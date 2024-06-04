@@ -137,12 +137,16 @@
   <ItemGroup>
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />
+    <ClInclude Include="OutputContext.h" />
+    <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Saber.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="OutputContext.cpp" />
+    <ClCompile Include="Renderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc" />
