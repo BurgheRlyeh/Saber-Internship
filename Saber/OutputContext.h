@@ -2,8 +2,6 @@
 
 #include "Headers.h"
 
-#include <functional>
-
 class OutputContext {
     HINSTANCE m_hInst;
 

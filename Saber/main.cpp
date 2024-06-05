@@ -12,8 +12,8 @@ bool g_useWarp{};
 uint32_t g_clientWidth{ 1280 };
 uint32_t g_clientHeight{ 720 };
 
-OutputContext* g_pOutputContext{};
-Renderer* g_pRenderer{};
+std::unique_ptr<OutputContext> g_pOutputContext{};
+std::unique_ptr<Renderer> g_pRenderer{};
 bool g_isInitialized{};
 
 void ParseCommandLineArguments() {
@@ -105,7 +105,7 @@ int CALLBACK wWinMain(
     const wchar_t* windowClassName = L"SaberInternshipWindowClass";
     ParseCommandLineArguments();
 
-    g_pOutputContext = new OutputContext(
+    g_pOutputContext = std::make_unique<OutputContext>(
         hInst,
         L"SaberInternshipWindowClass",
         L"Saber Internship"
@@ -114,7 +114,7 @@ int CALLBACK wWinMain(
     g_pOutputContext->CreateAppWindow(g_clientWidth, g_clientHeight);
     g_pOutputContext->initWindowRect();
 
-    g_pRenderer = new Renderer(3, g_useWarp, g_clientWidth, g_clientHeight, true);
+    g_pRenderer = std::make_unique<Renderer>(3, g_useWarp, g_clientWidth, g_clientHeight, true);
     g_pRenderer->initialize(g_pOutputContext->getHWND());
 
     g_isInitialized = true;

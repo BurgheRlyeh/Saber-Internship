@@ -1,5 +1,7 @@
 #include "Renderer.h"
 
+#include <cassert>
+
 Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync) {
     m_numFrames = backBuffersCnt;
     m_pBackBuffers.resize(m_numFrames);
@@ -32,7 +34,7 @@ void Renderer::switchVSync() {
 }
 
 void Renderer::initialize(HWND hWnd) {
-    ComPtr<IDXGIAdapter4> dxgiAdapter4{ GetAdapter(m_useWarp) };
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> dxgiAdapter4{ GetAdapter(m_useWarp) };
 
     m_pDevice = CreateDevice(dxgiAdapter4);
 
@@ -198,17 +200,17 @@ void Renderer::Resize(uint32_t width, uint32_t height) {
 
 void Renderer::EnableDebugLayer() {
 #if defined(_DEBUG)
-    ComPtr<ID3D12Debug> debugInterface;
+    Microsoft::WRL::ComPtr<ID3D12Debug> debugInterface;
     //ThrowIfFailed(D3D12GetInterface(CLSID_D3D12Debug, IID_PPV_ARGS(&debugInterface))); // TODO
     ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)));
     debugInterface->EnableDebugLayer();
 #endif
 }
 
-ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     // IDXGIFactory
     // An IDXGIFactory interface implements methods for generating DXGI objects (which handle full screen transitions)
-    ComPtr<IDXGIFactory6> dxgiFactory;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory;
 
     // Enabling the DXGI_CREATE_FACTORY_DEBUG flag during factory creation enables errors
     // to be caught during device creation and while querying for the adapters
@@ -222,8 +224,8 @@ ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory)));
 
     // The IDXGIAdapter interface represents a display subsystem (including one or more GPUs, DACs and video memory)
-    ComPtr<IDXGIAdapter1> dxgiAdapter1;
-    ComPtr<IDXGIAdapter4> dxgiAdapter4;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> dxgiAdapter1;
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> dxgiAdapter4;
 
     if (useWarp) {
         // IDXGIFactory4::EnumWarpAdapter
@@ -259,9 +261,9 @@ ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     return dxgiAdapter4;
 }
 
-ComPtr<ID3D12Device2> Renderer::CreateDevice(ComPtr<IDXGIAdapter4> adapter) {
+Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter) {
     // Represents a virtual adapter
-    ComPtr<ID3D12Device2> d3d12Device2;
+    Microsoft::WRL::ComPtr<ID3D12Device2> d3d12Device2;
     // D3D12CreateDevice
     // Creates a device that represents the display adapter
     ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device2)));
@@ -271,7 +273,7 @@ ComPtr<ID3D12Device2> Renderer::CreateDevice(ComPtr<IDXGIAdapter4> adapter) {
     // ID3D12InfoQueue
     // An information-queue interface stores, retrieves, and filters debug messages
     // The queue consists of a message queue, an optional storage filter stack, and a optional retrieval filter stack
-    ComPtr<ID3D12InfoQueue> pInfoQueue;
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
     if (SUCCEEDED(d3d12Device2.As(&pInfoQueue))) {
         // SetBreakOnSeverity
         // Set a message severity level to break on when a message with that severity level passes through the storage filter
@@ -312,10 +314,10 @@ ComPtr<ID3D12Device2> Renderer::CreateDevice(ComPtr<IDXGIAdapter4> adapter) {
     return d3d12Device2;
 }
 
-ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
+Microsoft::WRL::ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
     // ID3D12CommandQueue Provides methods for submitting command lists, synchronizing command list execution,
     // instrumenting the command queue, and updating resource tile mappings.
-    ComPtr<ID3D12CommandQueue> d3d12CommandQueue;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> d3d12CommandQueue;
 
     D3D12_COMMAND_QUEUE_DESC desc{
         .Type{ type },
@@ -336,9 +338,9 @@ bool Renderer::CheckTearingSupport() {
     // DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
     // graphics debugging tools which will not support the 1.5 factory interface 
     // until a future update. ??? TODO
-    ComPtr<IDXGIFactory4> factory4;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory4;
     if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4)))) {
-        ComPtr<IDXGIFactory5> factory5;
+        Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
         if (SUCCEEDED(factory4.As(&factory5))) {
             allowTearing = SUCCEEDED(factory5->CheckFeatureSupport(
                 DXGI_FEATURE_PRESENT_ALLOW_TEARING,
@@ -351,11 +353,11 @@ bool Renderer::CheckTearingSupport() {
     return allowTearing;
 }
 
-ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, ComPtr<ID3D12CommandQueue> commandQueue, uint32_t width, uint32_t height, uint32_t bufferCount) {
+Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, uint32_t width, uint32_t height, uint32_t bufferCount) {
     // An IDXGISwapChain interface implements one or more surfaces
     // for storing rendered data before presenting it to an output
-    ComPtr<IDXGISwapChain4> dxgiSwapChain4;
-    ComPtr<IDXGIFactory4> dxgiFactory4;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> dxgiSwapChain4;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory4;
 
     UINT createFactoryFlags = 0;
 #if defined(_DEBUG)
@@ -379,7 +381,7 @@ ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, ComPtr<ID3D12Comman
         .Flags{ CheckTearingSupport() ? UINT(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0 },
     };
 
-    ComPtr<IDXGISwapChain1> swapChain1;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
     // Creates a swap chain that is associated with an HWND handle to the output window for the swap chain
     ThrowIfFailed(dxgiFactory4->CreateSwapChainForHwnd(
         commandQueue.Get(),
@@ -398,13 +400,13 @@ ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, ComPtr<ID3D12Comman
     return dxgiSwapChain4;
 }
 
-ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(ComPtr<ID3D12Device2> device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors) {
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors) {
     // ID3D12DescriptorHeap (array of resource views)
     // A descriptor heap is a collection of contiguous allocations of descriptors, one
     // allocation for every descriptor. Descriptor heaps contain many object types that are
     // not part of a Pipeline State Object (PSO), such as Shader Resource Views (SRVs),
     // Unordered Access Views (UAVs), Constant Buffer Views (CBVs), and Samplers
-    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap;
 
     D3D12_DESCRIPTOR_HEAP_DESC desc{
         .Type{ type },
@@ -417,14 +419,14 @@ ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(ComPtr<ID3D12Device2
 }
 
 // Create/Update RTVs
-void Renderer::UpdateRenderTargetViews(ComPtr<ID3D12Device2> device, ComPtr<IDXGISwapChain4> swapChain, ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
+void Renderer::UpdateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
     UINT rtvDescriptorSize{ device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV) };
 
     // Get the CPU descriptor handle that represents the start of the heap
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(descriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
     for (int i{}; i < m_numFrames; ++i) {
-        ComPtr<ID3D12Resource> backBuffer;
+        Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer;
         ThrowIfFailed(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
 
         device->CreateRenderTargetView(
@@ -440,18 +442,18 @@ void Renderer::UpdateRenderTargetViews(ComPtr<ID3D12Device2> device, ComPtr<IDXG
     }
 }
 
-ComPtr<ID3D12CommandAllocator> Renderer::CreateCommandAllocator(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
+Microsoft::WRL::ComPtr<ID3D12CommandAllocator> Renderer::CreateCommandAllocator(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
     // ID3D12CommandAllocator
     // Represents the allocations of storage for GPU commands
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
     ThrowIfFailed(device->CreateCommandAllocator(type, IID_PPV_ARGS(&commandAllocator)));
 
     return commandAllocator;
 }
 
-ComPtr<ID3D12GraphicsCommandList> Renderer::CreateCommandList(ComPtr<ID3D12Device2> device, ComPtr<ID3D12CommandAllocator> commandAllocator, D3D12_COMMAND_LIST_TYPE type) {
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> Renderer::CreateCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, D3D12_COMMAND_LIST_TYPE type) {
     // Encapsulates a list of graphics commands for rendering
-    ComPtr<ID3D12GraphicsCommandList> commandList;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
     ThrowIfFailed(device->CreateCommandList(
         0,                          // for multi-adapter systems
         type,                       // type of command list to create
@@ -466,9 +468,9 @@ ComPtr<ID3D12GraphicsCommandList> Renderer::CreateCommandList(ComPtr<ID3D12Devic
     return commandList;
 }
 
-ComPtr<ID3D12Fence> Renderer::CreateFence(ComPtr<ID3D12Device2> device) {
+Microsoft::WRL::ComPtr<ID3D12Fence> Renderer::CreateFence(Microsoft::WRL::ComPtr<ID3D12Device2> device) {
     // Represents a fence, an object used for synchronization of the CPU and one or more GPUs
-    ComPtr<ID3D12Fence> fence;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
 
     ThrowIfFailed(device->CreateFence(
         0,                      // init value
@@ -489,7 +491,7 @@ HANDLE Renderer::CreateEventHandle() {
 
 // The Signal function is used to signal the fence from the GPU
 
-uint64_t Renderer::Signal(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence, uint64_t& fenceValue) {
+uint64_t Renderer::Signal(Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t& fenceValue) {
     uint64_t fenceValueForSignal = ++fenceValue;
     ThrowIfFailed(commandQueue->Signal(
         fence.Get(),        // pointer to the ID3D12Fence object
@@ -499,7 +501,7 @@ uint64_t Renderer::Signal(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12
     return fenceValueForSignal;
 }
 
-void Renderer::WaitForFenceValue(ComPtr<ID3D12Fence> fence, uint64_t fenceValue, HANDLE fenceEvent, std::chrono::milliseconds duration) {
+void Renderer::WaitForFenceValue(Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t fenceValue, HANDLE fenceEvent, std::chrono::milliseconds duration) {
     // Gets the current value of the fence
     if (fence->GetCompletedValue() < fenceValue) {
         // Specifies an event that's raised when the fence reaches a certain value
@@ -511,7 +513,7 @@ void Renderer::WaitForFenceValue(ComPtr<ID3D12Fence> fence, uint64_t fenceValue,
 
 // Ensure that any commands previously executed on the GPU have finished executing 
 // before the CPU thread is allowed to continue processing
-void Renderer::Flush(ComPtr<ID3D12CommandQueue> commandQueue, ComPtr<ID3D12Fence> fence, uint64_t& fenceValue, HANDLE fenceEvent) {
+void Renderer::Flush(Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t& fenceValue, HANDLE fenceEvent) {
     uint64_t fenceValueForSignal{ Signal(commandQueue, fence, fenceValue) };
     WaitForFenceValue(fence, fenceValueForSignal, fenceEvent);
 }

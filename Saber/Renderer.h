@@ -11,9 +11,7 @@
 #undef max
 #endif
 
-// STL Headers
 #include <algorithm>
-#include <cassert>
 #include <chrono>
 #include <vector>
 
@@ -32,18 +30,18 @@ class Renderer {
 	bool m_isInitialized{};
 
 	// DirectX 12 Objects
-    ComPtr<ID3D12Device2> m_pDevice{};
-	ComPtr<ID3D12CommandQueue> m_pCommandQueue{};
-	ComPtr<IDXGISwapChain4> m_pSwapChain{};
-    std::vector<ComPtr<ID3D12Resource>> m_pBackBuffers{ m_numFrames };
-	ComPtr<ID3D12GraphicsCommandList> m_pCommandList{};
-    std::vector<ComPtr<ID3D12CommandAllocator>> m_pCommandAllocators{ m_numFrames };
-	ComPtr<ID3D12DescriptorHeap> m_pRTVDescriptorHeap{};
+    Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_pCommandQueue{};
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{ m_numFrames };
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_pCommandList{};
+    std::vector<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>> m_pCommandAllocators{ m_numFrames };
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescriptorHeap{};
 	UINT m_RTVDescriptorSize{};
 	UINT m_currBackBufferId{};
 
 	// Synchronization objects
-	ComPtr<ID3D12Fence> m_pFence{};
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_pFence{};
     uint64_t m_fenceValue{};
 	
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
@@ -87,59 +85,59 @@ public:
 private:
     void EnableDebugLayer();
 
-    ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
 
-    ComPtr<ID3D12Device2> CreateDevice(ComPtr<IDXGIAdapter4> adapter);
+    Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
 
-    ComPtr<ID3D12CommandQueue> CreateCommandQueue(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
 
     bool CheckTearingSupport();
 
-    ComPtr<IDXGISwapChain4> CreateSwapChain(
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain(
         HWND hWnd,
-        ComPtr<ID3D12CommandQueue> commandQueue,
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
         uint32_t width,
         uint32_t height,
         uint32_t bufferCount
     );
 
-    ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
-        ComPtr<ID3D12Device2> device,
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
+        Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
         uint32_t numDescriptors
     );
 
     // Create RTVs
     void UpdateRenderTargetViews(
-        ComPtr<ID3D12Device2> device,
-        ComPtr<IDXGISwapChain4> swapChain,
-        ComPtr<ID3D12DescriptorHeap> descriptorHeap
+        Microsoft::WRL::ComPtr<ID3D12Device2> device,
+        Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap
     );
 
-    ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(
-        ComPtr<ID3D12Device2> device,
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(
+        Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_COMMAND_LIST_TYPE type
     );
 
-    ComPtr<ID3D12GraphicsCommandList> CreateCommandList(
-        ComPtr<ID3D12Device2> device,
-        ComPtr<ID3D12CommandAllocator> commandAllocator,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CreateCommandList(
+        Microsoft::WRL::ComPtr<ID3D12Device2> device,
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator,
         D3D12_COMMAND_LIST_TYPE type
     );
 
-    ComPtr<ID3D12Fence> CreateFence(ComPtr<ID3D12Device2> device);
+    Microsoft::WRL::ComPtr<ID3D12Fence> CreateFence(Microsoft::WRL::ComPtr<ID3D12Device2> device);
 
     HANDLE CreateEventHandle();
 
     // The Signal function is used to signal the fence from the GPU
     uint64_t Signal(
-        ComPtr<ID3D12CommandQueue> commandQueue,
-        ComPtr<ID3D12Fence> fence,
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
+        Microsoft::WRL::ComPtr<ID3D12Fence> fence,
         uint64_t& fenceValue
     );
 
     void WaitForFenceValue(
-        ComPtr<ID3D12Fence> fence,
+        Microsoft::WRL::ComPtr<ID3D12Fence> fence,
         uint64_t fenceValue,
         HANDLE fenceEvent,
         std::chrono::milliseconds duration = std::chrono::milliseconds::max()
@@ -148,8 +146,8 @@ private:
     // Ensure that any commands previously executed on the GPU have finished executing 
     // before the CPU thread is allowed to continue processing
     void Flush(
-        ComPtr<ID3D12CommandQueue> commandQueue,
-        ComPtr<ID3D12Fence> fence,
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
+        Microsoft::WRL::ComPtr<ID3D12Fence> fence,
         uint64_t& fenceValue,
         HANDLE fenceEvent
     );
