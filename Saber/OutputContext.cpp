@@ -62,16 +62,16 @@ void OutputContext::CreateAppWindow(uint32_t width, uint32_t height) {
     assert(m_hWnd && "Failed to create window");
 }
 
-void OutputContext::initWindowRect() {
+void OutputContext::InitWindowRect() {
     // Initialize the global window rect variable.
     ::GetWindowRect(m_hWnd, &m_windowRect);
 }
 
-void OutputContext::showWindow() {
+void OutputContext::ShowWindow() {
     ::ShowWindow(m_hWnd, SW_SHOW);
 }
 
-void OutputContext::switchFullscreen() {
+void OutputContext::SwitchFullscreen() {
     m_fullscreen = !m_fullscreen;
 
     // Switching to fullscreen.

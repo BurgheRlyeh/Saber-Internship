@@ -37,9 +37,9 @@ public:
         return m_hWnd;
     }
 
-    void initWindowRect();
+    void InitWindowRect();
 
-    void showWindow();
+    void ShowWindow();
 
-    void switchFullscreen();
+    void SwitchFullscreen();
 };

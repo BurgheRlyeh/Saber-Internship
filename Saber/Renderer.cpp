@@ -1,6 +1,11 @@
 #include "Renderer.h"
 
 #include <cassert>
+#include <random>
+
+#include <string>  
+#include <iostream> 
+#include <sstream>
 
 Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync) {
     m_numFrames = backBuffersCnt;
@@ -25,15 +30,7 @@ Renderer::~Renderer() {
     ::CloseHandle(m_fenceEvent);
 }
 
-inline bool Renderer::isInitialized() const {
-    return m_isInitialized;
-}
-
-void Renderer::switchVSync() {
-    m_isVSync = !m_isVSync;
-}
-
-void Renderer::initialize(HWND hWnd) {
+void Renderer::Initialize(HWND hWnd) {
     Microsoft::WRL::ComPtr<IDXGIAdapter4> dxgiAdapter4{ GetAdapter(m_useWarp) };
 
     m_pDevice = CreateDevice(dxgiAdapter4);
@@ -50,7 +47,7 @@ void Renderer::initialize(HWND hWnd) {
     // This value is typically used to increment a handle into a descriptor array by the correct amount.
     m_RTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    UpdateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
+    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
 
     for (int i{}; i < m_numFrames; ++i) {
         m_pCommandAllocators[i] = CreateCommandAllocator(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -67,102 +64,49 @@ void Renderer::initialize(HWND hWnd) {
     m_isInitialized = true;
 }
 
-void Renderer::Update() {
-    assert(m_isInitialized);
+bool Renderer::StartRenderThread() {
+    if (!m_isInitialized)
+        return false;
 
-    m_frameCounter++;
-    auto t1 = m_clock.now();
-    auto deltaTime = t1 - m_time;
-    m_time = t1;
-
-    m_elapsedSeconds += deltaTime.count() * 1e-9;
-    if (m_elapsedSeconds > 1.0) {
-        auto fps = m_frameCounter / m_elapsedSeconds;
-
-        m_frameCounter = 0;
-        m_elapsedSeconds = 0.0;
-    }
+    m_isRenderThreadRunning.store(true);
+    m_renderThread = std::thread(&Renderer::RenderLoop, this);
+    return true;
 }
 
-void Renderer::Render() {
-    assert(m_isInitialized);
-
-    auto& commandAllocator = m_pCommandAllocators[m_currBackBufferId];
-    auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
-
-    // Before overwriting the contents of the current back buffer with the content of the next frame,
-    // the CPU thread is stalled using the WaitForFenceValue function described earlier.
-    WaitForFenceValue(m_pFence, m_frameFenceValues[m_currBackBufferId], m_fenceEvent);
-
-    // Before any commands can be recorded into the command list, 
-    // the command allocator and command list needs to be reset to its initial state.
-    commandAllocator->Reset();
-    m_pCommandList->Reset(commandAllocator.Get(), nullptr);
-
-    // Clear the render target.
-    {
-        // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
-        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer.Get(),
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        ) };
-
-        // Notifies the driver that it needs to synchronize multiple accesses to resources
-        m_pCommandList->ResourceBarrier(1, &barrier);
-
-        FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-        // CPU descriptor handle to a RTV
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-            m_pRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),  // RTV desc heap start
-            m_currBackBufferId,                                   // current index (offset) from start
-            m_RTVDescriptorSize                                         // RTV desc size
-        );
-
-        m_pCommandList->ClearRenderTargetView(
-            rtv,        // cpu desc handle
-            clearColor, // color to fill RTV
-            0,          // number of rectangles in array
-            nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
-        );
-    }
-
-    // Present
-    {
-        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer.Get(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        ) };
-        m_pCommandList->ResourceBarrier(1, &barrier);
-
-        // This method must be called on the command list before being executed on the command queue
-        ThrowIfFailed(m_pCommandList->Close());
-
-        ID3D12CommandList* const commandLists[]{ m_pCommandList.Get() };
-        m_pCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
-
-        UINT syncInterval{ UINT(m_isVSync ? 1 : 0) };
-        UINT presentFlags{ m_isTearingSupported && !m_isVSync ? DXGI_PRESENT_ALLOW_TEARING : 0 };
-        ThrowIfFailed(m_pSwapChain->Present(
-            // 0 - Cancel the remaining time on the previously presented frame 
-            // and discard this frame if a newer frame is queued
-            // n = 1...4 - Synchronize presentation for at least n vertical blanks
-            syncInterval,
-            presentFlags
-        ));
-
-        // Immediately after presenting the rendered frame to the screen, a signal is inserted into the queue
-        m_frameFenceValues[m_currBackBufferId] = Signal(m_pCommandQueue, m_pFence, m_fenceValue);
-
-        // get the index of the swap chains current back buffer,
-        // as order of back buffer indicies is not guaranteed to be sequential,
-        // when using the DXGI_SWAP_EFFECT_FLIP_DISCARD flip model
-        m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
-    }
+void Renderer::StopRenderThread() {
+    m_isRenderThreadRunning.store(false);
+    m_renderThread.join();
 }
 
 void Renderer::Resize(uint32_t width, uint32_t height) {
+    m_isNeedResize.store(true);
+    m_resolutionWidthForResize.store(width);
+    m_resolutionHeightForResize.store(height);
+}
+
+void Renderer::SwitchVSync() {
+    m_isVSync = !m_isVSync;
+}
+
+inline void Renderer::RenderLoop() {
+    while (m_isRenderThreadRunning.load()) {
+        if (m_isNeedResize.load()) {
+            std::scoped_lock<std::mutex> lock(m_renderThreadMutex);
+            PerformResize(
+                m_resolutionWidthForResize.load(),
+                m_resolutionHeightForResize.load()
+            );
+            m_isNeedResize.store(false);
+        }
+
+        Update();
+
+        std::scoped_lock<std::mutex> lock(m_renderThreadMutex);
+        Render();
+    }
+}
+
+void Renderer::PerformResize(uint32_t width, uint32_t height) {
     assert(m_isInitialized);
 
     if (m_clientWidth == width && m_clientHeight == height)
@@ -195,7 +139,134 @@ void Renderer::Resize(uint32_t width, uint32_t height) {
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    UpdateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
+    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
+}
+
+void Renderer::Update() {
+    m_frameCounter++;
+    auto t1 = m_clock.now();
+    auto deltaTime = t1 - m_time;
+    m_time = t1;
+
+    m_elapsedSeconds += deltaTime.count() * 1e-9;
+    if (m_elapsedSeconds > 1.0) {
+        auto fps = m_frameCounter / m_elapsedSeconds;
+
+        std::wstringstream wss{};
+        wss << "FPS: " << fps << std::endl;
+        OutputDebugString(wss.str().c_str());
+
+        m_frameCounter = 0;
+        m_elapsedSeconds = 0.0;
+    }
+}
+
+void Renderer::Render() {
+    auto& commandAllocator = m_pCommandAllocators[m_currBackBufferId];
+    auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
+
+    // Before overwriting the contents of the current back buffer with the content of the next frame,
+    // the CPU thread is stalled using the WaitForFenceValue function described earlier.
+    WaitForFenceValue(m_pFence, m_frameFenceValues[m_currBackBufferId], m_fenceEvent);
+
+    // Before any commands can be recorded into the command list, 
+    // the command allocator and command list needs to be reset to its initial state.
+    commandAllocator->Reset();
+    m_pCommandList->Reset(commandAllocator.Get(), nullptr);
+
+    // Clear the render target.
+    {
+        // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
+        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
+            backBuffer.Get(),
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        ) };
+
+        // Notifies the driver that it needs to synchronize multiple accesses to resources
+        m_pCommandList->ResourceBarrier(1, &barrier);
+
+        // just for testing
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0.0, 0.1);
+
+        FLOAT clearColor[] = {
+            0.4f + static_cast<float>(dis(gen)),
+            0.6f + static_cast<float>(dis(gen)),
+            0.9f + static_cast<float>(dis(gen)),
+            1.0f
+        };
+        // CPU descriptor handle to a RTV
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
+            m_pRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),  // RTV desc heap start
+            m_currBackBufferId,                                   // current index (offset) from start
+            m_RTVDescriptorSize                                         // RTV desc size
+        );
+
+        m_pCommandList->ClearRenderTargetView(
+            rtv,        // cpu desc handle
+            clearColor, // color to fill RTV
+            0,          // number of rectangles in array
+            nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
+        );
+    }
+
+    // Present
+    {
+        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
+            backBuffer.Get(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PRESENT
+        ) };
+        m_pCommandList->ResourceBarrier(1, &barrier);
+
+        // This method must be called on the command list before being executed on the command queue
+        ThrowIfFailed(m_pCommandList->Close());
+
+        ID3D12CommandList* const commandLists[]{ m_pCommandList.Get() };
+        m_pCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+
+        UINT syncInterval{ m_isVSync ? 1u : 0};
+        UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };
+        ThrowIfFailed(m_pSwapChain->Present(
+            // 0 - Cancel the remaining time on the previously presented frame 
+            // and discard this frame if a newer frame is queued
+            // n = 1...4 - Synchronize presentation for at least n vertical blanks
+            syncInterval,
+            presentFlags
+        ));
+
+        // Immediately after presenting the rendered frame to the screen, a signal is inserted into the queue
+        m_frameFenceValues[m_currBackBufferId] = Signal(m_pCommandQueue, m_pFence, m_fenceValue);
+
+        // get the index of the swap chains current back buffer,
+        // as order of back buffer indicies is not guaranteed to be sequential,
+        // when using the DXGI_SWAP_EFFECT_FLIP_DISCARD flip model
+        m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
+    }
+}
+
+bool Renderer::CheckTearingSupport() {
+    BOOL allowTearing{};
+
+    // Rather than create the DXGI 1.5 factory interface directly, we create the
+    // DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
+    // graphics debugging tools which will not support the 1.5 factory interface 
+    // until a future update. ??? TODO
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory4;
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4)))) {
+        Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
+        if (SUCCEEDED(factory4.As(&factory5))) {
+            allowTearing = SUCCEEDED(factory5->CheckFeatureSupport(
+                DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                &allowTearing,
+                sizeof(allowTearing)
+            ));
+        }
+    }
+
+    return allowTearing;
 }
 
 void Renderer::EnableDebugLayer() {
@@ -331,28 +402,6 @@ Microsoft::WRL::ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(Microsof
     return d3d12CommandQueue;
 }
 
-bool Renderer::CheckTearingSupport() {
-    BOOL allowTearing{};
-
-    // Rather than create the DXGI 1.5 factory interface directly, we create the
-    // DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
-    // graphics debugging tools which will not support the 1.5 factory interface 
-    // until a future update. ??? TODO
-    Microsoft::WRL::ComPtr<IDXGIFactory4> factory4;
-    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4)))) {
-        Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
-        if (SUCCEEDED(factory4.As(&factory5))) {
-            allowTearing = SUCCEEDED(factory5->CheckFeatureSupport(
-                DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                &allowTearing,
-                sizeof(allowTearing)
-            ));
-        }
-    }
-
-    return allowTearing;
-}
-
 Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, uint32_t width, uint32_t height, uint32_t bufferCount) {
     // An IDXGISwapChain interface implements one or more surfaces
     // for storing rendered data before presenting it to an output
@@ -418,8 +467,7 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(Micr
     return descriptorHeap;
 }
 
-// Create/Update RTVs
-void Renderer::UpdateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
+void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
     UINT rtvDescriptorSize{ device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV) };
 
     // Get the CPU descriptor handle that represents the start of the heap
@@ -490,7 +538,6 @@ HANDLE Renderer::CreateEventHandle() {
 }
 
 // The Signal function is used to signal the fence from the GPU
-
 uint64_t Renderer::Signal(Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t& fenceValue) {
     uint64_t fenceValueForSignal = ++fenceValue;
     ThrowIfFailed(commandQueue->Signal(

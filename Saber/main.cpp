@@ -49,7 +49,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
         switch (wParam) {
         case 'V':
-            g_pRenderer->switchVSync();
+            g_pRenderer->SwitchVSync();
             break;
         case VK_ESCAPE:
             ::PostQuitMessage(0);
@@ -57,7 +57,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case VK_RETURN:
             if (alt) {
         case VK_F11:
-            g_pOutputContext->switchFullscreen();
+            g_pOutputContext->SwitchFullscreen();
             }
             break;
         }
@@ -112,14 +112,16 @@ int CALLBACK wWinMain(
     );
     g_pOutputContext->RegisterWindowClass(WndProc);
     g_pOutputContext->CreateAppWindow(g_clientWidth, g_clientHeight);
-    g_pOutputContext->initWindowRect();
+    g_pOutputContext->InitWindowRect();
 
     g_pRenderer = std::make_unique<Renderer>(3, g_useWarp, g_clientWidth, g_clientHeight, true);
-    g_pRenderer->initialize(g_pOutputContext->getHWND());
+    g_pRenderer->Initialize(g_pOutputContext->getHWND());
 
     g_isInitialized = true;
 
-    g_pOutputContext->showWindow();
+    g_pOutputContext->ShowWindow();
+
+    assert(g_pRenderer->StartRenderThread());
 
     MSG msg = {};
     while (msg.message != WM_QUIT) {
@@ -127,10 +129,9 @@ int CALLBACK wWinMain(
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
         }
-
-        g_pRenderer->Update();
-        g_pRenderer->Render();
     }
+
+    g_pRenderer->StopRenderThread();
 
     return 0;
 }

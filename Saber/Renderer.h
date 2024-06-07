@@ -15,6 +15,11 @@
 #include <chrono>
 #include <vector>
 
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+
 class Renderer {
 	// The number of swap chain back buffers.
     uint8_t m_numFrames{};
@@ -50,13 +55,24 @@ class Renderer {
 
 	// By default, enable V-Sync.
 	// Can be toggled with the V key.
-    bool m_isVSync{};
     bool m_isTearingSupported{};
+    bool m_isVSync{};
 
     uint64_t m_frameCounter{};
     double m_elapsedSeconds{};
     std::chrono::high_resolution_clock m_clock{};
     std::chrono::steady_clock::time_point m_time{};
+
+    // render thread sync
+    std::thread m_renderThread{};
+    std::mutex m_renderThreadMutex{};
+    std::condition_variable m_renderThreadCondVar{};
+    std::atomic<bool> m_isRenderThreadRunning{};
+
+    // for resize
+    std::atomic<bool> m_isNeedResize{};
+    std::atomic<uint32_t> m_resolutionWidthForResize{};
+    std::atomic<uint32_t> m_resolutionHeightForResize{};
 
 public:
     Renderer(const Renderer&) = delete;
@@ -67,32 +83,36 @@ public:
         uint32_t resHeight = 720,
         bool isUseVSync = true
     );
-
     ~Renderer();
 
-    bool isInitialized() const;
+    void Initialize(HWND hWnd);
 
-    void switchVSync();
+    bool StartRenderThread();
 
-    void initialize(HWND hWnd);
-
-    void Update();
-
-    void Render();
+    void StopRenderThread();
 
     void Resize(uint32_t width, uint32_t height);
 
+    void SwitchVSync();
+
 private:
-    void EnableDebugLayer();
+    void RenderLoop();
 
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+    void PerformResize(uint32_t width, uint32_t height);
 
-    Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
-
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
+    void Update();
+    void Render();
 
     bool CheckTearingSupport();
 
+    void EnableDebugLayer();
+
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+    Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(
+        Microsoft::WRL::ComPtr<ID3D12Device2> device,
+        D3D12_COMMAND_LIST_TYPE type
+    );
     Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain(
         HWND hWnd,
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
@@ -100,33 +120,26 @@ private:
         uint32_t height,
         uint32_t bufferCount
     );
-
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
         uint32_t numDescriptors
     );
-
-    // Create RTVs
-    void UpdateRenderTargetViews(
+    void CreateRenderTargetViews(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap
     );
-
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_COMMAND_LIST_TYPE type
     );
-
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CreateCommandList(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator,
         D3D12_COMMAND_LIST_TYPE type
     );
-
     Microsoft::WRL::ComPtr<ID3D12Fence> CreateFence(Microsoft::WRL::ComPtr<ID3D12Device2> device);
-
     HANDLE CreateEventHandle();
 
     // The Signal function is used to signal the fence from the GPU
