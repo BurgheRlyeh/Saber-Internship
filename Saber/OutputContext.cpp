@@ -1,10 +1,9 @@
 #include "OutputContext.h"
 
-OutputContext::OutputContext(HINSTANCE hInst, const wchar_t* windowClassName, const wchar_t* windowTitle) {
-    m_hInst = hInst;
-    m_windowClassName = windowClassName;
-    m_windowTitle = windowTitle;
-}
+OutputContext::OutputContext(HINSTANCE hInst, const wchar_t* windowClassName, const wchar_t* windowTitle) 
+    : m_hInst(hInst)
+    , m_windowClassName(windowClassName)
+    , m_windowTitle(windowTitle) {}
 
 void OutputContext::RegisterWindowClass(LRESULT(*WndProc)(HWND, UINT, WPARAM, LPARAM)) {
     // Register a window class for creating our render window with.

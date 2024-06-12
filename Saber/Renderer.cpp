@@ -7,37 +7,31 @@
 #include <iostream> 
 #include <sstream>
 
-Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync) {
+Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
+    : m_useWarp(backBuffersCnt)
+    , m_clientWidth(resWidth)
+    , m_clientHeight(resHeight)
+    , m_isVSync(isUseVSync)
+    , m_isTearingSupported(CheckTearingSupport())
+    , m_time(m_clock.now()) 
+{
     m_numFrames = backBuffersCnt;
-    m_pBackBuffers.resize(m_numFrames);
-    m_pCommandAllocators.resize(m_numFrames);
-    m_frameFenceValues.resize(m_numFrames);
-
-    m_useWarp = isUseWarp;
-    m_clientWidth = resWidth;
-    m_clientHeight = resHeight;
-    m_isVSync = isUseVSync;
-
-    m_isTearingSupported = CheckTearingSupport();
-
-    m_time = m_clock.now();
 }
 
-Renderer::~Renderer() {
-    // Make sure the command queue has finished all commands before closing.
-    Flush(m_pCommandQueue, m_pFence, m_fenceValue, m_fenceEvent);
-
-    ::CloseHandle(m_fenceEvent);
-}
+Renderer::~Renderer() {}
 
 void Renderer::Initialize(HWND hWnd) {
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> dxgiAdapter4{ GetAdapter(m_useWarp) };
+    m_pBackBuffers.resize(m_numFrames);
+    m_frameFenceValues.resize(m_numFrames);
 
-    m_pDevice = CreateDevice(dxgiAdapter4);
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> pDXGIAdapter4{ GetAdapter(m_useWarp) };
 
-    m_pCommandQueue = CreateCommandQueue(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_pDevice = CreateDevice(pDXGIAdapter4);
 
-    m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueue, m_clientWidth, m_clientHeight, m_numFrames);
+    m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
+
+    m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
@@ -48,18 +42,6 @@ void Renderer::Initialize(HWND hWnd) {
     m_RTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
     CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
-
-    for (int i{}; i < m_numFrames; ++i) {
-        m_pCommandAllocators[i] = CreateCommandAllocator(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    }
-    m_pCommandList = CreateCommandList(
-        m_pDevice,
-        m_pCommandAllocators[m_currBackBufferId],
-        D3D12_COMMAND_LIST_TYPE_DIRECT
-    );
-
-    m_pFence = CreateFence(m_pDevice);
-    m_fenceEvent = CreateEventHandle();
 
     m_isInitialized = true;
 }
@@ -118,7 +100,7 @@ void Renderer::PerformResize(uint32_t width, uint32_t height) {
 
     // Flush the GPU queue to make sure the swap chain's back buffers
     // are not being referenced by an in-flight command list.
-    Flush(m_pCommandQueue, m_pFence, m_fenceValue, m_fenceEvent);
+    Flush();
 
     // Any references to the back buffers must be released
     // before the swap chain can be resized.
@@ -162,29 +144,25 @@ void Renderer::Update() {
 }
 
 void Renderer::Render() {
-    auto& commandAllocator = m_pCommandAllocators[m_currBackBufferId];
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
 
     // Before overwriting the contents of the current back buffer with the content of the next frame,
     // the CPU thread is stalled using the WaitForFenceValue function described earlier.
-    WaitForFenceValue(m_pFence, m_frameFenceValues[m_currBackBufferId], m_fenceEvent);
+    m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
-    // Before any commands can be recorded into the command list, 
-    // the command allocator and command list needs to be reset to its initial state.
-    commandAllocator->Reset();
-    m_pCommandList->Reset(commandAllocator.Get(), nullptr);
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice)
+    };
 
     // Clear the render target.
     {
         // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
-        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer.Get(),
+        TransitionResource(
+            pCommandList,
+            backBuffer,
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET
-        ) };
-
-        // Notifies the driver that it needs to synchronize multiple accesses to resources
-        m_pCommandList->ResourceBarrier(1, &barrier);
+        );
 
         // just for testing
         std::random_device rd;
@@ -204,7 +182,7 @@ void Renderer::Render() {
             m_RTVDescriptorSize                                         // RTV desc size
         );
 
-        m_pCommandList->ClearRenderTargetView(
+        pCommandList->ClearRenderTargetView(
             rtv,        // cpu desc handle
             clearColor, // color to fill RTV
             0,          // number of rectangles in array
@@ -214,18 +192,15 @@ void Renderer::Render() {
 
     // Present
     {
-        CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer.Get(),
+        TransitionResource(
+            pCommandList,
+            backBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
-        ) };
-        m_pCommandList->ResourceBarrier(1, &barrier);
+        );
 
         // This method must be called on the command list before being executed on the command queue
-        ThrowIfFailed(m_pCommandList->Close());
-
-        ID3D12CommandList* const commandLists[]{ m_pCommandList.Get() };
-        m_pCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+        m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecuteCommandList(pCommandList);
 
         UINT syncInterval{ m_isVSync ? 1u : 0};
         UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };
@@ -236,9 +211,6 @@ void Renderer::Render() {
             syncInterval,
             presentFlags
         ));
-
-        // Immediately after presenting the rendered frame to the screen, a signal is inserted into the queue
-        m_frameFenceValues[m_currBackBufferId] = Signal(m_pCommandQueue, m_pFence, m_fenceValue);
 
         // get the index of the swap chains current back buffer,
         // as order of back buffer indicies is not guaranteed to be sequential,
@@ -254,11 +226,11 @@ bool Renderer::CheckTearingSupport() {
     // DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
     // graphics debugging tools which will not support the 1.5 factory interface 
     // until a future update. ??? TODO
-    Microsoft::WRL::ComPtr<IDXGIFactory4> factory4;
-    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4)))) {
-        Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
-        if (SUCCEEDED(factory4.As(&factory5))) {
-            allowTearing = SUCCEEDED(factory5->CheckFeatureSupport(
+    Microsoft::WRL::ComPtr<IDXGIFactory4> pFactory4;
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&pFactory4)))) {
+        Microsoft::WRL::ComPtr<IDXGIFactory5> pFactory5;
+        if (SUCCEEDED(pFactory4.As(&pFactory5))) {
+            allowTearing = SUCCEEDED(pFactory5->CheckFeatureSupport(
                 DXGI_FEATURE_PRESENT_ALLOW_TEARING,
                 &allowTearing,
                 sizeof(allowTearing)
@@ -271,17 +243,17 @@ bool Renderer::CheckTearingSupport() {
 
 void Renderer::EnableDebugLayer() {
 #if defined(_DEBUG)
-    Microsoft::WRL::ComPtr<ID3D12Debug> debugInterface;
+    Microsoft::WRL::ComPtr<ID3D12Debug> pDebugInterface;
     //ThrowIfFailed(D3D12GetInterface(CLSID_D3D12Debug, IID_PPV_ARGS(&debugInterface))); // TODO
-    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)));
-    debugInterface->EnableDebugLayer();
+    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
+    pDebugInterface->EnableDebugLayer();
 #endif
 }
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     // IDXGIFactory
     // An IDXGIFactory interface implements methods for generating DXGI objects (which handle full screen transitions)
-    Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> pDXGIFactory;
 
     // Enabling the DXGI_CREATE_FACTORY_DEBUG flag during factory creation enables errors
     // to be caught during device creation and while querying for the adapters
@@ -292,52 +264,52 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
 
     // CreateDXGIFactory2
     // Creates a DXGI factory that you can use to generate other DXGI objects
-    ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory)));
+    ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&pDXGIFactory)));
 
     // The IDXGIAdapter interface represents a display subsystem (including one or more GPUs, DACs and video memory)
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> dxgiAdapter1;
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> dxgiAdapter4;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> pDXGIAdapter1;
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> pDXGIAdapter4;
 
     if (useWarp) {
         // IDXGIFactory4::EnumWarpAdapter
         // Provides an adapter which can be provided to D3D12CreateDevice to use the WARP renderer
-        ThrowIfFailed(dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&dxgiAdapter1)));
-        ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
-        return dxgiAdapter4;
+        ThrowIfFailed(pDXGIFactory->EnumWarpAdapter(IID_PPV_ARGS(&pDXGIAdapter1)));
+        ThrowIfFailed(pDXGIAdapter1.As(&pDXGIAdapter4));
+        return pDXGIAdapter4;
     }
 
     for (UINT adapterIndex{};
-        dxgiFactory->EnumAdapterByGpuPreference(
+        pDXGIFactory->EnumAdapterByGpuPreference(
             adapterIndex,
             DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,   // The GPU preference for the app
-            IID_PPV_ARGS(&dxgiAdapter1)
+            IID_PPV_ARGS(&pDXGIAdapter1)
         ) != DXGI_ERROR_NOT_FOUND;
         ++adapterIndex
         ) {
         DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
-        ThrowIfFailed(dxgiAdapter1->GetDesc1(&dxgiAdapterDesc1));
+        ThrowIfFailed(pDXGIAdapter1->GetDesc1(&dxgiAdapterDesc1));
 
         if (!(dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             // Creates a device that represents the display adapter
             && SUCCEEDED(D3D12CreateDevice(
-                dxgiAdapter1.Get(),     // A pointer to the video adapter to use when creating a device
+                pDXGIAdapter1.Get(),     // A pointer to the video adapter to use when creating a device
                 D3D_FEATURE_LEVEL_11_0, // Feature Level
                 __uuidof(ID3D12Device), // Device interface GUID
                 nullptr                 // A pointer to a memory block that receives a pointer to the device
             ))) {
-            ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
+            ThrowIfFailed(pDXGIAdapter1.As(&pDXGIAdapter4));
         }
     }
 
-    return dxgiAdapter4;
+    return pDXGIAdapter4;
 }
 
 Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter) {
     // Represents a virtual adapter
-    Microsoft::WRL::ComPtr<ID3D12Device2> d3d12Device2;
+    Microsoft::WRL::ComPtr<ID3D12Device2> pD3D12Device2;
     // D3D12CreateDevice
     // Creates a device that represents the display adapter
-    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device2)));
+    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pD3D12Device2)));
 
     // Enable debug messages in debug mode.
 #if defined(_DEBUG)
@@ -345,7 +317,7 @@ Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::Com
     // An information-queue interface stores, retrieves, and filters debug messages
     // The queue consists of a message queue, an optional storage filter stack, and a optional retrieval filter stack
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
-    if (SUCCEEDED(d3d12Device2.As(&pInfoQueue))) {
+    if (SUCCEEDED(pD3D12Device2.As(&pInfoQueue))) {
         // SetBreakOnSeverity
         // Set a message severity level to break on when a message with that severity level passes through the storage filter
         pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -382,13 +354,13 @@ Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::Com
     }
 #endif
 
-    return d3d12Device2;
+    return pD3D12Device2;
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
     // ID3D12CommandQueue Provides methods for submitting command lists, synchronizing command list execution,
     // instrumenting the command queue, and updating resource tile mappings.
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> d3d12CommandQueue;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> pD3D12CommandQueue;
 
     D3D12_COMMAND_QUEUE_DESC desc{
         .Type{ type },
@@ -397,23 +369,23 @@ Microsoft::WRL::ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(Microsof
         .NodeMask{}
     };
 
-    ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&d3d12CommandQueue)));
+    ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&pD3D12CommandQueue)));
 
-    return d3d12CommandQueue;
+    return pD3D12CommandQueue;
 }
 
 Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, uint32_t width, uint32_t height, uint32_t bufferCount) {
     // An IDXGISwapChain interface implements one or more surfaces
     // for storing rendered data before presenting it to an output
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> dxgiSwapChain4;
-    Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory4;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> pDXGISwapChain4;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> pDXGIFactory4;
 
     UINT createFactoryFlags = 0;
 #if defined(_DEBUG)
     createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-    ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory4)));
+    ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&pDXGIFactory4)));
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc{
         .Width{ width },                                    // Resolution width
@@ -430,23 +402,23 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Mic
         .Flags{ CheckTearingSupport() ? UINT(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0 },
     };
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> pSwapChain1;
     // Creates a swap chain that is associated with an HWND handle to the output window for the swap chain
-    ThrowIfFailed(dxgiFactory4->CreateSwapChainForHwnd(
+    ThrowIfFailed(pDXGIFactory4->CreateSwapChainForHwnd(
         commandQueue.Get(),
         hWnd,
         &swapChainDesc,
         nullptr,        // description of a full-screen swap chain
         nullptr,        // pointer to interface for the output to restrict content to
-        &swapChain1
+        &pSwapChain1
     ));
 
     // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen
     // will be handled manually.
-    ThrowIfFailed(dxgiFactory4->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER));
+    ThrowIfFailed(pDXGIFactory4->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER));
 
-    ThrowIfFailed(swapChain1.As(&dxgiSwapChain4));
-    return dxgiSwapChain4;
+    ThrowIfFailed(pSwapChain1.As(&pDXGISwapChain4));
+    return pDXGISwapChain4;
 }
 
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors) {
@@ -455,16 +427,16 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(Micr
     // allocation for every descriptor. Descriptor heaps contain many object types that are
     // not part of a Pipeline State Object (PSO), such as Shader Resource Views (SRVs),
     // Unordered Access Views (UAVs), Constant Buffer Views (CBVs), and Samplers
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescriptorHeap;
 
     D3D12_DESCRIPTOR_HEAP_DESC desc{
         .Type{ type },
         .NumDescriptors{ numDescriptors }
     };
 
-    ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&descriptorHeap)));
+    ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pDescriptorHeap)));
 
-    return descriptorHeap;
+    return pDescriptorHeap;
 }
 
 void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
@@ -474,93 +446,41 @@ void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> dev
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(descriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
     for (int i{}; i < m_numFrames; ++i) {
-        Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer;
-        ThrowIfFailed(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
+        Microsoft::WRL::ComPtr<ID3D12Resource> pBackBufferResource;
+        ThrowIfFailed(swapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBufferResource)));
 
         device->CreateRenderTargetView(
-            backBuffer.Get(),   // ID3D12Resource that represents a render target
+            pBackBufferResource.Get(),   // ID3D12Resource that represents a render target
             nullptr,            // RTV desc
             rtvHandle           // new RTV dest
         );
 
-        m_pBackBuffers[i] = backBuffer;
+        m_pBackBuffers[i] = pBackBufferResource;
 
         // increment to the next handle in the descriptor heap
         rtvHandle.Offset(rtvDescriptorSize);
     }
 }
 
-Microsoft::WRL::ComPtr<ID3D12CommandAllocator> Renderer::CreateCommandAllocator(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
-    // ID3D12CommandAllocator
-    // Represents the allocations of storage for GPU commands
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
-    ThrowIfFailed(device->CreateCommandAllocator(type, IID_PPV_ARGS(&commandAllocator)));
-
-    return commandAllocator;
-}
-
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> Renderer::CreateCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator, D3D12_COMMAND_LIST_TYPE type) {
-    // Encapsulates a list of graphics commands for rendering
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
-    ThrowIfFailed(device->CreateCommandList(
-        0,                          // for multi-adapter systems
-        type,                       // type of command list to create
-        commandAllocator.Get(),     // pointer to the command allocator
-        nullptr,                    // pointer to the pipeline state
-        IID_PPV_ARGS(&commandList)
-    ));
-
-    // Indicates that recording to the command list has finished
-    ThrowIfFailed(commandList->Close());
-
-    return commandList;
-}
-
-Microsoft::WRL::ComPtr<ID3D12Fence> Renderer::CreateFence(Microsoft::WRL::ComPtr<ID3D12Device2> device) {
-    // Represents a fence, an object used for synchronization of the CPU and one or more GPUs
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-
-    ThrowIfFailed(device->CreateFence(
-        0,                      // init value
-        D3D12_FENCE_FLAG_NONE,  // no flags
-        IID_PPV_ARGS(&fence)
-    ));
-
-    return fence;
-}
-
-HANDLE Renderer::CreateEventHandle() {
-    HANDLE fenceEvent{ ::CreateEvent(NULL, FALSE, FALSE, NULL) };
-
-    assert(fenceEvent && "Failed to create fence event.");
-
-    return fenceEvent;
-}
-
-// The Signal function is used to signal the fence from the GPU
-uint64_t Renderer::Signal(Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t& fenceValue) {
-    uint64_t fenceValueForSignal = ++fenceValue;
-    ThrowIfFailed(commandQueue->Signal(
-        fence.Get(),        // pointer to the ID3D12Fence object
-        fenceValueForSignal // value to set the fence to
-    ));
-
-    return fenceValueForSignal;
-}
-
-void Renderer::WaitForFenceValue(Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t fenceValue, HANDLE fenceEvent, std::chrono::milliseconds duration) {
-    // Gets the current value of the fence
-    if (fence->GetCompletedValue() < fenceValue) {
-        // Specifies an event that's raised when the fence reaches a certain value
-        ThrowIfFailed(fence->SetEventOnCompletion(fenceValue, fenceEvent));
-        // Waits until the specified object is in the signaled state or the time-out interval elapses
-        ::WaitForSingleObject(fenceEvent, static_cast<DWORD>(duration.count()));
-    }
-}
-
 // Ensure that any commands previously executed on the GPU have finished executing 
 // before the CPU thread is allowed to continue processing
-void Renderer::Flush(Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, Microsoft::WRL::ComPtr<ID3D12Fence> fence, uint64_t& fenceValue, HANDLE fenceEvent) {
-    uint64_t fenceValueForSignal{ Signal(commandQueue, fence, fenceValue) };
-    WaitForFenceValue(fence, fenceValueForSignal, fenceEvent);
+void Renderer::Flush() {
+    m_pCommandQueueDirect->Flush();
+    m_pCommandQueueCopy->Flush();
+}
+
+void Renderer::TransitionResource(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+    Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
+    D3D12_RESOURCE_STATES stateBefore,
+    D3D12_RESOURCE_STATES stateAfter
+) {
+    CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
+        pResource.Get(),
+        stateBefore,
+        stateAfter
+    ) };
+
+    // Notifies the driver that it needs to synchronize multiple accesses to resources
+    pCommandList->ResourceBarrier(1, &barrier);
 }

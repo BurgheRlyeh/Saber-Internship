@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />
     <ClInclude Include="OutputContext.h" />
@@ -144,6 +145,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="OutputContext.cpp" />
     <ClCompile Include="Renderer.cpp" />
