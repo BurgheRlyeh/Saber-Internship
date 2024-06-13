@@ -26,12 +26,15 @@ public:
 	CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_COMMAND_LIST_TYPE type);;
 	~CommandQueue();
 
+	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;
+
 	// Get an available command list from the command queue.
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice);;
 
 	// Execute a command list.
 	// Returns the fence value to wait for for this command list.
 	uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
+	void ExecuteCommandListImmediately(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
 
 	uint64_t Signal();
 	bool IsFenceComplete(uint64_t fenceValue);

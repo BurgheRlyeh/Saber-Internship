@@ -21,8 +21,14 @@
 #include <thread>
 
 #include "CommandQueue.h"
+#include "Object.h"
+#include "Camera.h"
+#include "Scene.h"
 
 class CommandQueue;
+class Object;
+class Camera;
+class Scene;
 
 class Renderer {
 	// The number of swap chain back buffers.
@@ -42,7 +48,7 @@ class Renderer {
     Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{ m_numFrames };
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescriptorHeap{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescHeap{};
 	UINT m_RTVDescriptorSize{};
 	UINT m_currBackBufferId{};
 	
@@ -61,7 +67,6 @@ class Renderer {
     // render thread sync
     std::thread m_renderThread{};
     std::mutex m_renderThreadMutex{};
-    std::condition_variable m_renderThreadCondVar{};
     std::atomic<bool> m_isRenderThreadRunning{};
 
     // for resize
@@ -71,6 +76,29 @@ class Renderer {
 
     std::shared_ptr<CommandQueue> m_pCommandQueueDirect{};
     std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
+
+    // Depth buffer.
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_pDepthStencilBuffer{};
+    // Descriptor heap for depth buffer.
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDSVDescHeap{};
+
+    // Root signature
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_pRootSignature{};
+
+    // Pipeline state object.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
+
+    D3D12_VIEWPORT m_viewport{};
+    D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
+
+    //Scene m_scene{};
+    std::vector<Scene> m_scenes{};
+    size_t m_currSceneId{ 1 };
+    bool m_isCurrentHandLeft{};
+
+    std::atomic<size_t> m_nextSceneId{ m_currSceneId };
+    std::atomic<bool> m_isSwitchToNextCamera{};
+    std::atomic<bool> m_isLeftHand{ m_isCurrentHandLeft };
 
 public:
     Renderer(const Renderer&) = delete;
@@ -86,20 +114,26 @@ public:
     void Initialize(HWND hWnd);
 
     bool StartRenderThread();
-
     void StopRenderThread();
+
+    void SwitchVSync();
+
+    void SetSceneId(size_t sceneId);
+
+    void SwitchToNextCamera();
+
+    void SwitchHand();
 
     void Resize(uint32_t width, uint32_t height);
 
-    void SwitchVSync();
+    void PerformResize();
+    void Update();
+    void Render();
 
 private:
     void RenderLoop();
 
-    void PerformResize(uint32_t width, uint32_t height);
-
-    void Update();
-    void Render();
+    void ResizeDepthBuffer();
 
     bool CheckTearingSupport();
 
@@ -139,4 +173,10 @@ private:
         D3D12_RESOURCE_STATES stateBefore,
         D3D12_RESOURCE_STATES stateAfter
     );
+
+    void CreateDSVDescHeap();
+
+    void CreateRootSignature();
+
+    void CreatePipelineState();
 };

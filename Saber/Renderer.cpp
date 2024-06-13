@@ -8,12 +8,13 @@
 #include <sstream>
 
 Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
-    : m_useWarp(backBuffersCnt)
+    : m_useWarp(isUseWarp)
     , m_clientWidth(resWidth)
     , m_clientHeight(resHeight)
     , m_isVSync(isUseVSync)
     , m_isTearingSupported(CheckTearingSupport())
-    , m_time(m_clock.now()) 
+    , m_time(m_clock.now())
+    , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
 {
     m_numFrames = backBuffersCnt;
 }
@@ -35,15 +36,57 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    m_pRTVDescriptorHeap = CreateDescriptorHeap(m_pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_numFrames);
+    m_pRTVDescHeap = CreateDescriptorHeap(m_pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_numFrames);
 
     // Get the size of the handle increment for the given type of descriptor heap.
     // This value is typically used to increment a handle into a descriptor array by the correct amount.
     m_RTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
+    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescHeap);
 
     m_isInitialized = true;
+
+    CreateDSVDescHeap();
+    CreateRootSignature();
+    CreatePipelineState();
+
+    // Create scenes
+    {
+        //// createTriangle createCube
+        //m_pObject = std::make_shared<Object>(TestObject::createCube(m_pDevice, m_pCommandQueueCopy));
+
+        //m_pCamera = std::make_shared<StaticCamera>(
+        //    DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        //);
+
+        m_scenes.resize(3);
+
+        m_scenes[1].AddStaticObject(TestObject::createTriangle(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[1].AddCamera(StaticCamera(
+            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_scenes[1].AddCamera(StaticCamera(
+            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+
+        m_scenes[2].AddStaticObject(TestObject::createCube(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[2].AddCamera(StaticCamera(
+            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_scenes[2].AddCamera(StaticCamera(
+            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+    }
 }
 
 bool Renderer::StartRenderThread() {
@@ -70,15 +113,30 @@ void Renderer::SwitchVSync() {
     m_isVSync = !m_isVSync;
 }
 
+void Renderer::SetSceneId(size_t sceneId) {
+    m_nextSceneId.store(sceneId);
+}
+
+void Renderer::SwitchToNextCamera() {
+    m_isSwitchToNextCamera.store(true);
+}
+
+void Renderer::SwitchHand() {
+    m_isLeftHand.store(!m_isCurrentHandLeft);
+}
+
 inline void Renderer::RenderLoop() {
     while (m_isRenderThreadRunning.load()) {
         if (m_isNeedResize.load()) {
             std::scoped_lock<std::mutex> lock(m_renderThreadMutex);
-            PerformResize(
-                m_resolutionWidthForResize.load(),
-                m_resolutionHeightForResize.load()
-            );
+            PerformResize();
             m_isNeedResize.store(false);
+        }
+        m_currSceneId = m_nextSceneId.load();
+        m_isCurrentHandLeft = m_isLeftHand.load();
+        if (m_isSwitchToNextCamera.load()) {
+            m_scenes[m_currSceneId].NextCamera();
+            m_isSwitchToNextCamera.store(false);
         }
 
         Update();
@@ -88,8 +146,11 @@ inline void Renderer::RenderLoop() {
     }
 }
 
-void Renderer::PerformResize(uint32_t width, uint32_t height) {
+void Renderer::PerformResize() {
     assert(m_isInitialized);
+
+    uint32_t width{ m_resolutionWidthForResize.load() };
+    uint32_t height{ m_resolutionHeightForResize.load() };
 
     if (m_clientWidth == width && m_clientHeight == height)
         return;
@@ -121,7 +182,58 @@ void Renderer::PerformResize(uint32_t width, uint32_t height) {
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescriptorHeap);
+    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescHeap);
+
+    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_clientWidth), static_cast<float>(m_clientHeight));
+
+    // TODO update during switch
+    m_scenes[m_currSceneId].UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+    
+    ResizeDepthBuffer();
+}
+
+void Renderer::ResizeDepthBuffer() {
+    // Flush any GPU commands that might be referencing the depth buffer.
+    Flush();
+
+    // Resize screen dependent resources.
+    // Create a depth buffer.
+    D3D12_CLEAR_VALUE optimizedClearValue{
+        .Format{ DXGI_FORMAT_D32_FLOAT },
+        .DepthStencil{ 0.0f, 0 }
+    };
+
+    ThrowIfFailed(m_pDevice->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_D32_FLOAT,
+            m_clientWidth,
+            m_clientHeight,
+            1,
+            0,
+            1,
+            0,
+            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        ),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        &optimizedClearValue,
+        IID_PPV_ARGS(&m_pDepthStencilBuffer)
+    ));
+
+    // Update the depth-stencil view.
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{
+        .Format{ DXGI_FORMAT_D32_FLOAT },
+        .ViewDimension{ D3D12_DSV_DIMENSION_TEXTURE2D },
+        .Flags{ D3D12_DSV_FLAG_NONE },
+        .Texture2D{.MipSlice{} }
+    };
+
+    m_pDevice->CreateDepthStencilView(
+        m_pDepthStencilBuffer.Get(),
+        &dsv,
+        m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart()
+    );
 }
 
 void Renderer::Update() {
@@ -154,6 +266,14 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice)
     };
 
+    // CPU descriptor handle to a RTV
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
+        m_pRTVDescHeap->GetCPUDescriptorHandleForHeapStart(),  // RTV desc heap start
+        m_currBackBufferId,                                   // current index (offset) from start
+        m_RTVDescriptorSize                                         // RTV desc size
+    );
+    auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
+
     // Clear the render target.
     {
         // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
@@ -175,12 +295,6 @@ void Renderer::Render() {
             0.9f + static_cast<float>(dis(gen)),
             1.0f
         };
-        // CPU descriptor handle to a RTV
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-            m_pRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),  // RTV desc heap start
-            m_currBackBufferId,                                   // current index (offset) from start
-            m_RTVDescriptorSize                                         // RTV desc size
-        );
 
         pCommandList->ClearRenderTargetView(
             rtv,        // cpu desc handle
@@ -188,7 +302,26 @@ void Renderer::Render() {
             0,          // number of rectangles in array
             nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
         );
+        pCommandList->ClearDepthStencilView(
+            dsv,
+            D3D12_CLEAR_FLAG_DEPTH,
+            0.f,
+            0,
+            0,
+            nullptr
+        );
     }
+
+    m_scenes[m_currSceneId].RenderStaticObjects(
+        pCommandList,
+        m_pPipelineState,
+        m_pRootSignature,
+        m_viewport,
+        m_scissorRect,
+        rtv,
+        dsv,
+        m_isCurrentHandLeft
+    );
 
     // Present
     {
@@ -225,7 +358,7 @@ bool Renderer::CheckTearingSupport() {
     // Rather than create the DXGI 1.5 factory interface directly, we create the
     // DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
     // graphics debugging tools which will not support the 1.5 factory interface 
-    // until a future update. ??? TODO
+    // until a future update
     Microsoft::WRL::ComPtr<IDXGIFactory4> pFactory4;
     if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&pFactory4)))) {
         Microsoft::WRL::ComPtr<IDXGIFactory5> pFactory5;
@@ -483,4 +616,109 @@ void Renderer::TransitionResource(
 
     // Notifies the driver that it needs to synchronize multiple accesses to resources
     pCommandList->ResourceBarrier(1, &barrier);
+}
+
+void Renderer::CreateDSVDescHeap() {
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc{
+        .Type{ D3D12_DESCRIPTOR_HEAP_TYPE_DSV },
+        .NumDescriptors{ 1 },
+        .Flags{ D3D12_DESCRIPTOR_HEAP_FLAG_NONE }
+    };
+    ThrowIfFailed(m_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_pDSVDescHeap)));
+
+    ResizeDepthBuffer();
+}
+
+void Renderer::CreateRootSignature() {
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
+    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    }
+
+    // Allow input layout and deny unnecessary access to certain pipeline stages.
+    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
+    };
+
+    // A single 32-bit constant root parameter that is used by the vertex shader.
+    CD3DX12_ROOT_PARAMETER1 rootParameters[1]{};
+    rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+
+    // Serialize the root signature.
+    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
+        &rootSignatureDescription,
+        featureData.HighestVersion,
+        &rootSignatureBlob,
+        &errorBlob
+    ));
+
+    // Create the root signature.
+    ThrowIfFailed(m_pDevice->CreateRootSignature(
+        0,
+        rootSignatureBlob->GetBufferPointer(),
+        rootSignatureBlob->GetBufferSize(),
+        IID_PPV_ARGS(&m_pRootSignature)
+    ));
+}
+
+void Renderer::CreatePipelineState() {
+    // Load the vertex shader.
+    Microsoft::WRL::ComPtr<ID3DBlob> pVertexShaderBlob;
+    ThrowIfFailed(D3DReadFileToBlob(L"SimpleVertexShader.cso", &pVertexShaderBlob));
+
+    // Load the pixel shader.
+    Microsoft::WRL::ComPtr<ID3DBlob> pPixelShaderBlob;
+    ThrowIfFailed(D3DReadFileToBlob(L"SimplePixelShader.cso", &pPixelShaderBlob));
+
+    // Create the vertex input layout
+    D3D12_INPUT_ELEMENT_DESC inputLayout[]{
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    D3D12_RT_FORMAT_ARRAY rtvFormats{};
+    rtvFormats.NumRenderTargets = 1;
+    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc{ D3D12_DEFAULT };
+    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+
+    CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT }; // CD3DX12_DEFAULT D3D12_DEFAULT
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+
+    struct PipelineStateStream {
+        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
+        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
+        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
+        CD3DX12_PIPELINE_STATE_STREAM_VS VS;
+        CD3DX12_PIPELINE_STATE_STREAM_PS PS;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL DepthStencil;
+        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER Rasterizer;
+        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+    } pipelineStateStream{
+        .pRootSignature{ m_pRootSignature.Get() },
+        .InputLayout{ { inputLayout, _countof(inputLayout) } },
+        .PrimitiveTopologyType{ D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE },
+        .VS{ CD3DX12_SHADER_BYTECODE(pVertexShaderBlob.Get()) },
+        .PS{ CD3DX12_SHADER_BYTECODE(pPixelShaderBlob.Get()) },
+        .DSVFormat{ DXGI_FORMAT_D32_FLOAT },
+        .DepthStencil{ depthStencilDesc },
+        .Rasterizer{ rasterizerDesc },
+        .RTVFormats{ rtvFormats }
+    };
+
+    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc{
+        .SizeInBytes{ sizeof(PipelineStateStream) },
+        .pPipelineStateSubobjectStream{ &pipelineStateStream }
+    };
+    ThrowIfFailed(m_pDevice->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pPipelineState)));
 }

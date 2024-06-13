@@ -1,0 +1,40 @@
+#pragma once
+
+#include "Headers.h"
+
+#include "Object.h"
+#include "Camera.h"
+
+class Object;
+class StaticCamera;
+
+// TODO: UNSAFE!
+class Scene {
+    std::vector<std::shared_ptr<Object>> m_staticObjects{};
+    //std::vector<std::shared_ptr<Object>> m_dynamicObjects{};
+    std::vector<std::shared_ptr<StaticCamera>> m_cameras{};
+
+    size_t m_currCameraId{};
+
+public:
+    void AddStaticObject(const Object&& object);
+
+    void AddCamera(const StaticCamera&& camera);
+
+    void UpdateCamerasAspectRatio(float aspectRatio);
+
+    bool SetCurrentCamera(size_t cameraId);
+
+    void NextCamera();
+
+    void RenderStaticObjects(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState,
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
+        bool isLH = false
+    );
+};

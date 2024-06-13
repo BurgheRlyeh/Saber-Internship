@@ -30,6 +30,10 @@ CommandQueue::~CommandQueue() {
 	::CloseHandle(m_fenceEvent);
 }
 
+D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
+	return m_commandListType;
+}
+
 // Get an available command list from the command queue.
 Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
@@ -84,6 +88,11 @@ uint64_t CommandQueue::ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsC
 	pCommandAllocator->Release();
 
 	return fenceValue;
+}
+
+void CommandQueue::ExecuteCommandListImmediately(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
+	uint64_t fenceValue{ ExecuteCommandList(pCommandList) };
+	WaitForFenceValue(fenceValue);
 }
 
 uint64_t CommandQueue::Signal() {

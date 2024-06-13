@@ -1,6 +1,7 @@
 #include "Headers.h"
 
 #include <shellapi.h> // For CommandLineToArgvW
+#include <Shlwapi.h>
 
 #include "OutputContext.h"
 #include "Renderer.h"
@@ -48,6 +49,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         bool alt{ (::GetAsyncKeyState(VK_MENU) & 0x8000) != 0 };
 
         switch (wParam) {
+        case '0':
+            g_pRenderer->SetSceneId(0);
+            break;
+        case '1':
+            g_pRenderer->SetSceneId(1);
+            break;
+        case '2':
+            g_pRenderer->SetSceneId(2);
+            break;
+        case 'C':
+            g_pRenderer->SwitchToNextCamera();
+            break;
+        case 'H':
+            g_pRenderer->SwitchHand();
+            break;
         case 'V':
             g_pRenderer->SwitchVSync();
             break;
@@ -95,6 +111,14 @@ int CALLBACK wWinMain(
     PWSTR lpCmdLine,        // Cmd-line args as Unicode string
     int nCmdShow            // is minimized / maximized / shown normally
 ) {
+    // Set the working directory to the path of the executable.
+    WCHAR path[MAX_PATH];
+    HMODULE hModule = GetModuleHandleW(NULL);
+    if (GetModuleFileNameW(hModule, path, MAX_PATH) > 0) {
+        PathRemoveFileSpecW(path);
+        SetCurrentDirectoryW(path);
+    }
+
     // Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
     // Using this awareness context allows the client area of the window 
     // to achieve 100% scaling while still allowing non-client window content to 
@@ -129,6 +153,10 @@ int CALLBACK wWinMain(
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
         }
+
+        //g_pRenderer->PerformResize();
+        //g_pRenderer->Update();
+        //g_pRenderer->Render();
     }
 
     g_pRenderer->StopRenderThread();
