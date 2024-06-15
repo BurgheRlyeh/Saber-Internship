@@ -2,22 +2,22 @@
 
 #include "Headers.h"
 
-#include "Object.h"
+#include "RenderObject.h"
 #include "Camera.h"
 
-class Object;
+class RenderObject;
 class StaticCamera;
 
 // TODO: UNSAFE!
 class Scene {
-    std::vector<std::shared_ptr<Object>> m_staticObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_staticObjects{};
     //std::vector<std::shared_ptr<Object>> m_dynamicObjects{};
     std::vector<std::shared_ptr<StaticCamera>> m_cameras{};
 
     size_t m_currCameraId{};
 
 public:
-    void AddStaticObject(const Object&& object);
+    void AddStaticObject(const RenderObject&& object);
 
     void AddCamera(const StaticCamera&& camera);
 

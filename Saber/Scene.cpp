@@ -1,7 +1,7 @@
 #include "Scene.h"
 
-void Scene::AddStaticObject(const Object&& object) {
-    m_staticObjects.push_back(std::make_shared<Object>(object));
+void Scene::AddStaticObject(const RenderObject&& object) {
+    m_staticObjects.push_back(std::make_shared<RenderObject>(object));
 }
 
 void Scene::AddCamera(const StaticCamera&& camera) {

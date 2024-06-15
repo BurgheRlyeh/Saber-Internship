@@ -139,7 +139,8 @@
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />
-    <ClInclude Include="Object.h" />
+    <ClInclude Include="Mesh.h" />
+    <ClInclude Include="RenderObject.h" />
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
@@ -152,7 +153,8 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Object.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="OutputContext.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Scene.cpp" />

@@ -35,7 +35,9 @@ D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
 }
 
 // Get an available command list from the command queue.
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetCommandList(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+) {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
 
@@ -90,7 +92,9 @@ uint64_t CommandQueue::ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsC
 	return fenceValue;
 }
 
-void CommandQueue::ExecuteCommandListImmediately(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
+void CommandQueue::ExecuteCommandListImmediately(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+) {
 	uint64_t fenceValue{ ExecuteCommandList(pCommandList) };
 	WaitForFenceValue(fenceValue);
 }
@@ -120,7 +124,9 @@ Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() 
 	return m_pCommandQueue;
 }
 
-Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAllocator(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
+Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAllocator(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+) {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 
 	ThrowIfFailed(pDevice->CreateCommandAllocator(
@@ -131,7 +137,10 @@ Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAlloca
 	return pCommandAllocator;
 }
 
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::CreateCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator) {
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::CreateCommandList(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator
+) {
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
 
 	ThrowIfFailed(pDevice->CreateCommandList(

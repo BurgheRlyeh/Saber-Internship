@@ -4,28 +4,24 @@
 
 #include "Vertices.h"
 #include "CommandQueue.h"
+#include "Mesh.h"
 
 struct VertexPositionColor;
 class CommandQueue;
+struct MeshData;
+class Mesh;
 
-class Object {
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_pVertexBuffer{};
-    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView{};
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_pIndexBuffer{};
-    D3D12_INDEX_BUFFER_VIEW m_indexBufferView{};
-
-    size_t m_indicesCount{};
+class RenderObject {
+    std::shared_ptr<Mesh> m_pMesh{};
 
     DirectX::XMMATRIX m_modelMatrix{ DirectX::XMMatrixIdentity() };
 
 public:
-    Object() = delete;
-    Object(
+    RenderObject() = delete;
+    RenderObject(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const void* vertices, size_t verticesCnt, size_t vertexSize,
-        const void* indices, size_t indicesCnt, size_t indexSize, DXGI_FORMAT indexFormat
+        const MeshData& meshData
     );
 
     void Update();
@@ -40,36 +36,21 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
         DirectX::XMMATRIX viewProjectionMatrix
     ) const;
-
-private:
-    void CreateBufferResource(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-        ID3D12Resource** ppDestinationResource,
-        ID3D12Resource** ppIntermediateResource,
-        size_t numElements,
-        size_t elementSize,
-        const void* bufferData,
-        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
-    );
-
 };
 
-class TestObject : Object {
-    TestObject(
+class TestRenderObject : RenderObject {
+    TestRenderObject(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const void* vertices, size_t verticesCnt, size_t vertexSize,
-        const void* indices, size_t indicesCnt, size_t indexSize, DXGI_FORMAT indexFormat
-    ) : Object(
+        const MeshData& meshData
+    ) : RenderObject(
         pDevice,
         pCommandQueueCopy,
-        vertices, verticesCnt, vertexSize,
-        indices, indicesCnt, indexSize, indexFormat
+        meshData
     ) {};
 
 public:
-    static Object createTriangle(
+    static RenderObject createTriangle(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy
     ) {
@@ -80,15 +61,26 @@ public:
         };
         uint32_t indices[]{ 0, 1, 2 };
 
-        return TestObject(
+        MeshData meshData{
+            // vertices data
+            .vertices{ vertices },
+            .verticesCnt{ _countof(vertices) },
+            .vertexSize{ sizeof(*vertices) },
+            // indices data
+            .indices{ indices },
+            .indicesCnt{ _countof(indices) },
+            .indexSize{ sizeof(*indices) },
+            .indexFormat{ DXGI_FORMAT_R32_UINT }
+        };
+
+        return TestRenderObject(
             pDevice,
             pCommandQueueCopy,
-            vertices, _countof(vertices), sizeof(*vertices),
-            indices, _countof(indices), sizeof(*indices), DXGI_FORMAT_R32_UINT
+            meshData
         );
     }
 
-    static Object createCube(
+    static RenderObject createCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy
     ) {
@@ -112,11 +104,22 @@ public:
             4, 0, 3, 4, 3, 7
         };
 
-        return TestObject(
+        MeshData meshData{
+            // vertices data
+            .vertices{ vertices },
+            .verticesCnt{ _countof(vertices) },
+            .vertexSize{ sizeof(*vertices) },
+            // indices data
+            .indices{ indices },
+            .indicesCnt{ _countof(indices) },
+            .indexSize{ sizeof(*indices) },
+            .indexFormat{ DXGI_FORMAT_R32_UINT }
+        };
+
+        return TestRenderObject(
             pDevice,
             pCommandQueueCopy,
-            vertices, _countof(vertices), sizeof(*vertices),
-            indices, _countof(indices), sizeof(*indices), DXGI_FORMAT_R32_UINT
+            meshData
         );
     }
 };

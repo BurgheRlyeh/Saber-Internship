@@ -63,7 +63,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         m_scenes.resize(3);
 
-        m_scenes[1].AddStaticObject(TestObject::createTriangle(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[1].AddStaticObject(TestRenderObject::createTriangle(m_pDevice, m_pCommandQueueCopy));
         m_scenes[1].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
@@ -75,7 +75,7 @@ void Renderer::Initialize(HWND hWnd) {
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
 
-        m_scenes[2].AddStaticObject(TestObject::createCube(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[2].AddStaticObject(TestRenderObject::createCube(m_pDevice, m_pCommandQueueCopy));
         m_scenes[2].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),

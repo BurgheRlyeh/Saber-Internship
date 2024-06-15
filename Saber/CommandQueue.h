@@ -23,7 +23,7 @@ public:
 	CommandQueue() = delete;
 	CommandQueue(CommandQueue&&) = delete;
 	CommandQueue(const CommandQueue&) = delete;
-	CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_COMMAND_LIST_TYPE type);;
+	CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_COMMAND_LIST_TYPE type);
 	~CommandQueue();
 
 	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;

@@ -21,12 +21,12 @@
 #include <thread>
 
 #include "CommandQueue.h"
-#include "Object.h"
+#include "RenderObject.h"
 #include "Camera.h"
 #include "Scene.h"
 
 class CommandQueue;
-class Object;
+class RenderObject;
 class Camera;
 class Scene;
 

@@ -1,11 +1,6 @@
-#include "Object.h"
+#include "Mesh.h"
 
-Object::Object(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    const void* vertices, size_t verticesCnt, size_t vertexSize,
-    const void* indices, size_t indicesCnt, size_t indexSize, DXGI_FORMAT indexFormat
-) : m_indicesCount(indicesCnt) {
+Mesh::Mesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, const MeshData& meshData) : m_indicesCount(meshData.indicesCnt) {
     assert(pCommandQueueCopy->GetCommandListType() == D3D12_COMMAND_LIST_TYPE_COPY);
 
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{
@@ -19,16 +14,15 @@ Object::Object(
         pCommandList,
         &m_pVertexBuffer,
         &intermediateVertexBuffer,
-        verticesCnt,
-        vertexSize,
-        vertices
+        meshData.vertices,
+        meshData.verticesCnt * meshData.vertexSize
     );
 
     // Create the vertex buffer view
     m_vertexBufferView = {
         .BufferLocation{ m_pVertexBuffer->GetGPUVirtualAddress() },
-        .SizeInBytes{ static_cast<uint32_t>(verticesCnt * vertexSize) },
-        .StrideInBytes{ static_cast<uint32_t>(vertexSize) }
+        .SizeInBytes{ static_cast<uint32_t>(meshData.verticesCnt * meshData.vertexSize) },
+        .StrideInBytes{ static_cast<uint32_t>(meshData.vertexSize) }
     };
 
     // Upload index buffer data
@@ -38,67 +32,41 @@ Object::Object(
         pCommandList,
         &m_pIndexBuffer,
         &intermediateIndexBuffer,
-        indicesCnt,
-        indexSize,
-        indices
+        meshData.indices,
+        meshData.indicesCnt * meshData.indexSize
     );
 
     // Create index buffer view
     m_indexBufferView = {
         .BufferLocation{ m_pIndexBuffer->GetGPUVirtualAddress() },
-        .SizeInBytes{ static_cast<uint32_t>(indicesCnt * indexSize) },
-        .Format{ indexFormat },
+        .SizeInBytes{ static_cast<uint32_t>(meshData.indicesCnt * meshData.indexSize) },
+        .Format{ meshData.indexFormat },
     };
 
     pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);
 }
 
-void Object::Update() {
-
+const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
+    return &m_vertexBufferView;
 }
 
-void Object::Render(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState,
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-    D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-    DirectX::XMMATRIX viewProjectionMatrix) const {
-    assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-    pCommandListDirect->SetPipelineState(pPipelineState.Get());
-    pCommandListDirect->SetGraphicsRootSignature(pRootSignature.Get());
-
-    pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    pCommandListDirect->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    pCommandListDirect->IASetIndexBuffer(&m_indexBufferView);
-
-    pCommandListDirect->RSSetViewports(1, &viewport);
-    pCommandListDirect->RSSetScissorRects(1, &scissorRect);
-
-    pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, &depthStencilView);
-
-    // Update the MVP matrix
-    DirectX::XMMATRIX mvpMatrix{ DirectX::XMMatrixMultiply(m_modelMatrix, viewProjectionMatrix) };
-    pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &mvpMatrix, 0);
-
-    pCommandListDirect->DrawIndexedInstanced(m_indicesCount, 1, 0, 0, 0);
+const D3D12_INDEX_BUFFER_VIEW* Mesh::GetIndexBufferView() const {
+    return &m_indexBufferView;
 }
 
-void Object::CreateBufferResource(
+size_t Mesh::GetIndicesCount() const {
+    return m_indicesCount;
+}
+
+void Mesh::CreateBufferResource(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     ID3D12Resource** ppDestinationResource,
     ID3D12Resource** ppIntermediateResource,
-    size_t numElements,
-    size_t elementSize,
     const void* bufferData,
+    size_t bufferSize,
     D3D12_RESOURCE_FLAGS flags
 ) {
-    size_t bufferSize{ numElements * elementSize };
-
     ThrowIfFailed(pDevice->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
         D3D12_HEAP_FLAG_NONE,
