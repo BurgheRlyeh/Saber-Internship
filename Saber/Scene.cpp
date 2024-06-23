@@ -27,7 +27,14 @@ void Scene::NextCamera() {
         m_currCameraId = (m_currCameraId + 1) % m_cameras.size();
 }
 
-void Scene::RenderStaticObjects(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState, Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature, D3D12_VIEWPORT viewport, D3D12_RECT scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView, D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView, bool isLH) {
+void Scene::RenderStaticObjects(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect,
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
+    bool isLH
+) {
     if (m_cameras.empty())
         return;
 
@@ -39,8 +46,6 @@ void Scene::RenderStaticObjects(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList
     for (auto const& obj : m_staticObjects) {
         obj->Render(
             pCommandListDirect,
-            pPipelineState,
-            pRootSignature,
             viewport,
             scissorRect,
             renderTargetView,

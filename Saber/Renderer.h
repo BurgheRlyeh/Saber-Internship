@@ -20,15 +20,12 @@
 #include <condition_variable>
 #include <thread>
 
+#include "Atlas.h"
+#include "Camera.h"
 #include "CommandQueue.h"
 #include "RenderObject.h"
-#include "Camera.h"
+#include "Resources.h"
 #include "Scene.h"
-
-class CommandQueue;
-class RenderObject;
-class Camera;
-class Scene;
 
 class Renderer {
 	// The number of swap chain back buffers.
@@ -82,12 +79,6 @@ class Renderer {
     // Descriptor heap for depth buffer.
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDSVDescHeap{};
 
-    // Root signature
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_pRootSignature{};
-
-    // Pipeline state object.
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
-
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
@@ -99,6 +90,13 @@ class Renderer {
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
     std::atomic<bool> m_isLeftHand{ m_isCurrentHandLeft };
+
+    // Atlases
+    std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
+    std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
+    std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
+    std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
+    //std::shared_ptr<MaterialAtlas<>> m_pMaterialAtlas{};
 
 public:
     Renderer(const Renderer&) = delete;
@@ -175,8 +173,4 @@ private:
     );
 
     void CreateDSVDescHeap();
-
-    void CreateRootSignature();
-
-    void CreatePipelineState();
 };

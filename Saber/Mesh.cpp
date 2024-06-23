@@ -1,6 +1,11 @@
 #include "Mesh.h"
 
-Mesh::Mesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, const MeshData& meshData) : m_indicesCount(meshData.indicesCnt) {
+Mesh::Mesh(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
+    , const MeshData& meshData
+) : m_indicesCount(meshData.indicesCnt)
+{
     assert(pCommandQueueCopy->GetCommandListType() == D3D12_COMMAND_LIST_TYPE_COPY);
 
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{
@@ -45,6 +50,14 @@ Mesh::Mesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Comman
 
     pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);
 }
+
+Mesh::Mesh(
+    const std::string& filename
+    , Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
+    , const MeshData& meshData
+) : Mesh(pDevice, pCommandQueueCopy, meshData)
+{};
 
 const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
     return &m_vertexBufferView;

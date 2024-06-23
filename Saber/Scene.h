@@ -5,9 +5,6 @@
 #include "RenderObject.h"
 #include "Camera.h"
 
-class RenderObject;
-class StaticCamera;
-
 // TODO: UNSAFE!
 class Scene {
     std::vector<std::shared_ptr<RenderObject>> m_staticObjects{};
@@ -29,8 +26,6 @@ public:
 
     void RenderStaticObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        Microsoft::WRL::ComPtr<ID3D12PipelineState> pPipelineState,
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,

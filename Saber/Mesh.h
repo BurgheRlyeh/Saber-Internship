@@ -34,6 +34,12 @@ public:
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshData& meshData
     );
+    Mesh(
+        const std::string& filename,
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const MeshData& meshData
+    );
 
     const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferView() const;
 

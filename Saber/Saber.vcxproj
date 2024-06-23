@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Atlas.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="framework.h" />
@@ -144,6 +145,7 @@
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Resources.h" />
     <ClInclude Include="Saber.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="targetver.h" />

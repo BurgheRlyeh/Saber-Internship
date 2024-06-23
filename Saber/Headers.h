@@ -8,6 +8,7 @@
 
 // Windows Runtime Library. Needed for Microsoft::WRL::ComPtr<> template class.
 #include <wrl.h>
+#include <comdef.h>
 
 // DirectX
 #pragma comment(lib, "d3d12.lib")
@@ -32,6 +33,11 @@
 
 inline void ThrowIfFailed(HRESULT hr) {
     if (FAILED(hr)) {
+        _com_error err(hr);
+        OutputDebugString(L"HRESULT: ");
+        OutputDebugString(err.ErrorMessage());
+        OutputDebugString(L"\n");
+
         throw std::exception();
     }
 }

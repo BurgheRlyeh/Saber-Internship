@@ -15,11 +15,17 @@ Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, ui
     , m_isTearingSupported(CheckTearingSupport())
     , m_time(m_clock.now())
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
+    , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(""))
+    , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(""))
+    , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(""))
+    , m_pPipelineStateAtlas(std::make_shared<Atlas<PipelineStateResource>>(""))
 {
     m_numFrames = backBuffersCnt;
 }
 
-Renderer::~Renderer() {}
+Renderer::~Renderer() {
+    m_scenes.clear();
+}
 
 void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers.resize(m_numFrames);
@@ -47,23 +53,19 @@ void Renderer::Initialize(HWND hWnd) {
     m_isInitialized = true;
 
     CreateDSVDescHeap();
-    CreateRootSignature();
-    CreatePipelineState();
 
     // Create scenes
     {
-        //// createTriangle createCube
-        //m_pObject = std::make_shared<Object>(TestObject::createCube(m_pDevice, m_pCommandQueueCopy));
-
-        //m_pCamera = std::make_shared<StaticCamera>(
-        //    DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //);
-
         m_scenes.resize(3);
 
-        m_scenes[1].AddStaticObject(TestRenderObject::createTriangle(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[1].AddStaticObject(TestRenderObject::createTriangle(
+            m_pDevice,
+            m_pCommandQueueCopy,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPipelineStateAtlas
+        ));
         m_scenes[1].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
@@ -75,7 +77,14 @@ void Renderer::Initialize(HWND hWnd) {
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
 
-        m_scenes[2].AddStaticObject(TestRenderObject::createCube(m_pDevice, m_pCommandQueueCopy));
+        m_scenes[2].AddStaticObject(TestRenderObject::createCube(
+            m_pDevice,
+            m_pCommandQueueCopy,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPipelineStateAtlas
+        ));
         m_scenes[2].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
@@ -314,8 +323,6 @@ void Renderer::Render() {
 
     m_scenes[m_currSceneId].RenderStaticObjects(
         pCommandList,
-        m_pPipelineState,
-        m_pRootSignature,
         m_viewport,
         m_scissorRect,
         rtv,
@@ -629,96 +636,96 @@ void Renderer::CreateDSVDescHeap() {
     ResizeDepthBuffer();
 }
 
-void Renderer::CreateRootSignature() {
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
+//void Renderer::CreateRootSignature() {
+//    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
+//    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+//        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+//    }
+//
+//    // Allow input layout and deny unnecessary access to certain pipeline stages.
+//    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
+//        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+//        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+//        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+//        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+//        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
+//    };
+//
+//    // A single 32-bit constant root parameter that is used by the vertex shader.
+//    CD3DX12_ROOT_PARAMETER1 rootParameters[1]{};
+//    rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+//
+//    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+//    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+//
+//    // Serialize the root signature.
+//    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+//    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
+//        &rootSignatureDescription,
+//        featureData.HighestVersion,
+//        &rootSignatureBlob,
+//        &errorBlob
+//    ));
+//
+//    // Create the root signature.
+//    ThrowIfFailed(m_pDevice->CreateRootSignature(
+//        0,
+//        rootSignatureBlob->GetBufferPointer(),
+//        rootSignatureBlob->GetBufferSize(),
+//        IID_PPV_ARGS(&m_pRootSignature)
+//    ));
+//}
 
-    // Allow input layout and deny unnecessary access to certain pipeline stages.
-    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
-    };
-
-    // A single 32-bit constant root parameter that is used by the vertex shader.
-    CD3DX12_ROOT_PARAMETER1 rootParameters[1]{};
-    rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-    // Serialize the root signature.
-    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &rootSignatureDescription,
-        featureData.HighestVersion,
-        &rootSignatureBlob,
-        &errorBlob
-    ));
-
-    // Create the root signature.
-    ThrowIfFailed(m_pDevice->CreateRootSignature(
-        0,
-        rootSignatureBlob->GetBufferPointer(),
-        rootSignatureBlob->GetBufferSize(),
-        IID_PPV_ARGS(&m_pRootSignature)
-    ));
-}
-
-void Renderer::CreatePipelineState() {
-    // Load the vertex shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> pVertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(L"SimpleVertexShader.cso", &pVertexShaderBlob));
-
-    // Load the pixel shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> pPixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(L"SimplePixelShader.cso", &pPixelShaderBlob));
-
-    // Create the vertex input layout
-    D3D12_INPUT_ELEMENT_DESC inputLayout[]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    };
-
-    D3D12_RT_FORMAT_ARRAY rtvFormats{};
-    rtvFormats.NumRenderTargets = 1;
-    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc{ D3D12_DEFAULT };
-    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
-
-    CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT }; // CD3DX12_DEFAULT D3D12_DEFAULT
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
-
-    struct PipelineStateStream {
-        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
-        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
-        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
-        CD3DX12_PIPELINE_STATE_STREAM_VS VS;
-        CD3DX12_PIPELINE_STATE_STREAM_PS PS;
-        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
-        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL DepthStencil;
-        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER Rasterizer;
-        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-    } pipelineStateStream{
-        .pRootSignature{ m_pRootSignature.Get() },
-        .InputLayout{ { inputLayout, _countof(inputLayout) } },
-        .PrimitiveTopologyType{ D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE },
-        .VS{ CD3DX12_SHADER_BYTECODE(pVertexShaderBlob.Get()) },
-        .PS{ CD3DX12_SHADER_BYTECODE(pPixelShaderBlob.Get()) },
-        .DSVFormat{ DXGI_FORMAT_D32_FLOAT },
-        .DepthStencil{ depthStencilDesc },
-        .Rasterizer{ rasterizerDesc },
-        .RTVFormats{ rtvFormats }
-    };
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc{
-        .SizeInBytes{ sizeof(PipelineStateStream) },
-        .pPipelineStateSubobjectStream{ &pipelineStateStream }
-    };
-    ThrowIfFailed(m_pDevice->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pPipelineState)));
-}
+//void Renderer::CreatePipelineState() {
+//    // Load the vertex shader.
+//    Microsoft::WRL::ComPtr<ID3DBlob> pVertexShaderBlob;
+//    ThrowIfFailed(D3DReadFileToBlob(L"SimpleVertexShader.cso", &pVertexShaderBlob));
+//
+//    // Load the pixel shader.
+//    Microsoft::WRL::ComPtr<ID3DBlob> pPixelShaderBlob;
+//    ThrowIfFailed(D3DReadFileToBlob(L"SimplePixelShader.cso", &pPixelShaderBlob));
+//
+//    // Create the vertex input layout
+//    D3D12_INPUT_ELEMENT_DESC inputLayout[]{
+//        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+//        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+//    };
+//
+//    D3D12_RT_FORMAT_ARRAY rtvFormats{};
+//    rtvFormats.NumRenderTargets = 1;
+//    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+//
+//    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc{ D3D12_DEFAULT };
+//    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+//
+//    CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT }; // CD3DX12_DEFAULT D3D12_DEFAULT
+//    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+//
+//    struct PipelineStateStream {
+//        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
+//        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
+//        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
+//        CD3DX12_PIPELINE_STATE_STREAM_VS VS;
+//        CD3DX12_PIPELINE_STATE_STREAM_PS PS;
+//        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
+//        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL DepthStencil;
+//        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER Rasterizer;
+//        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+//    } pipelineStateStream{
+//        .pRootSignature{ m_pRootSignature.Get() },
+//        .InputLayout{ { inputLayout, _countof(inputLayout) } },
+//        .PrimitiveTopologyType{ D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE },
+//        .VS{ CD3DX12_SHADER_BYTECODE(pVertexShaderBlob.Get()) },
+//        .PS{ CD3DX12_SHADER_BYTECODE(pPixelShaderBlob.Get()) },
+//        .DSVFormat{ DXGI_FORMAT_D32_FLOAT },
+//        .DepthStencil{ depthStencilDesc },
+//        .Rasterizer{ rasterizerDesc },
+//        .RTVFormats{ rtvFormats }
+//    };
+//
+//    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc{
+//        .SizeInBytes{ sizeof(PipelineStateStream) },
+//        .pPipelineStateSubobjectStream{ &pipelineStateStream }
+//    };
+//    ThrowIfFailed(m_pDevice->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pPipelineState)));
+//}
