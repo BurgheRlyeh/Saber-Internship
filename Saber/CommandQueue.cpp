@@ -35,8 +35,11 @@ D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
 }
 
 // Get an available command list from the command queue.
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetCommandList(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+CommandList CommandQueue::GetCommandList(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	uint16_t priority,
+	std::function<void(void)> beforeExecuteTask,
+	std::function<void(void)> afterExecuteTask
 ) {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
@@ -70,19 +73,19 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetCommandList(
 
 // Execute a command list.
 // Returns the fence value to wait for for this command list.
-uint64_t CommandQueue::ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-	ThrowIfFailed(pCommandList->Close());
+uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
+	ThrowIfFailed(commandList.m_pCommandList->Close());
 
 	ID3D12CommandAllocator* pCommandAllocator{};
 	uint32_t dataSize{ sizeof(pCommandAllocator) };
-	ThrowIfFailed(pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
+	ThrowIfFailed(commandList.m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
 
-	ID3D12CommandList* const pCommandLists[]{ pCommandList.Get() };
+	ID3D12CommandList* const pCommandLists[]{ commandList.m_pCommandList.Get() };
 	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
 	uint64_t fenceValue{ Signal() };
 
 	m_commandAllocatorQueue.emplace(CommandAllocatorEntry{ fenceValue, pCommandAllocator });
-	m_commandListQueue.push(pCommandList);
+	m_commandListQueue.push(commandList.m_pCommandList);
 
 	// The ownership of the command allocator has been transferred to the ComPtr
 	// in the command allocator queue. It is safe to release the reference 
@@ -93,9 +96,9 @@ uint64_t CommandQueue::ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsC
 }
 
 void CommandQueue::ExecuteCommandListImmediately(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+	CommandList commandList
 ) {
-	uint64_t fenceValue{ ExecuteCommandList(pCommandList) };
+	uint64_t fenceValue{ ExecuteCommandList(commandList) };
 	WaitForFenceValue(fenceValue);
 }
 

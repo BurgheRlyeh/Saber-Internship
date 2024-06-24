@@ -137,6 +137,7 @@
   <ItemGroup>
     <ClInclude Include="Atlas.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CommandList.h" />
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />

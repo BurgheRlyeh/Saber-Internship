@@ -25,6 +25,7 @@ Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, ui
 
 Renderer::~Renderer() {
     m_scenes.clear();
+    Flush();
 }
 
 void Renderer::Initialize(HWND hWnd) {
@@ -271,7 +272,7 @@ void Renderer::Render() {
     // the CPU thread is stalled using the WaitForFenceValue function described earlier.
     m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{
+    CommandList commandList{
         m_pCommandQueueDirect->GetCommandList(m_pDevice)
     };
 
@@ -287,7 +288,7 @@ void Renderer::Render() {
     {
         // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
         TransitionResource(
-            pCommandList,
+            commandList.m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -305,13 +306,13 @@ void Renderer::Render() {
             1.0f
         };
 
-        pCommandList->ClearRenderTargetView(
+        commandList.m_pCommandList->ClearRenderTargetView(
             rtv,        // cpu desc handle
             clearColor, // color to fill RTV
             0,          // number of rectangles in array
             nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
         );
-        pCommandList->ClearDepthStencilView(
+        commandList.m_pCommandList->ClearDepthStencilView(
             dsv,
             D3D12_CLEAR_FLAG_DEPTH,
             0.f,
@@ -322,7 +323,7 @@ void Renderer::Render() {
     }
 
     m_scenes[m_currSceneId].RenderStaticObjects(
-        pCommandList,
+        commandList.m_pCommandList,
         m_viewport,
         m_scissorRect,
         rtv,
@@ -333,14 +334,14 @@ void Renderer::Render() {
     // Present
     {
         TransitionResource(
-            pCommandList,
+            commandList.m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
         );
 
         // This method must be called on the command list before being executed on the command queue
-        m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecuteCommandList(pCommandList);
+        m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecuteCommandList(commandList.m_pCommandList);
 
         UINT syncInterval{ m_isVSync ? 1u : 0};
         UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };

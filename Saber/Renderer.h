@@ -23,6 +23,7 @@
 #include "Atlas.h"
 #include "Camera.h"
 #include "CommandQueue.h"
+#include "CommandList.h"
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Scene.h"

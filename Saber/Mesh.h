@@ -3,8 +3,7 @@
 #include "Headers.h"
 
 #include "CommandQueue.h"
-
-class CommandQueue;
+#include "CommandList.h"
 
 struct MeshData {
     // vertices data

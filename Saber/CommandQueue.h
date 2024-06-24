@@ -4,6 +4,8 @@
 
 #include <queue>
 
+#include "CommandList.h"
+
 class CommandQueue {
 	struct CommandAllocatorEntry {
 		uint64_t fenceValue{};
@@ -29,12 +31,17 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;
 
 	// Get an available command list from the command queue.
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice);;
+	CommandList GetCommandList(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		uint16_t priority = 0,
+		std::function<void(void)> beforeExecuteTask = [=]() { return; },
+		std::function<void(void)> afterExecuteTask = [=]() { return; }
+	);
 
 	// Execute a command list.
 	// Returns the fence value to wait for for this command list.
-	uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
-	void ExecuteCommandListImmediately(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
+	uint64_t ExecuteCommandList(CommandList pCommandList);
+	void ExecuteCommandListImmediately(CommandList pCommandList);
 
 	uint64_t Signal();
 	bool IsFenceComplete(uint64_t fenceValue);

@@ -8,7 +8,7 @@ Mesh::Mesh(
 {
     assert(pCommandQueueCopy->GetCommandListType() == D3D12_COMMAND_LIST_TYPE_COPY);
 
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{
+    CommandList commandList{
         pCommandQueueCopy->GetCommandList(pDevice)
     };
 
@@ -16,7 +16,7 @@ Mesh::Mesh(
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateVertexBuffer{};
     CreateBufferResource(
         pDevice,
-        pCommandList,
+        commandList.m_pCommandList,
         &m_pVertexBuffer,
         &intermediateVertexBuffer,
         meshData.vertices,
@@ -34,7 +34,7 @@ Mesh::Mesh(
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateIndexBuffer{};
     CreateBufferResource(
         pDevice,
-        pCommandList,
+        commandList.m_pCommandList,
         &m_pIndexBuffer,
         &intermediateIndexBuffer,
         meshData.indices,
@@ -48,7 +48,7 @@ Mesh::Mesh(
         .Format{ meshData.indexFormat },
     };
 
-    pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);
+    pCommandQueueCopy->ExecuteCommandListImmediately(commandList.m_pCommandList);
 }
 
 Mesh::Mesh(
