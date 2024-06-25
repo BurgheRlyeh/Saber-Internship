@@ -9,51 +9,56 @@
 
 template <typename T, typename STRING_TYPE = std::string>
 class StringAtlas {
-    STRING_TYPE m_resourse_folder;
+    STRING_TYPE m_resourceFolder;
     std::map<const STRING_TYPE, std::weak_ptr<T>> m_map;
 
     struct Deleter {
-        Deleter(StringAtlas* atlas, const STRING_TYPE& filename)
-            : m_atlas(atlas)
+        Deleter(StringAtlas* pAtlas, const STRING_TYPE& filename)
+            : m_pAtlas(pAtlas)
             , m_filename(filename)
         {}
 
-        void operator()(T* item) {
-            m_atlas->m_map.erase(m_filename);
+        void operator()(T* pItem) {
+            m_pAtlas->m_map.erase(m_filename);
 
-            delete item;
+            delete pItem;
         }
 
-        StringAtlas* m_atlas;
+        StringAtlas* m_pAtlas;
         STRING_TYPE m_filename;
     };
 
 public:
-    StringAtlas(const STRING_TYPE& ResourseFolder) {
-        m_resourse_folder = ResourseFolder;
-    }
+    StringAtlas(const STRING_TYPE& resourceFolder)
+        : m_resourceFolder(resourceFolder) 
+    {}
     ~StringAtlas() {
         assert(m_map.empty());
     }
 
-    template <typename... Params>
-    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
-        auto it = m_map.find(filename);
-        if (it != m_map.end()) {
-            return it->second.lock();
-        }
-        auto resource = std::shared_ptr<T>(new T(m_resourse_folder + filename, params...), Deleter(this, filename));
-        m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, resource));
-        return resource;
-
+    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
+        auto res = m_map.find(filename);
+        return res != m_map.end() ? res->second.lock() : std::shared_ptr<T>(nullptr);
     }
 
-    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
-        auto it = m_map.find(filename);
-        if (it != m_map.end()) {
-            return it->second.lock();
+    template <typename... Params>
+    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
+        std::shared_ptr<T> res{ Find(filename) };
+        if (res) {
+            return res;
         }
-        return std::shared_ptr<T>(nullptr);
+        res = std::shared_ptr<T>(new T(m_resourceFolder + filename, params...), Deleter(this, filename));
+        m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, res));
+        return res;
+    }
+
+    bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
+        if (Find(filename)) {
+            return false;
+        }
+
+        m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, val));
+        return true;
     }
 
     void Clean() {
@@ -61,66 +66,74 @@ public:
     }
 
     const STRING_TYPE& GetResourceFolder() const {
-        return m_resourse_folder;
+        return m_resourceFolder;
     }
 };
 
 template <typename T, typename STRING_TYPE = std::string>
 class HashAtlas {
     std::hash<STRING_TYPE> m_hasher;
-    STRING_TYPE m_resourse_folder;
+    STRING_TYPE m_resourceFolder;
     std::map<const size_t, std::weak_ptr<T>> m_map;
 
     struct Deleter {
-        Deleter(HashAtlas* atlas, const size_t& filename_hash)
-            : m_atlas(atlas)
-            , m_filename_hash(filename_hash)
+        Deleter(HashAtlas* pAtlas, const size_t& filenameHash)
+            : m_pAtlas(pAtlas)
+            , m_filenameHash(filenameHash)
         {}
 
-        void operator()(T* item) {
-            m_atlas->m_map.erase(m_filename_hash);
+        void operator()(T* pItem) {
+            m_pAtlas->m_map.erase(m_filenameHash);
 
-            delete item;
+            delete pItem;
         }
 
-        HashAtlas* m_atlas;
-        size_t m_filename_hash;
+        HashAtlas* m_pAtlas;
+        size_t m_filenameHash;
     };
 
 public:
-    HashAtlas(const STRING_TYPE& ResourseFolder) {
-        m_resourse_folder = ResourseFolder;
-    }
+    HashAtlas(const STRING_TYPE& resourceFolder)
+        : m_resourceFolder(resourceFolder)
+    {}
     ~HashAtlas() {
         assert(m_map.empty());
     }
 
-    template <typename... Params>
-    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
-        size_t hash = m_hasher(filename);
-        auto it = m_map.find(hash);
-        if (it != m_map.end()) {
-            return it->second.lock();
-        }
-        auto resource = std::shared_ptr<T>(new T(m_resourse_folder + filename, params...), Deleter(this, hash));
-        m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, resource));
-        return resource;
+    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
+        auto res = m_map.find(m_hasher(filename));
+        return res != m_map.end() ? res->second.lock() : std::shared_ptr<T>(nullptr);
     }
 
-    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
-        size_t hash = m_hasher(filename);
-        auto it = m_map.find(hash);
-        if (it != m_map.end())
-        {
-            return it->second.lock();
+    template <typename... Params>
+    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
+        size_t hash{ m_hasher(filename) };
+
+        std::shared_ptr<T> res{ m_map.find(hash) }
+            if (res != m_map.end()) {
+                return res->second.lock();
+            }
+
+        res = std::shared_ptr<T>(new T(m_resourseFolder + filename, params...), Deleter(this, hash));
+        m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, res));
+        return res;
+    }
+
+    bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
+        size_t hash{ m_hasher(filename) };
+        std::shared_ptr<T> resource{ Find(hash) };
+        if (resource) {
+            return false;
         }
-        return std::shared_ptr<T>(nullptr);
+
+        m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, val));
+        return true;
     }
 
     void Clean() {}
 
     const STRING_TYPE& GetResourceFolder() const {
-        return m_resourse_folder;
+        return m_resourceFolder;
     }
 };
 
