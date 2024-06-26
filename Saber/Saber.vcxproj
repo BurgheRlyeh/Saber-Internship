@@ -141,7 +141,9 @@
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />
+    <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="PSOLibrary.h" />
     <ClInclude Include="RenderObject.h" />
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
@@ -156,6 +158,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MemoryMappedFile.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="OutputContext.cpp" />

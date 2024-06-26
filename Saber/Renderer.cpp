@@ -18,7 +18,7 @@ Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, ui
     , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(""))
     , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(""))
     , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(""))
-    , m_pPipelineStateAtlas(std::make_shared<Atlas<PipelineStateResource>>(""))
+    //, m_pPipelineStateAtlas(std::make_shared<Atlas<PipelineStateResource>>(""))
 {
     m_numFrames = backBuffersCnt;
 }
@@ -55,6 +55,8 @@ void Renderer::Initialize(HWND hWnd) {
 
     CreateDSVDescHeap();
 
+    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
+
     // Create scenes
     {
         m_scenes.resize(3);
@@ -65,7 +67,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_pMeshAtlas,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
-            m_pPipelineStateAtlas
+            m_pPSOLibrary
         ));
         m_scenes[1].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
@@ -84,7 +86,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_pMeshAtlas,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
-            m_pPipelineStateAtlas
+            m_pPSOLibrary
         ));
         m_scenes[2].AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),

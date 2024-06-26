@@ -14,7 +14,6 @@ void RenderObject::Render(
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    //pCommandListDirect->SetPipelineState(m_pPipelineStateResource->pPipelineState.Get());
     pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
 
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());

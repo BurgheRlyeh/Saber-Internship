@@ -24,6 +24,7 @@
 #include "Camera.h"
 #include "CommandQueue.h"
 #include "CommandList.h"
+#include "PSOLibrary.h"
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Scene.h"
@@ -96,7 +97,8 @@ class Renderer {
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
     std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
     std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
-    std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
+    std::shared_ptr<PSOLibrary> m_pPSOLibrary{};
+    //std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
     //std::shared_ptr<MaterialAtlas<>> m_pMaterialAtlas{};
 
 public:
