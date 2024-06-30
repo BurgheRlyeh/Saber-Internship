@@ -44,29 +44,42 @@ CommandList CommandQueue::GetCommandList(
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
 
+	std::unique_lock commandAllocatorQueueLock{ m_commandAllocatorQueueMutex };
 	if (!m_commandAllocatorQueue.empty() && IsFenceComplete(m_commandAllocatorQueue.front().fenceValue)) {
 		pCommandAllocator = m_commandAllocatorQueue.front().pCommandAllocator;
 		m_commandAllocatorQueue.pop();
+		commandAllocatorQueueLock.unlock();
 
 		ThrowIfFailed(pCommandAllocator->Reset());
 	}
 	else {
+		commandAllocatorQueueLock.unlock();
 		pCommandAllocator = CreateCommandAllocator(pDevice);
 	}
 
+	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
 	if (!m_commandListQueue.empty()) {
 		pCommandList = m_commandListQueue.front();
 		m_commandListQueue.pop();
+		commandListQueueLock.unlock();
 
 		ThrowIfFailed(pCommandList->Reset(pCommandAllocator.Get(), nullptr));
 	}
 	else {
+		commandListQueueLock.unlock();
 		pCommandList = CreateCommandList(pDevice, pCommandAllocator);
 	}
 
 	// Associate the command allocator with the command list so that it can be
 	// retrieved when the command list is executed.
-	ThrowIfFailed(pCommandList->SetPrivateDataInterface(__uuidof(ID3D12CommandAllocator), pCommandAllocator.Get()));
+	ThrowIfFailed(pCommandList->SetPrivateDataInterface(
+		__uuidof(ID3D12CommandAllocator),
+		pCommandAllocator.Get()
+	));
+
+	std::unique_lock lock(m_commandListsCounters.at(priority).mutex);
+	++m_commandListsCounters.at(priority).count;
+	lock.unlock();
 
 	return pCommandList;
 }
@@ -84,8 +97,13 @@ uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
 	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
 	uint64_t fenceValue{ Signal() };
 
+	std::unique_lock allocatorListQueueLock{ m_commandAllocatorQueueMutex };
 	m_commandAllocatorQueue.emplace(CommandAllocatorEntry{ fenceValue, pCommandAllocator });
+	allocatorListQueueLock.unlock();
+
+	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
 	m_commandListQueue.push(commandList.m_pCommandList);
+	commandListQueueLock.unlock();
 
 	// The ownership of the command allocator has been transferred to the ComPtr
 	// in the command allocator queue. It is safe to release the reference 
@@ -100,6 +118,22 @@ void CommandQueue::ExecuteCommandListImmediately(
 ) {
 	uint64_t fenceValue{ ExecuteCommandList(commandList) };
 	WaitForFenceValue(fenceValue);
+}
+
+void CommandQueue::PushForExecution(CommandList commandList) {
+	m_commandListPriorityQueue.push(commandList);
+
+	std::scoped_lock lock(m_commandListsCounters.at(commandList.GetPriority()).mutex);
+	--m_commandListsCounters.at(commandList.GetPriority()).count;
+}
+
+bool CommandQueue::IsAllCommandListsReady() {
+	for (int i{}; i < m_commandListsCounters.size(); ++i) {
+		std::scoped_lock elemLock(m_commandListsCounters.at(i).mutex);
+		if (!m_commandListsCounters.at(i).count)
+			return false;
+	}
+	return true;
 }
 
 uint64_t CommandQueue::Signal() {
