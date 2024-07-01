@@ -139,12 +139,7 @@ void MemoryMappedFile::GrowMapping(UINT size)
     }
 
     // Flush.
-    BOOL flag = FlushViewOfFile(m_mapAddress, 0);
-    if (!flag)
-    {
-        std::cerr << (L"\nError %ld occurred flushing the mapping object!", GetLastError());
-        assert(false);
-    }
+    Flush();
 
     // Close the current mapping.
     Destroy(false);
@@ -152,4 +147,15 @@ void MemoryMappedFile::GrowMapping(UINT size)
     // Update the size and create a new mapping.
     m_currentFileSize = size;
     Init(m_filename, m_currentFileSize);
+}
+
+void MemoryMappedFile::Flush()
+{
+    BOOL flag = FlushViewOfFile(m_mapAddress, 0);
+    if (!flag)
+    {
+        std::cerr << (L"\nError %ld occurred flushing the mapping object!", GetLastError());
+        assert(false);
+    }
+
 }

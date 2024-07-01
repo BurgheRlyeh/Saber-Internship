@@ -22,6 +22,7 @@ public:
     void Init(std::wstring filename, UINT filesize = DefaultFileSize);
     void Destroy(bool deleteFile);
     void GrowMapping(UINT size);
+    void Flush();
 
     void SetSize(UINT size)
     {

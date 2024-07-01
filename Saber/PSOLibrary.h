@@ -5,9 +5,11 @@
 #include "MemoryMappedFile.h"
 
 class PSOLibrary {
+private:
 	MemoryMappedFile m_file;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary1> m_pPipelineLibrary{};
+	bool m_Renewed;
 
 public:
 	PSOLibrary(
@@ -16,6 +18,9 @@ public:
 	);
 
 	~PSOLibrary();
+
+	void Destroy(bool ClearPsoCache);
+	void SaveCacheToFile();
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Find(
 		LPCWSTR filename,
