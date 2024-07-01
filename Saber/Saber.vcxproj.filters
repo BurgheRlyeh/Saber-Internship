@@ -101,6 +101,9 @@
     <ClCompile Include="MemoryMappedFile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PSOLibrary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc">
