@@ -1,18 +1,29 @@
 #include "RenderObject.h"
 
-void RenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, std::shared_ptr<Atlas<Mesh>> pMeshAtlas, const MeshData& meshData, const std::string& meshFilename) {
+#include <codecvt> 
+
+void RenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, std::shared_ptr<Atlas<Mesh>> pMeshAtlas, const MeshData& meshData, const std::wstring& meshFilename) {
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, meshData);
 }
-void RenderObject::InitMaterial(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas, const LPCWSTR& vertexShaderFilepath, const LPCWSTR& pixelShaderFilepath, const std::string& vertexShaderFilename, const std::string& pixelShaderFilename, std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas, Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob, const std::string& rootSignatureFilename, std::shared_ptr<PSOLibrary> pPSOLibrary, const std::string& pipelineStateFilename) {
-    ShaderResource::ShaderResourceData vertexShaderResData{
-        .filepath{ vertexShaderFilepath }
-    };
-    m_pVertexShaderResource = pShaderAtlas->Assign(vertexShaderFilename, vertexShaderResData);
+void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+const LPCWSTR& vertexShaderFilepath,
+const LPCWSTR& pixelShaderFilepath,
+std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
+const std::wstring& rootSignatureFilename,
+std::shared_ptr<PSOLibrary> pPSOLibrary){
 
-    ShaderResource::ShaderResourceData pixelShaderResData{
-        .filepath{ pixelShaderFilepath }
-    };
-    m_pPixelShaderResource = pShaderAtlas->Assign(pixelShaderFilename, pixelShaderResData);
+
+    //ShaderResource::ShaderResourceData vertexShaderResData{
+    //    .filepath{ vertexShaderFilepath }
+    //};
+    m_pVertexShaderResource = pShaderAtlas->Assign(vertexShaderFilepath);
+
+    //ShaderResource::ShaderResourceData pixelShaderResData{
+    //    .filepath{ pixelShaderFilepath }
+    //};
+    m_pPixelShaderResource = pShaderAtlas->Assign(pixelShaderFilepath);
 
     RootSignatureResource::RootSignatureResourceData rootSignatureResData{
         .pDevice{ pDevice },
@@ -25,7 +36,7 @@ void RenderObject::InitMaterial(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, s
         CreatePipelineStateDesc(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource)
     };
 
-    m_pPipelineState = pPSOLibrary->Assign(pDevice, L"PSO", &desc); // Name please as material!!!
+    m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc); // Name please as material!!!
 
     //PipelineStateResource::PipelineStateResourceData pipelineStateResData{
     //    .pDevice{ pDevice },

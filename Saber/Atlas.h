@@ -7,7 +7,9 @@
 #include <memory>
 #include <string>
 
-template <typename T, typename STRING_TYPE = std::string>
+using atlas_string = std::wstring;
+
+template <typename T, typename STRING_TYPE = atlas_string>
 class StringAtlas {
     STRING_TYPE m_resourceFolder;
     std::map<const STRING_TYPE, std::weak_ptr<T>> m_map;
@@ -70,7 +72,7 @@ public:
     }
 };
 
-template <typename T, typename STRING_TYPE = std::string>
+template <typename T, typename STRING_TYPE = atlas_string>
 class HashAtlas {
     std::hash<STRING_TYPE> m_hasher;
     STRING_TYPE m_resourceFolder;

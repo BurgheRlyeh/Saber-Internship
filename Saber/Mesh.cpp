@@ -52,7 +52,7 @@ Mesh::Mesh(
 }
 
 Mesh::Mesh(
-    const std::string& filename
+    const std::wstring& filename
     , Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
     , const MeshData& meshData

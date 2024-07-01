@@ -15,10 +15,9 @@ Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, ui
     , m_isTearingSupported(CheckTearingSupport())
     , m_time(m_clock.now())
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
-    , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(""))
-    , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(""))
-    , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(""))
-    //, m_pPipelineStateAtlas(std::make_shared<Atlas<PipelineStateResource>>(""))
+    , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(L""))
+    , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(L""))
+    , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(L""))
 {
     m_numFrames = backBuffersCnt;
 }

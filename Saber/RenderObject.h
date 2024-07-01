@@ -26,7 +26,7 @@ public:
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         const MeshData& meshData,
-        const std::string& meshFilename = ""
+        const std::wstring& meshFilename = L""
     );
 
     void InitMaterial(
@@ -34,14 +34,10 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         const LPCWSTR& vertexShaderFilepath,
         const LPCWSTR& pixelShaderFilepath,
-        const std::string& vertexShaderFilename,
-        const std::string& pixelShaderFilename,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
-        const std::string& rootSignatureFilename,
-        //std::shared_ptr<Atlas<PipelineStateResource>> pPipelineStateAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const std::string& pipelineStateFilename
+        const std::wstring& rootSignatureFilename,
+        std::shared_ptr<PSOLibrary> pPSOLibrary
     );
 
     void Update();
@@ -98,20 +94,17 @@ public:
         };
 
         RenderObject obj{};
-        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, "SimpleTriangle");
+        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
             L"SimpleVertexShader.cso",
             L"SimplePixelShader.cso",
-            "SimpleVertexShader",
-            "SimplePixelShader",
             pRootSignatureAtlas,
             CreateRootSignatureBlob(pDevice),
-            "SimpleRootSignature",
+            L"SimpleRootSignature",
             //pPipelineStateAtlas
-            pPSOLibrary,
-            "SimplePipelineState"
+            pPSOLibrary
         );
 
         return obj;
@@ -159,20 +152,17 @@ public:
         };
 
         RenderObject obj{};
-        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, "SimpleCube");
+        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
             L"SimpleVertexShader.cso",
             L"SimplePixelShader.cso",
-            "SimpleVertexShader",
-            "SimplePixelShader",
             pRootSignatureAtlas,
             CreateRootSignatureBlob(pDevice),
-            "SimpleRootSignature",
+            L"SimpleRootSignature",
             //pPipelineStateAtlas
-            pPSOLibrary,
-            "SimplePipelineState"
+            pPSOLibrary
         );
 
         return obj;

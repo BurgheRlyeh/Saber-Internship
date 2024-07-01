@@ -5,12 +5,8 @@
 struct ShaderResource {
 	Microsoft::WRL::ComPtr<ID3DBlob> pShaderBlob{};
 
-	struct ShaderResourceData {
-		LPCWSTR filepath{};
-	};
-
-	ShaderResource(const std::string& filename, const ShaderResourceData& data) {
-		ThrowIfFailed(D3DReadFileToBlob(data.filepath, &pShaderBlob));
+	ShaderResource(const std::wstring& filename) {
+		ThrowIfFailed(D3DReadFileToBlob(filename.c_str(), &pShaderBlob));
 	}
 };
 
@@ -23,7 +19,7 @@ struct RootSignatureResource {
 	};
 
 	RootSignatureResource(
-		const std::string& filename,
+		const std::wstring& filename,
 		const RootSignatureResourceData& data
 	) {
 		ThrowIfFailed(data.pDevice->CreateRootSignature(
