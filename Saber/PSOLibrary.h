@@ -9,7 +9,7 @@ private:
 	MemoryMappedFile m_file;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary1> m_pPipelineLibrary{};
-	bool m_Renewed;
+	bool m_renewed;
 
 public:
 	PSOLibrary(
@@ -20,7 +20,7 @@ public:
 	~PSOLibrary();
 
 	void Destroy(bool ClearPsoCache);
-	void SaveCacheToFile();
+	void FlushCacheToFile();
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Find(
 		LPCWSTR filename,

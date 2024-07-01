@@ -1,6 +1,6 @@
 #include "PSOLibrary.h"
 
-PSOLibrary::PSOLibrary(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::wstring filename) :m_Renewed{ true } {
+PSOLibrary::PSOLibrary(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::wstring filename) :m_renewed{ false } {
 	m_file.Init(filename);
 
 	ThrowIfFailed(pDevice->CreatePipelineLibrary(
@@ -18,14 +18,16 @@ void PSOLibrary::Destroy(bool ClearPsoCache)
 {
 	if (!ClearPsoCache)
 	{
-		SaveCacheToFile();
+		FlushCacheToFile();
 	}
 
 	m_file.Destroy(ClearPsoCache);
 }
 
-void PSOLibrary::SaveCacheToFile()
+void PSOLibrary::FlushCacheToFile()
 {
+	if (!m_renewed)
+		return;
 	auto librarySize = m_pPipelineLibrary->GetSerializedSize();
 	const size_t neededSize = sizeof(UINT) + librarySize;
 	auto currentFileSize = m_file.GetSize();
@@ -46,6 +48,9 @@ void PSOLibrary::SaveCacheToFile()
 	{
 		m_pPipelineLibrary->Serialize(m_file.GetData(), librarySize);
 	}
+	m_file.Flush();
+	m_renewed = false;
+
 }
 
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(LPCWSTR filename, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc) {
@@ -66,7 +71,11 @@ bool PSOLibrary::Add(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, LPCWSTR file
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
 	pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
 	auto result = (m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
-	return SUCCEEDED(result);
+	if (SUCCEEDED(result))
+	{
+		m_renewed = true;
+	}
+	return false;
 }
 
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, LPCWSTR filename, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc) {
@@ -76,7 +85,14 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(Microsoft::WRL::C
 	}
 
 	pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
-	ThrowIfFailed(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
-	//m_pPipelineLibrary->
+	auto result = (m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
+	if (SUCCEEDED(result))
+	{
+		m_renewed = true;
+	}
+	else
+	{
+		ThrowIfFailed(result);
+	}
 	return pPSO;
 }

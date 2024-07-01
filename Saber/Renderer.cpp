@@ -99,6 +99,7 @@ void Renderer::Initialize(HWND hWnd) {
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
     }
+    m_pPSOLibrary->FlushCacheToFile();
 }
 
 bool Renderer::StartRenderThread() {
