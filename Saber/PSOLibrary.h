@@ -24,7 +24,29 @@ public:
 	}
 
 	~PSOLibrary() {
-		m_file.Destroy(true);
+		auto librarySize = m_pPipelineLibrary->GetSerializedSize();
+		const size_t neededSize = sizeof(UINT) + librarySize;
+		auto currentFileSize = m_file.GetSize();
+		if(neededSize > currentFileSize)
+		{
+			void* pTempData = new BYTE[librarySize];
+			if (pTempData)
+			{
+				ThrowIfFailed(m_pPipelineLibrary->Serialize(pTempData, librarySize));
+				m_file.GrowMapping(librarySize);
+				memcpy(m_file.GetData(), pTempData, librarySize);
+				m_file.SetSize(librarySize);
+
+				delete[] pTempData;
+			}
+		}
+		else
+		{
+			m_pPipelineLibrary->Serialize(m_file.GetData(), librarySize);
+		}
+
+		
+		m_file.Destroy(false);
 	}
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Find(
@@ -51,7 +73,7 @@ public:
 
 		Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
 		pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
-		m_pPipelineLibrary->StorePipeline(filename, pPSO.Get());
+		ThrowIfFailed(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
 
 		return true;
 	}
@@ -67,8 +89,8 @@ public:
 		}
 
 		pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
-		m_pPipelineLibrary->StorePipeline(filename, pPSO.Get());
-
+		ThrowIfFailed(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
+		//m_pPipelineLibrary->
 		return pPSO;
 	}
 };

@@ -69,7 +69,7 @@ public:
             CreatePipelineState(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource) 
         };
 
-        m_pPipelineState = pPSOLibrary->Assign(pDevice, L"PSO", &desc);
+        m_pPipelineState = pPSOLibrary->Assign(pDevice, L"PSO", &desc); // Name please as material!!!
 
         //PipelineStateResource::PipelineStateResourceData pipelineStateResData{
         //    .pDevice{ pDevice },
