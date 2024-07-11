@@ -56,9 +56,11 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
 
+    m_pJobSystem = std::make_shared<JobSystem<2>>();
+
     // Create scenes
     {
-        m_scenes.resize(3);
+        m_scenes.resize(4);
 
         m_scenes[1].AddStaticObject(TestRenderObject::createTriangle(
             m_pDevice,
@@ -79,24 +81,49 @@ void Renderer::Initialize(HWND hWnd) {
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
 
-        m_scenes[2].AddStaticObject(TestRenderObject::createCube(
-            m_pDevice,
-            m_pCommandQueueCopy,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_scenes[2].AddCamera(StaticCamera(
-            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
-            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        ));
-        m_scenes[2].AddCamera(StaticCamera(
-            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
-            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        ));
+        //m_scenes[2].AddStaticObject(TestRenderObject::createCube(
+        //    m_pDevice,
+        //    m_pCommandQueueCopy,
+        //    m_pMeshAtlas,
+        //    m_pShaderAtlas,
+        //    m_pRootSignatureAtlas,
+        //    m_pPSOLibrary
+        //));
+        //m_scenes[2].AddCamera(StaticCamera(
+        //    DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        //));
+        //m_scenes[2].AddCamera(StaticCamera(
+        //    DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        //));
+
+        m_pJobSystem->AddJob([&]() {
+            m_scenes[2].AddStaticObject(TestRenderObject::createCube(
+                m_pDevice,
+                m_pCommandQueueCopy,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+        });
+        m_pJobSystem->AddJob([&]() {
+            m_scenes[2].AddCamera(StaticCamera(
+                DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+                DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+                DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+            ));
+        });
+        m_pJobSystem->AddJob([&]() {
+            m_scenes[2].AddCamera(StaticCamera(
+                DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+                DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+                DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+            ));
+        });
     }
     m_pPSOLibrary->FlushCacheToFile();
 }
@@ -105,6 +132,7 @@ bool Renderer::StartRenderThread() {
     if (!m_isInitialized)
         return false;
 
+    m_pJobSystem->StartRunning();
     m_isRenderThreadRunning.store(true);
     m_renderThread = std::thread(&Renderer::RenderLoop, this);
     return true;

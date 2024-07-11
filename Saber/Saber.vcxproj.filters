@@ -72,6 +72,12 @@
     <ClInclude Include="MemoryMappedFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="LockFreeQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="JobSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

@@ -7,7 +7,7 @@ Mesh::Mesh(
 ) : m_indicesCount(meshData.indicesCnt)
 {
     assert(pCommandQueueCopy->GetCommandListType() == D3D12_COMMAND_LIST_TYPE_COPY);
-
+    
     CommandList commandList{
         pCommandQueueCopy->GetCommandList(pDevice)
     };

@@ -28,6 +28,7 @@
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Scene.h"
+#include "JobSystem.h"
 
 class Renderer {
 	// The number of swap chain back buffers.
@@ -100,6 +101,8 @@ class Renderer {
     std::shared_ptr<PSOLibrary> m_pPSOLibrary{};
     //std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
     //std::shared_ptr<MaterialAtlas<>> m_pMaterialAtlas{};
+
+    std::shared_ptr<JobSystem<2>> m_pJobSystem{};
 
 public:
     Renderer(const Renderer&) = delete;
