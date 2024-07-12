@@ -9,7 +9,7 @@ private:
 	MemoryMappedFile m_file;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary1> m_pPipelineLibrary{};
-	bool m_renewed;
+	bool m_renewed{};
 
 public:
 	PSOLibrary(

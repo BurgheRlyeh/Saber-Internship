@@ -1,31 +1,41 @@
 #include "PSOLibrary.h"
 
-PSOLibrary::PSOLibrary(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::wstring filename) :m_renewed{ false } {
+PSOLibrary::PSOLibrary(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::wstring filename) {
 	m_file.Init(filename);
 
-	ThrowIfFailed(pDevice->CreatePipelineLibrary(
+	HRESULT hr{ pDevice->CreatePipelineLibrary(
 		m_file.GetData(),
 		m_file.GetSize(),
 		IID_PPV_ARGS(&m_pPipelineLibrary)
-	));
+	)};
+
+	if (hr == E_INVALIDARG
+		|| hr == D3D12_ERROR_ADAPTER_NOT_FOUND
+		|| hr == D3D12_ERROR_DRIVER_VERSION_MISMATCH
+	) {
+		m_file.Destroy(true);
+		m_file.Init(filename);
+		ThrowIfFailed(pDevice->CreatePipelineLibrary(
+			m_file.GetData(),
+			m_file.GetSize(),
+			IID_PPV_ARGS(&m_pPipelineLibrary)
+		));
+	}
 }
 
 PSOLibrary::~PSOLibrary() {
 	Destroy(false);
 }
 
-void PSOLibrary::Destroy(bool ClearPsoCache)
-{
-	if (!ClearPsoCache)
-	{
+void PSOLibrary::Destroy(bool ClearPsoCache) {
+	if (!ClearPsoCache) {
 		FlushCacheToFile();
 	}
 
 	m_file.Destroy(ClearPsoCache);
 }
 
-void PSOLibrary::FlushCacheToFile()
-{
+void PSOLibrary::FlushCacheToFile() {
 	if (!m_renewed)
 		return;
 	auto librarySize = m_pPipelineLibrary->GetSerializedSize();
@@ -44,8 +54,7 @@ void PSOLibrary::FlushCacheToFile()
 			delete[] pTempData;
 		}
 	}
-	else
-	{
+	else {
 		m_pPipelineLibrary->Serialize(m_file.GetData(), librarySize);
 	}
 	m_file.Flush();
@@ -53,7 +62,10 @@ void PSOLibrary::FlushCacheToFile()
 
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(LPCWSTR filename, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc) {
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
+	LPCWSTR filename,
+	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
+) {
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
 	HRESULT hr{ m_pPipelineLibrary->LoadGraphicsPipeline(
 		filename,
@@ -63,36 +75,37 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(LPCWSTR filename, c
 	return SUCCEEDED(hr) ? pPSO : nullptr;
 }
 
-bool PSOLibrary::Add(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, LPCWSTR filename, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc) {
+bool PSOLibrary::Add(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	LPCWSTR filename,
+	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
+) {
 	if (Find(filename, pPSODesc)) {
 		return false;
 	}
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
 	pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
-	auto result = (m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
-	if (SUCCEEDED(result))
-	{
+	if (SUCCEEDED(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()))) {
 		m_renewed = true;
+		return true;
 	}
 	return false;
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, LPCWSTR filename, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc) {
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	LPCWSTR filename,
+	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
+) {
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{ Find(filename, pPSODesc) };
 	if (pPSO) {
 		return pPSO;
 	}
 
 	pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
-	auto result = (m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
-	if (SUCCEEDED(result))
-	{
-		m_renewed = true;
-	}
-	else
-	{
-		ThrowIfFailed(result);
-	}
+	ThrowIfFailed(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
+	m_renewed = true;
+
 	return pPSO;
 }

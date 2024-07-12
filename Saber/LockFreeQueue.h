@@ -85,9 +85,9 @@ enum ArrayLockFreeQueueOptimizationType {
 
 // Bounded Ring Buffer Lock-Free Queue
 // https://www.codeproject.com/Articles/153898/Yet-another-implementation-of-a-lock-free-circul
-template <typename T, ArrayLockFreeQueueOptimizationType Optimization = SPEED>
+template <typename T, ArrayLockFreeQueueOptimizationType Optimization = SPEED, bool DestructAfterPop = false>
 class ArrayLockFreeQueue {
-    std::vector<T> m_data{};
+    T* m_data{};
 
     std::atomic<size_t> m_pushId{};
     std::atomic<size_t> m_popId{};
@@ -105,12 +105,16 @@ public:
             }
             m_capacity = m_capacityMask + 1;
 
-            m_data.resize(m_capacity);
+            m_data = new T[m_capacity];
         }
         else {
             m_capacity = capacity + 1;
-            m_data.resize(m_capacity);
+            m_data = new T[m_capacity];
         }
+    }
+
+    ~ArrayLockFreeQueue() {
+        delete[] m_data;
     }
 
     size_t GetCapacity() const {
@@ -142,7 +146,7 @@ public:
             }
         } while (!m_pushId.compare_exchange_weak(id, ToRingBufId(id + 1)));
 
-        m_data.at(id) = data;
+        m_data[id] = data;
 
         while (!m_lastDataId.compare_exchange_weak(id, ToRingBufId(id + 1))) {
             std::this_thread::yield();
@@ -159,8 +163,10 @@ public:
                 return false;   // queue is empty
             }
 
-            data = m_data.at(id);
-            m_data.at(id).~T();
+            data = m_data[id];
+            if (DestructAfterPop) {
+                m_data[id].~T();
+            }
 
             if (m_popId.compare_exchange_weak(id, ToRingBufId(id + 1))) {
                 return true;

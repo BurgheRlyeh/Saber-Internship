@@ -116,7 +116,6 @@ public:
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        //std::shared_ptr<Atlas<PipelineStateResource>> pPipelineStateAtlas
         std::shared_ptr<PSOLibrary> pPSOLibrary
     ) {
         VertexPositionColor vertices[]{

@@ -102,11 +102,13 @@ class Renderer {
     //std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
     //std::shared_ptr<MaterialAtlas<>> m_pMaterialAtlas{};
 
-    std::shared_ptr<JobSystem<2>> m_pJobSystem{};
+    std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
 public:
     Renderer(const Renderer&) = delete;
+
     Renderer(
+        std::shared_ptr<JobSystem<>> pJobSystem,
         uint8_t backBuffersCnt = 3,
         bool isUseWarp = false,
         uint32_t resWidth = 1280,

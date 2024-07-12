@@ -4,6 +4,7 @@
 #include <Shlwapi.h>
 
 #include "OutputContext.h"
+#include "JobSystem.h"
 #include "Renderer.h"
 
 // Use WARP adapter
@@ -14,6 +15,7 @@ uint32_t g_clientWidth{ 1280 };
 uint32_t g_clientHeight{ 720 };
 
 std::unique_ptr<OutputContext> g_pOutputContext{};
+std::shared_ptr<JobSystem<>> g_pJobSystem{};
 std::unique_ptr<Renderer> g_pRenderer{};
 bool g_isInitialized{};
 
@@ -138,7 +140,9 @@ int CALLBACK wWinMain(
     g_pOutputContext->CreateAppWindow(g_clientWidth, g_clientHeight);
     g_pOutputContext->InitWindowRect();
 
-    g_pRenderer = std::make_unique<Renderer>(3, g_useWarp, g_clientWidth, g_clientHeight, true);
+    g_pJobSystem = std::make_shared<JobSystem<>>();
+
+    g_pRenderer = std::make_unique<Renderer>(g_pJobSystem, 3, g_useWarp, g_clientWidth, g_clientHeight, true);
     g_pRenderer->Initialize(g_pOutputContext->getHWND());
 
     g_isInitialized = true;

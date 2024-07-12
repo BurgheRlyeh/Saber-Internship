@@ -8,7 +8,7 @@
 
 #include "LockFreeQueue.h"
 
-template <size_t ThreadsCount, typename DurationType = std::chrono::milliseconds, size_t Duration = 15, size_t Passes = 512>
+template <size_t ThreadsCount = 2, typename DurationType = std::chrono::milliseconds, size_t Duration = 15, size_t Passes = 512>
 class JobSystem {
     std::vector<std::thread> m_threads{ ThreadsCount };
     ArrayLockFreeQueue<std::function<void()>> m_jobs{};

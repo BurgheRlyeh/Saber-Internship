@@ -7,7 +7,7 @@
 #include <iostream> 
 #include <sstream>
 
-Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
+Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
     , m_clientWidth(resWidth)
     , m_clientHeight(resHeight)
@@ -18,6 +18,7 @@ Renderer::Renderer(uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, ui
     , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(L""))
     , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(L""))
     , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(L""))
+    , m_pJobSystem(pJobSystem)
 {
     m_numFrames = backBuffersCnt;
 }
@@ -55,8 +56,6 @@ void Renderer::Initialize(HWND hWnd) {
     CreateDSVDescHeap();
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
-
-    m_pJobSystem = std::make_shared<JobSystem<2>>();
 
     // Create scenes
     {

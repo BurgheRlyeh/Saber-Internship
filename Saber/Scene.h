@@ -2,14 +2,19 @@
 
 #include "Headers.h"
 
+#include <mutex>
+
 #include "RenderObject.h"
 #include "Camera.h"
 
 // TODO: UNSAFE!
 class Scene {
     std::vector<std::shared_ptr<RenderObject>> m_staticObjects{};
+    //std::mutex m_staticObjectsMutex{};
+
     //std::vector<std::shared_ptr<Object>> m_dynamicObjects{};
     std::vector<std::shared_ptr<StaticCamera>> m_cameras{};
+    //std::mutex m_camerasMutex{};
 
     size_t m_currCameraId{};
 
