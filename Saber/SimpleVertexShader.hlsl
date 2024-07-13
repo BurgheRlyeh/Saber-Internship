@@ -1,9 +1,16 @@
-struct MVP
+struct SceneBuffer
 {
-    matrix mvp;
+    matrix vpMatrix;
 };
 
-ConstantBuffer<MVP> MVPCB : register(b0);
+ConstantBuffer<SceneBuffer> SceneCB : register(b0);
+
+struct ModelBuffer
+{
+    matrix modelMatrix;
+};
+
+ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
 struct VSInput
 {
@@ -21,8 +28,11 @@ VSOutput main(VSInput vtxIn)
 {
     VSOutput vtxOut;
     
+    //matrix mvpMatrix = mul(ModelCB.modelMatrix, SceneCB.vpMatrix);
+    matrix mvpMatrix = mul(SceneCB.vpMatrix, ModelCB.modelMatrix);
+    
     vtxOut.color = vtxIn.color;
-    vtxOut.position = mul(MVPCB.mvp, vtxIn.position);
+    vtxOut.position = mul(mvpMatrix, vtxIn.position);
     
     return vtxOut;
 }

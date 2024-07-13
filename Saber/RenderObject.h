@@ -21,6 +21,11 @@ class RenderObject {
     DirectX::XMMATRIX m_modelMatrix{ DirectX::XMMatrixIdentity() };
 
 public:
+    RenderObject() = default;
+    RenderObject(const DirectX::XMMATRIX& modelMatrix)
+        : m_modelMatrix(modelMatrix)
+    {}
+
     void InitMesh(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -71,8 +76,8 @@ public:
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        //std::shared_ptr<Atlas<PipelineStateResource>> pPipelineStateAtlas
-        std::shared_ptr<PSOLibrary> pPSOLibrary
+        std::shared_ptr<PSOLibrary> pPSOLibrary,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         VertexPositionColor vertices[]{
             { { -1.0f, -1.0f, 0.f, 1.f }, { 1.0f, 0.0f, 0.0f, 0.f } },
@@ -93,7 +98,7 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
-        RenderObject obj{};
+        RenderObject obj{ modelMatrix };
         obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
         obj.InitMaterial(
             pDevice,
@@ -116,7 +121,8 @@ public:
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
+        std::shared_ptr<PSOLibrary> pPSOLibrary,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         VertexPositionColor vertices[]{
             { { -1.0f, -1.0f, -1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 0.0f } },
@@ -150,7 +156,7 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
-        RenderObject obj{};
+        RenderObject obj{ modelMatrix };
         obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
         obj.InitMaterial(
             pDevice,
@@ -186,8 +192,9 @@ private:
         };
 
         // A single 32-bit constant root parameter that is used by the vertex shader.
-        CD3DX12_ROOT_PARAMETER1 rootParameters[1]{};
-        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
+        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
+        rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);

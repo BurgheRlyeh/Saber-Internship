@@ -76,8 +76,8 @@ void RenderObject::Render(
     pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, &depthStencilView);
 
     // Update the MVP matrix
-    DirectX::XMMATRIX mvpMatrix{ DirectX::XMMatrixMultiply(m_modelMatrix, viewProjectionMatrix) };
-    pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &mvpMatrix, 0);
+    pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &viewProjectionMatrix, 0);
+    pCommandListDirect->SetGraphicsRoot32BitConstants(1, sizeof(DirectX::XMMATRIX) / 4, &m_modelMatrix, 0);
 
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);
 }

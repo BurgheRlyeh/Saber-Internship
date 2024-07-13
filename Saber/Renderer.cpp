@@ -123,6 +123,64 @@ void Renderer::Initialize(HWND hWnd) {
                 DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
             ));
         });
+
+        for (size_t i{}; i < 15; ++i) {
+            // add triangle at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-10.0, 10.0);
+                m_scenes[3].AddStaticObject(TestRenderObject::createTriangle(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+            });
+            // add cube at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-10.0, 10.0);
+                m_scenes[3].AddStaticObject(TestRenderObject::createCube(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+            });
+            // add camera at random position
+            m_pJobSystem->AddJob([=]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> cameraPosDist(-10.0, 10.0);
+                DirectX::XMVECTOR cameraPos{ DirectX::XMVectorSet(
+                    cameraPosDist(gen),
+                    0.f,
+                    cameraPosDist(gen),
+                    1.f
+                ) };
+                m_scenes[3].AddCamera(StaticCamera(
+                    cameraPos,
+                    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+                    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+                ));
+             });
+        }
     }
     m_pPSOLibrary->FlushCacheToFile();
 }
@@ -326,12 +384,12 @@ void Renderer::Render() {
         // just for testing
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(0.0, 0.1);
+        std::uniform_real_distribution<float> dis(0.0, 0.1);
 
         FLOAT clearColor[] = {
-            0.4f + static_cast<float>(dis(gen)),
-            0.6f + static_cast<float>(dis(gen)),
-            0.9f + static_cast<float>(dis(gen)),
+            0.4f + dis(gen),
+            0.6f + dis(gen),
+            0.9f + dis(gen),
             1.0f
         };
 
