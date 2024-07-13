@@ -94,7 +94,9 @@ uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
 	ThrowIfFailed(commandList.m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
 
 	ID3D12CommandList* const pCommandLists[]{ commandList.m_pCommandList.Get() };
+	commandList.BeforeExecute();
 	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
+	commandList.AfterExecute();
 	uint64_t fenceValue{ Signal() };
 
 	std::unique_lock allocatorListQueueLock{ m_commandAllocatorQueueMutex };

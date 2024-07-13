@@ -49,7 +49,6 @@ private:
             }
             else if (++passes >= Passes) {
                 std::this_thread::sleep_for(DurationType(Duration));
-                passes = 0;
             }
         }
     }

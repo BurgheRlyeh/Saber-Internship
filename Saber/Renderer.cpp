@@ -24,7 +24,7 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
-    m_scenes.clear();
+    m_pScenes.clear();
     Flush();
 }
 
@@ -51,17 +51,18 @@ void Renderer::Initialize(HWND hWnd) {
 
     CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescHeap);
 
-    m_isInitialized = true;
-
     CreateDSVDescHeap();
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
 
+    m_isInitialized = true;
+
     // Create scenes
     {
-        m_scenes.resize(4);
+        m_pScenes.resize(4);
 
-        m_scenes[1].AddStaticObject(TestRenderObject::createTriangle(
+        m_pScenes[1] = std::make_unique<Scene>();
+        m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
             m_pDevice,
             m_pCommandQueueCopy,
             m_pMeshAtlas,
@@ -69,68 +70,47 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary
         ));
-        m_scenes[1].AddCamera(StaticCamera(
+        m_pScenes[1]->AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
-        m_scenes[1].AddCamera(StaticCamera(
+        m_pScenes[1]->AddCamera(StaticCamera(
             DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
+        m_pScenes[1]->SetSceneReadiness(true);
 
-        //m_scenes[2].AddStaticObject(TestRenderObject::createCube(
-        //    m_pDevice,
-        //    m_pCommandQueueCopy,
-        //    m_pMeshAtlas,
-        //    m_pShaderAtlas,
-        //    m_pRootSignatureAtlas,
-        //    m_pPSOLibrary
-        //));
-        //m_scenes[2].AddCamera(StaticCamera(
-        //    DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //));
-        //m_scenes[2].AddCamera(StaticCamera(
-        //    DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //));
+        m_pScenes[2] = std::make_unique<Scene>();
+        m_pScenes[2]->AddStaticObject(TestRenderObject::createCube(
+            m_pDevice,
+            m_pCommandQueueCopy,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ));
+        m_pScenes[2]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[2]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[2]->SetSceneReadiness(true);
 
-        m_pJobSystem->AddJob([&]() {
-            m_scenes[2].AddStaticObject(TestRenderObject::createCube(
-                m_pDevice,
-                m_pCommandQueueCopy,
-                m_pMeshAtlas,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
-        });
-        m_pJobSystem->AddJob([&]() {
-            m_scenes[2].AddCamera(StaticCamera(
-                DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
-                DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-                DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-            ));
-        });
-        m_pJobSystem->AddJob([&]() {
-            m_scenes[2].AddCamera(StaticCamera(
-                DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
-                DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-                DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-            ));
-        });
-
+        m_pScenes[3] = std::make_unique<Scene>();
         for (size_t i{}; i < 15; ++i) {
             // add triangle at random position
             m_pJobSystem->AddJob([&]() {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.0, 10.0);
-                m_scenes[3].AddStaticObject(TestRenderObject::createTriangle(
+                m_pScenes[3]->AddStaticObject(TestRenderObject::createTriangle(
                     m_pDevice,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
@@ -149,7 +129,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.0, 10.0);
-                m_scenes[3].AddStaticObject(TestRenderObject::createCube(
+                m_pScenes[3]->AddStaticObject(TestRenderObject::createCube(
                     m_pDevice,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
@@ -164,7 +144,7 @@ void Renderer::Initialize(HWND hWnd) {
                 ));
             });
             // add camera at random position
-            m_pJobSystem->AddJob([=]() {
+            m_pJobSystem->AddJob([&]() {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> cameraPosDist(-10.0, 10.0);
@@ -174,13 +154,16 @@ void Renderer::Initialize(HWND hWnd) {
                     cameraPosDist(gen),
                     1.f
                 ) };
-                m_scenes[3].AddCamera(StaticCamera(
+                m_pScenes[3]->AddCamera(StaticCamera(
                     cameraPos,
                     DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
                     DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
                 ));
              });
         }
+        m_pJobSystem->AddJob([&]() {
+            m_pScenes[3]->SetSceneReadiness(true);
+        });
     }
     m_pPSOLibrary->FlushCacheToFile();
 }
@@ -223,6 +206,10 @@ void Renderer::SwitchHand() {
 }
 
 inline void Renderer::RenderLoop() {
+    while (!m_isInitialized) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
     while (m_isRenderThreadRunning.load()) {
         if (m_isNeedResize.load()) {
             std::scoped_lock<std::mutex> lock(m_renderThreadMutex);
@@ -232,7 +219,7 @@ inline void Renderer::RenderLoop() {
         m_currSceneId = m_nextSceneId.load();
         m_isCurrentHandLeft = m_isLeftHand.load();
         if (m_isSwitchToNextCamera.load()) {
-            m_scenes[m_currSceneId].NextCamera();
+            m_pScenes[m_currSceneId]->NextCamera();
             m_isSwitchToNextCamera.store(false);
         }
 
@@ -284,7 +271,7 @@ void Renderer::PerformResize() {
     m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_clientWidth), static_cast<float>(m_clientHeight));
 
     // TODO update during switch
-    m_scenes[m_currSceneId].UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+    m_pScenes[m_currSceneId]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
     
     ResizeDepthBuffer();
 }
@@ -381,15 +368,10 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
 
-        // just for testing
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dis(0.0, 0.1);
-
         FLOAT clearColor[] = {
-            0.4f + dis(gen),
-            0.6f + dis(gen),
-            0.9f + dis(gen),
+            0.4f,
+            0.6f,
+            0.9f,
             1.0f
         };
 
@@ -408,17 +390,6 @@ void Renderer::Render() {
             nullptr
         );
     }
-
-    m_scenes[m_currSceneId].RenderStaticObjects(
-        commandList.m_pCommandList,
-        m_viewport,
-        m_scissorRect,
-        rtv,
-        dsv,
-        m_isCurrentHandLeft
-    );
-
-    // Present
     {
         TransitionResource(
             commandList.m_pCommandList,
@@ -426,10 +397,24 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
         );
-
         // This method must be called on the command list before being executed on the command queue
-        m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecuteCommandList(commandList.m_pCommandList);
+        m_pCommandQueueDirect->ExecuteCommandListImmediately(commandList.m_pCommandList);
+    }
 
+    // two command lists: 1. static, 1,5. static too same priority; 2. dynamic
+    CommandList commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice) };
+    m_pScenes[m_currSceneId]->RenderStaticObjects(
+        commandListForStaticObjects.m_pCommandList,
+        m_viewport,
+        m_scissorRect,
+        rtv,
+        dsv,
+        m_isCurrentHandLeft
+    );
+    m_pCommandQueueDirect->ExecuteCommandListImmediately(commandListForStaticObjects);
+
+    // Present
+    {
         UINT syncInterval{ m_isVSync ? 1u : 0};
         UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };
         ThrowIfFailed(m_pSwapChain->Present(

@@ -36,16 +36,7 @@ std::shared_ptr<PSOLibrary> pPSOLibrary){
         CreatePipelineStateDesc(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource)
     };
 
-    m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc); // Name please as material!!!
-
-    //PipelineStateResource::PipelineStateResourceData pipelineStateResData{
-    //    .pDevice{ pDevice },
-    //    .pipelineStateStreamDesc{ CreatePipelineStateStreamDesc(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource) }
-    //};
-    //m_pPipelineStateResource = pPipelineStateAtlas->Assign(pipelineStateFilename, pipelineStateResData);
-    //Microsoft::WRL::ComPtr<ID3DBlob> pPipelineStateBlob{
-    //    CreatePipelineStateBlob(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource)
-    //};
+    m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc);
 }
 
 void RenderObject::Update() {

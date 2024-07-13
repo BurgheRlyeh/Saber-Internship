@@ -86,7 +86,7 @@ class Renderer {
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
     //Scene m_scene{};
-    std::vector<Scene> m_scenes{};
+    std::vector<std::unique_ptr<Scene>> m_pScenes{};
     size_t m_currSceneId{ 1 };
     bool m_isCurrentHandLeft{};
 
