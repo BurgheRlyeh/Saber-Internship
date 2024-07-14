@@ -8,14 +8,9 @@ class CommandList {
 	uint8_t m_priority{};
 	std::function<void(void)> m_beforeExec{};
 	std::function<void(void)> m_afterExec{};
+	std::atomic<bool> m_isReadyForExecution{};
 
 public:
-	struct Comparator {
-		bool operator()(const CommandList& lhs, const CommandList& rhs) {
-			return lhs.m_priority < rhs.m_priority;
-		}
-	};
-
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pCommandList{};
 
 	CommandList(
@@ -30,17 +25,31 @@ public:
 		, m_afterExec(afterExec)
 	{}
 
-	bool operator<(const CommandList& other) const {
-		return m_priority < other.m_priority;
+	template <typename T>
+	inline T operator->() const {
+		return m_pCommandList;
+	}
+
+	inline operator Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>() const {
+		return m_pCommandList;
 	}
 
 	uint16_t GetPriority() {
 		return m_priority;
 	}
 
+	bool IsReadyForExection() {
+		return m_isReadyForExecution.load();
+	}
+
+	void SetReadyForExection() {
+		m_isReadyForExecution.store(true);
+	}
+
 	void BeforeExecute() {
 		m_beforeExec();
 	};
+
 	void AfterExecute() {
 		m_afterExec();
 	};

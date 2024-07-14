@@ -35,14 +35,15 @@ D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
 }
 
 // Get an available command list from the command queue.
-CommandList CommandQueue::GetCommandList(
+std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	uint16_t priority,
+	bool isDeffered,
+	uint8_t priority,
 	std::function<void(void)> beforeExecuteTask,
 	std::function<void(void)> afterExecuteTask
 ) {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList{};
 
 	std::unique_lock commandAllocatorQueueLock{ m_commandAllocatorQueueMutex };
 	if (!m_commandAllocatorQueue.empty() && IsFenceComplete(m_commandAllocatorQueue.front().fenceValue)) {
@@ -59,44 +60,59 @@ CommandList CommandQueue::GetCommandList(
 
 	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
 	if (!m_commandListQueue.empty()) {
-		pCommandList = m_commandListQueue.front();
+		pD3D12CommandList = m_commandListQueue.front();
 		m_commandListQueue.pop();
 		commandListQueueLock.unlock();
 
-		ThrowIfFailed(pCommandList->Reset(pCommandAllocator.Get(), nullptr));
+		ThrowIfFailed(pD3D12CommandList->Reset(pCommandAllocator.Get(), nullptr));
 	}
 	else {
 		commandListQueueLock.unlock();
-		pCommandList = CreateCommandList(pDevice, pCommandAllocator);
+		pD3D12CommandList = CreateCommandList(pDevice, pCommandAllocator);
 	}
 
 	// Associate the command allocator with the command list so that it can be
 	// retrieved when the command list is executed.
-	ThrowIfFailed(pCommandList->SetPrivateDataInterface(
+	ThrowIfFailed(pD3D12CommandList->SetPrivateDataInterface(
 		__uuidof(ID3D12CommandAllocator),
 		pCommandAllocator.Get()
 	));
 
-	std::unique_lock lock(m_commandListsCounters.at(priority).mutex);
-	++m_commandListsCounters.at(priority).count;
-	lock.unlock();
+	std::shared_ptr<CommandList> pCommandList{ std::make_shared<CommandList>(
+		pD3D12CommandList,
+		priority,
+		beforeExecuteTask,
+		afterExecuteTask
+	) };
+
+	if (isDeffered) {
+		std::scoped_lock<std::mutex> setsLock(m_commandListsSetsMutex);
+		if (m_commandListSets.size() <= priority) {
+			m_commandListSets.resize(priority + 1);
+		}
+		if (!m_commandListSets.at(priority)) {
+			m_commandListSets.at(priority) = std::make_unique<PrioritySet>();
+		}
+		std::scoped_lock<std::mutex> setLock(m_commandListSets.at(priority)->mutex);
+		m_commandListSets.at(priority)->pCommandLists.insert(pCommandList);
+	}
 
 	return pCommandList;
 }
 
 // Execute a command list.
 // Returns the fence value to wait for for this command list.
-uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
-	ThrowIfFailed(commandList.m_pCommandList->Close());
+uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandList) {
+	ThrowIfFailed(commandList->m_pCommandList->Close());
 
 	ID3D12CommandAllocator* pCommandAllocator{};
 	uint32_t dataSize{ sizeof(pCommandAllocator) };
-	ThrowIfFailed(commandList.m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
+	ThrowIfFailed(commandList->m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
 
-	ID3D12CommandList* const pCommandLists[]{ commandList.m_pCommandList.Get() };
-	commandList.BeforeExecute();
+	ID3D12CommandList* const pCommandLists[]{ commandList->m_pCommandList.Get() };
+	commandList->BeforeExecute();
 	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
-	commandList.AfterExecute();
+	commandList->AfterExecute();
 	uint64_t fenceValue{ Signal() };
 
 	std::unique_lock allocatorListQueueLock{ m_commandAllocatorQueueMutex };
@@ -104,7 +120,7 @@ uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
 	allocatorListQueueLock.unlock();
 
 	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
-	m_commandListQueue.push(commandList.m_pCommandList);
+	m_commandListQueue.push(commandList->m_pCommandList);
 	commandListQueueLock.unlock();
 
 	// The ownership of the command allocator has been transferred to the ComPtr
@@ -116,26 +132,35 @@ uint64_t CommandQueue::ExecuteCommandList(CommandList commandList) {
 }
 
 void CommandQueue::ExecuteCommandListImmediately(
-	CommandList commandList
+	std::shared_ptr<CommandList> commandList
 ) {
 	uint64_t fenceValue{ ExecuteCommandList(commandList) };
 	WaitForFenceValue(fenceValue);
 }
 
-void CommandQueue::PushForExecution(CommandList commandList) {
-	m_commandListPriorityQueue.push(commandList);
-
-	std::scoped_lock lock(m_commandListsCounters.at(commandList.GetPriority()).mutex);
-	--m_commandListsCounters.at(commandList.GetPriority()).count;
+void CommandQueue::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
+	pCommandList->SetReadyForExection();
 }
 
-bool CommandQueue::IsAllCommandListsReady() {
-	for (int i{}; i < m_commandListsCounters.size(); ++i) {
-		std::scoped_lock elemLock(m_commandListsCounters.at(i).mutex);
-		if (!m_commandListsCounters.at(i).count)
-			return false;
+void CommandQueue::ExecutionTask() {
+	for (std::unique_ptr<PrioritySet>& priorityVector : m_commandListSets) {
+		std::unordered_multiset<std::shared_ptr<CommandList>>& pCommandLists{ priorityVector->pCommandLists };
+
+		auto iter = pCommandLists.begin();
+		while (!pCommandLists.empty()) {
+			if (iter == pCommandLists.end()) {
+				iter = pCommandLists.begin();
+			}
+			if ((*iter)->IsReadyForExection()) {
+				ExecuteCommandList(*iter);
+				pCommandLists.erase(iter);
+				iter = pCommandLists.begin();
+			}
+			else {
+				++iter;
+			}
+		}
 	}
-	return true;
 }
 
 uint64_t CommandQueue::Signal() {

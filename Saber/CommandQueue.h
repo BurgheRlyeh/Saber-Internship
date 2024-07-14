@@ -13,7 +13,7 @@
 
 #include <queue>
 #include <vector>
-#include <concurrent_priority_queue.h>
+#include <unordered_set>
 #include <mutex>
 
 #include "CommandList.h"
@@ -35,12 +35,25 @@ class CommandQueue {
 	std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
 	std::mutex m_commandListQueueMutex{};
 
-	Concurrency::concurrent_priority_queue<CommandList, CommandList::Comparator> m_commandListPriorityQueue{};
-	struct CommandListCounter {
-		uint8_t count{};
+	//struct CommandListSmartPtrComparator {
+	//	bool operator()(const std::shared_ptr<CommandList>& lhs, const std::shared_ptr<CommandList>& rhs) {
+	//		return lhs->GetPriority() < rhs->GetPriority();
+	//	}
+	//};
+	//Concurrency::concurrent_priority_queue<std::shared_ptr<CommandList>, CommandListSmartPtrComparator> m_commandListPriorityQueue{};
+
+	struct PrioritySet {
 		std::mutex mutex{};
+		std::unordered_multiset<std::shared_ptr<CommandList>> pCommandLists{};
 	};
-	std::vector<CommandListCounter> m_commandListsCounters{ std::numeric_limits<uint8_t>::max() };
+	std::mutex m_commandListsSetsMutex{};
+	std::vector<std::unique_ptr<PrioritySet>> m_commandListSets{};
+
+	//struct CommandListCounter {
+	//	uint8_t count{};
+	//	std::mutex mutex{};
+	//};
+	//std::vector<CommandListCounter> m_commandListsCounters{ std::numeric_limits<uint8_t>::max() };
 
 public:
 	CommandQueue() = delete;
@@ -52,21 +65,21 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;
 
 	// Get an available command list from the command queue.
-	CommandList GetCommandList(
+	std::shared_ptr<CommandList> GetCommandList(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		uint16_t priority = 0,
+		bool isDeffered = false,
+		uint8_t priority = 0,
 		std::function<void(void)> beforeExecuteTask = [=]() { return; },
 		std::function<void(void)> afterExecuteTask = [=]() { return; }
 	);
 
 	// Execute a command list.
 	// Returns the fence value to wait for for this command list.
-	uint64_t ExecuteCommandList(CommandList commandList);
-	void ExecuteCommandListImmediately(CommandList commandList);
+	uint64_t ExecuteCommandList(std::shared_ptr<CommandList> commandList);
+	void ExecuteCommandListImmediately(std::shared_ptr<CommandList> commandList);
 
-	void PushForExecution(CommandList pCommandList);
-	bool IsAllCommandListsReady();
-	// TODO method GetTaskForExecution
+	void PushForExecution(std::shared_ptr<CommandList> pCommandList);
+	void ExecutionTask();
 
 	uint64_t Signal();
 	bool IsFenceComplete(uint64_t fenceValue);

@@ -61,6 +61,7 @@ void Renderer::Initialize(HWND hWnd) {
     {
         m_pScenes.resize(4);
 
+        // 1
         m_pScenes[1] = std::make_unique<Scene>();
         m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
             m_pDevice,
@@ -82,6 +83,7 @@ void Renderer::Initialize(HWND hWnd) {
         ));
         m_pScenes[1]->SetSceneReadiness(true);
 
+        // 2
         m_pScenes[2] = std::make_unique<Scene>();
         m_pScenes[2]->AddStaticObject(TestRenderObject::createCube(
             m_pDevice,
@@ -89,7 +91,8 @@ void Renderer::Initialize(HWND hWnd) {
             m_pMeshAtlas,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
-            m_pPSOLibrary
+            m_pPSOLibrary,
+            DirectX::XMMatrixIdentity()
         ));
         m_pScenes[2]->AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
@@ -103,9 +106,10 @@ void Renderer::Initialize(HWND hWnd) {
         ));
         m_pScenes[2]->SetSceneReadiness(true);
 
+        // 3
         m_pScenes[3] = std::make_unique<Scene>();
         for (size_t i{}; i < 15; ++i) {
-            // add triangle at random position
+            // add static triangle at random position
             m_pJobSystem->AddJob([&]() {
                 std::random_device rd;
                 std::mt19937 gen(rd());
@@ -123,13 +127,13 @@ void Renderer::Initialize(HWND hWnd) {
                         posDist(gen)
                     )
                 ));
-            });
-            // add cube at random position
+                });
+            // add dynamic cube at random position
             m_pJobSystem->AddJob([&]() {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.0, 10.0);
-                m_pScenes[3]->AddStaticObject(TestRenderObject::createCube(
+                m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
                     m_pDevice,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
@@ -160,6 +164,28 @@ void Renderer::Initialize(HWND hWnd) {
                     DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
                 ));
              });
+        }
+        // extra cubes
+        for (size_t i{}; i < 100; ++i) {
+            // add dynamic cube at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-100.0, 100.0);
+                m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+                });
         }
         m_pJobSystem->AddJob([&]() {
             m_pScenes[3]->SetSceneReadiness(true);
@@ -346,7 +372,7 @@ void Renderer::Render() {
     // the CPU thread is stalled using the WaitForFenceValue function described earlier.
     m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
-    CommandList commandList{
+    std::shared_ptr<CommandList> commandList{
         m_pCommandQueueDirect->GetCommandList(m_pDevice)
     };
 
@@ -362,7 +388,7 @@ void Renderer::Render() {
     {
         // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
         TransitionResource(
-            commandList.m_pCommandList,
+            commandList->m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -375,13 +401,13 @@ void Renderer::Render() {
             1.0f
         };
 
-        commandList.m_pCommandList->ClearRenderTargetView(
+        commandList->m_pCommandList->ClearRenderTargetView(
             rtv,        // cpu desc handle
             clearColor, // color to fill RTV
             0,          // number of rectangles in array
             nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
         );
-        commandList.m_pCommandList->ClearDepthStencilView(
+        commandList->m_pCommandList->ClearDepthStencilView(
             dsv,
             D3D12_CLEAR_FLAG_DEPTH,
             0.f,
@@ -392,26 +418,54 @@ void Renderer::Render() {
     }
     {
         TransitionResource(
-            commandList.m_pCommandList,
+            commandList->m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
         );
         // This method must be called on the command list before being executed on the command queue
-        m_pCommandQueueDirect->ExecuteCommandListImmediately(commandList.m_pCommandList);
+        m_pCommandQueueDirect->ExecuteCommandListImmediately(commandList);
     }
 
     // two command lists: 1. static, 1,5. static too same priority; 2. dynamic
-    CommandList commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice) };
-    m_pScenes[m_currSceneId]->RenderStaticObjects(
-        commandListForStaticObjects.m_pCommandList,
-        m_viewport,
-        m_scissorRect,
-        rtv,
-        dsv,
-        m_isCurrentHandLeft
-    );
-    m_pCommandQueueDirect->ExecuteCommandListImmediately(commandListForStaticObjects);
+    std::shared_ptr<CommandList> commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1, []() {
+        //std::wstringstream wss{};
+        //wss << "Static triangles second" << std::endl;
+        //OutputDebugString(wss.str().c_str());
+    }) };
+    m_pJobSystem->AddJob([&]() {
+        m_pScenes[m_currSceneId]->RenderStaticObjects(
+            commandListForStaticObjects->m_pCommandList,
+            m_viewport,
+            m_scissorRect,
+            rtv,
+            dsv,
+            m_isCurrentHandLeft
+        );
+        commandListForStaticObjects->SetReadyForExection();
+        });
+
+    std::shared_ptr<CommandList> commandListForDynamicObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0, []() {
+        //std::wstringstream wss{};
+        //wss << "Dynamic cubes first" << std::endl;
+        //OutputDebugString(wss.str().c_str());
+    }) };
+    m_pJobSystem->AddJob([&]() {
+        m_pScenes[m_currSceneId]->RenderDynamicObjects(
+            commandListForDynamicObjects->m_pCommandList,
+            m_viewport,
+            m_scissorRect,
+            rtv,
+            dsv,
+            m_isCurrentHandLeft
+        );
+        commandListForDynamicObjects->SetReadyForExection();
+        });
+
+    m_pCommandQueueDirect->ExecutionTask();
+    //std::wstringstream wss{};
+    //wss << "All objects rendered!" << std::endl << std::endl;
+    //OutputDebugString(wss.str().c_str());
 
     // Present
     {

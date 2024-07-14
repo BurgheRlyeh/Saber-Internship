@@ -122,18 +122,17 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity(),
-        DirectX::XMFLOAT4 color = { 0.5f, 0.5f, 0.5f, 0.5f }
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         VertexPositionColor vertices[8]{
-            { { -1.0f, -1.0f, -1.0f, 1.0f }, color },
-            { { -1.0f,  1.0f, -1.0f, 1.0f }, color },
-            { {  1.0f,  1.0f, -1.0f, 1.0f }, color },
-            { {  1.0f, -1.0f, -1.0f, 1.0f }, color },
-            { { -1.0f, -1.0f,  1.0f, 1.0f }, color },
-            { { -1.0f,  1.0f,  1.0f, 1.0f }, color },
-            { {  1.0f,  1.0f,  1.0f, 1.0f }, color },
-            { {  1.0f, -1.0f,  1.0f, 1.0f }, color }
+            { { -1.0f, -1.0f, -1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 0.0f } },
+            { { -1.0f,  1.0f, -1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f, 0.0f } },
+            { {  1.0f,  1.0f, -1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f, 0.0f } },
+            { {  1.0f, -1.0f, -1.0f, 1.0f }, { 0.0f, 1.0f, 1.0f, 0.0f } },
+            { { -1.0f, -1.0f,  1.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } },
+            { { -1.0f,  1.0f,  1.0f, 1.0f }, { 1.0f, 0.0f, 1.0f, 0.0f } },
+            { {  1.0f,  1.0f,  1.0f, 1.0f }, { 1.0f, 1.0f, 0.0f, 0.0f } },
+            { {  1.0f, -1.0f,  1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 0.0f } }
         };
 
         uint32_t indices[]{
