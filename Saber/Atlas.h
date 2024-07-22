@@ -109,25 +109,24 @@ public:
 
     template <typename... Params>
     std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
+        std::shared_ptr<T> res{ Find(filename) };
+        if (res) {
+            return res;
+        }
+
         size_t hash{ m_hasher(filename) };
-
-        std::shared_ptr<T> res{ m_map.find(hash) }
-            if (res != m_map.end()) {
-                return res->second.lock();
-            }
-
-        res = std::shared_ptr<T>(new T(m_resourseFolder + filename, params...), Deleter(this, hash));
+        res = std::shared_ptr<T>(new T(m_resourceFolder + filename, params...), Deleter(this, hash));
         m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, res));
         return res;
     }
 
     bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
-        size_t hash{ m_hasher(filename) };
-        std::shared_ptr<T> resource{ Find(hash) };
+        std::shared_ptr<T> resource{ Find(filename) };
         if (resource) {
             return false;
         }
 
+        size_t hash{ m_hasher(filename) };
         m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, val));
         return true;
     }

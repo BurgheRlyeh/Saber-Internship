@@ -31,26 +31,29 @@
 #include "JobSystem.h"
 
 class Renderer {
-	// The number of swap chain back buffers.
+    // The number of swap chain back buffers.
     uint8_t m_numFrames{};
 
-	// Use WARP adapter
+    // Use WARP adapter
     bool m_useWarp{};
 
-	// Window client area size
+    // Window client area size
     uint32_t m_clientWidth{};
     uint32_t m_clientHeight{};
 
-	// Set to true once the DX12 objects have been initialized.
-	bool m_isInitialized{};
+    // Set to true once the DX12 objects have been initialized.
+    bool m_isInitialized{};
 
-	// DirectX 12 Objects
+    // DirectX 12 Objects
     Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{ m_numFrames };
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescHeap{};
-	UINT m_RTVDescriptorSize{};
-	UINT m_currBackBufferId{};
+    UINT m_RTVDescriptorSize{};
+    UINT m_currBackBufferId{};
+
+    // Memory Allocator
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
 	
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
 
@@ -87,7 +90,7 @@ class Renderer {
 
     //Scene m_scene{};
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
-    size_t m_currSceneId{ 1 };
+    size_t m_currSceneId{ 2 };
     bool m_isCurrentHandLeft{};
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
@@ -147,6 +150,10 @@ private:
 
     Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
     Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> CreateAllocator(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
+    );
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_COMMAND_LIST_TYPE type

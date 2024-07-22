@@ -27,6 +27,9 @@
 // D3D12 extension library.
 #include <d3dx12.h>
 
+// D3D12MemoryAllocator
+#include "D3D12MemAlloc.h"
+
 // STL Headers
 #include <cassert>
 #include <exception>

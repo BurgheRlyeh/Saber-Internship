@@ -6,23 +6,16 @@ void RenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, meshData);
 }
 void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-const LPCWSTR& vertexShaderFilepath,
-const LPCWSTR& pixelShaderFilepath,
-std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
-const std::wstring& rootSignatureFilename,
-std::shared_ptr<PSOLibrary> pPSOLibrary){
-
-
-    //ShaderResource::ShaderResourceData vertexShaderResData{
-    //    .filepath{ vertexShaderFilepath }
-    //};
+    std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+    const LPCWSTR& vertexShaderFilepath,
+    const LPCWSTR& pixelShaderFilepath,
+    std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+    Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
+    const std::wstring& rootSignatureFilename,
+    std::shared_ptr<PSOLibrary> pPSOLibrary,
+    std::shared_ptr<Texture> pTexture
+){
     m_pVertexShaderResource = pShaderAtlas->Assign(vertexShaderFilepath);
-
-    //ShaderResource::ShaderResourceData pixelShaderResData{
-    //    .filepath{ pixelShaderFilepath }
-    //};
     m_pPixelShaderResource = pShaderAtlas->Assign(pixelShaderFilepath);
 
     RootSignatureResource::RootSignatureResourceData rootSignatureResData{
@@ -37,6 +30,10 @@ std::shared_ptr<PSOLibrary> pPSOLibrary){
     };
 
     m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc);
+
+    if (pTexture) {
+        m_pTexture = pTexture;
+    }
 }
 
 void RenderObject::Update() {
@@ -57,6 +54,12 @@ void RenderObject::Render(
 
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
+    if (m_pTexture) {
+        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->m_pTextureDescHeap.Get() };
+        pCommandListDirect->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+        pCommandListDirect->SetGraphicsRootDescriptorTable(2, m_pTexture->m_pTextureDescHeap->GetGPUDescriptorHandleForHeapStart());
+    }
+
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     pCommandListDirect->IASetVertexBuffers(0, 1, m_pMesh->GetVertexBufferView());
     pCommandListDirect->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
@@ -69,7 +72,7 @@ void RenderObject::Render(
     // Update the MVP matrix
     pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &viewProjectionMatrix, 0);
     pCommandListDirect->SetGraphicsRoot32BitConstants(1, sizeof(DirectX::XMMATRIX) / 4, &m_modelMatrix, 0);
-
+    
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);
 }
 
@@ -77,7 +80,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(Microso
     // Create the vertex input layout
     static D3D12_INPUT_ELEMENT_DESC inputLayout[]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
     D3D12_RT_FORMAT_ARRAY rtvFormats{};

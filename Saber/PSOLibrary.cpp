@@ -103,7 +103,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
 		return pPSO;
 	}
 
-	pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO));
+	ThrowIfFailed(pDevice->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO)));
 	ThrowIfFailed(m_pPipelineLibrary->StorePipeline(filename, pPSO.Get()));
 	m_renewed = true;
 
