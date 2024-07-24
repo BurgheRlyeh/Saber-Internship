@@ -63,30 +63,30 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes.resize(4);
 
         // 1
-        //m_pScenes[1] = std::make_unique<Scene>();
-        //m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
-        //    m_pDevice,
-        //    m_pCommandQueueCopy,
-        //    m_pMeshAtlas,
-        //    m_pShaderAtlas,
-        //    m_pRootSignatureAtlas,
-        //    m_pPSOLibrary
-        //));
-        //m_pScenes[1]->AddCamera(StaticCamera(
-        //    DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //));
-        //m_pScenes[1]->AddCamera(StaticCamera(
-        //    DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //));
-        //m_pScenes[1]->SetSceneReadiness(true);
+        m_pScenes[1] = std::make_unique<Scene>();
+        m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
+            m_pDevice,
+            m_pCommandQueueCopy,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ));
+        m_pScenes[1]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[1]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[1]->SetSceneReadiness(true);
 
         // 2
         m_pScenes[2] = std::make_unique<Scene>();
-        m_pScenes[2]->AddStaticObject(TestRenderObject::createTextureCube(
+        m_pScenes[2]->AddStaticObject(TestTextureRenderObject::createTextureCube(
             m_pDevice,
             m_pCommandQueueCopy,
             m_pCommandQueueDirect,
@@ -94,6 +94,8 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
+            m_pAllocator,
+            L"Kitty.dds",
             DirectX::XMMatrixIdentity()
         ));
         m_pScenes[2]->AddCamera(StaticCamera(
@@ -109,89 +111,89 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[2]->SetSceneReadiness(true);
 
         // 3
-        //m_pScenes[3] = std::make_unique<Scene>();
-        //for (size_t i{}; i < 15; ++i) {
-        //    // add static triangle at random position
-        //    m_pJobSystem->AddJob([&]() {
-        //        std::random_device rd;
-        //        std::mt19937 gen(rd());
-        //        std::uniform_real_distribution<float> posDist(-10.0, 10.0);
-        //        m_pScenes[3]->AddStaticObject(TestRenderObject::createTriangle(
-        //            m_pDevice,
-        //            m_pCommandQueueCopy,
-        //            m_pMeshAtlas,
-        //            m_pShaderAtlas,
-        //            m_pRootSignatureAtlas,
-        //            m_pPSOLibrary,
-        //            DirectX::XMMatrixTranslation(
-        //                posDist(gen),
-        //                posDist(gen),
-        //                posDist(gen)
-        //            )
-        //        ));
-        //        });
-        //    // add dynamic cube at random position
-        //    m_pJobSystem->AddJob([&]() {
-        //        std::random_device rd;
-        //        std::mt19937 gen(rd());
-        //        std::uniform_real_distribution<float> posDist(-10.0, 10.0);
-        //        m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
-        //            m_pDevice,
-        //            m_pCommandQueueCopy,
-        //            m_pMeshAtlas,
-        //            m_pShaderAtlas,
-        //            m_pRootSignatureAtlas,
-        //            m_pPSOLibrary,
-        //            DirectX::XMMatrixTranslation(
-        //                posDist(gen),
-        //                posDist(gen),
-        //                posDist(gen)
-        //            )
-        //        ));
-        //    });
-        //    // add camera at random position
-        //    m_pJobSystem->AddJob([&]() {
-        //        std::random_device rd;
-        //        std::mt19937 gen(rd());
-        //        std::uniform_real_distribution<float> cameraPosDist(-10.0, 10.0);
-        //        DirectX::XMVECTOR cameraPos{ DirectX::XMVectorSet(
-        //            cameraPosDist(gen),
-        //            0.f,
-        //            cameraPosDist(gen),
-        //            1.f
-        //        ) };
-        //        m_pScenes[3]->AddCamera(StaticCamera(
-        //            cameraPos,
-        //            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
-        //            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
-        //        ));
-        //     });
-        //}
-        //// extra cubes
-        //for (size_t i{}; i < 100; ++i) {
-        //    // add dynamic cube at random position
-        //    m_pJobSystem->AddJob([&]() {
-        //        std::random_device rd;
-        //        std::mt19937 gen(rd());
-        //        std::uniform_real_distribution<float> posDist(-100.0, 100.0);
-        //        m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
-        //            m_pDevice,
-        //            m_pCommandQueueCopy,
-        //            m_pMeshAtlas,
-        //            m_pShaderAtlas,
-        //            m_pRootSignatureAtlas,
-        //            m_pPSOLibrary,
-        //            DirectX::XMMatrixTranslation(
-        //                posDist(gen),
-        //                posDist(gen),
-        //                posDist(gen)
-        //            )
-        //        ));
-        //        });
-        //}
-        //m_pJobSystem->AddJob([&]() {
-        //    m_pScenes[3]->SetSceneReadiness(true);
-        //});
+        m_pScenes[3] = std::make_unique<Scene>();
+        for (size_t i{}; i < 15; ++i) {
+            // add static triangle at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-10.0, 10.0);
+                m_pScenes[3]->AddStaticObject(TestRenderObject::createTriangle(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+                });
+            // add dynamic cube at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-10.0, 10.0);
+                m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+            });
+            // add camera at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> cameraPosDist(-10.0, 10.0);
+                DirectX::XMVECTOR cameraPos{ DirectX::XMVectorSet(
+                    cameraPosDist(gen),
+                    0.f,
+                    cameraPosDist(gen),
+                    1.f
+                ) };
+                m_pScenes[3]->AddCamera(StaticCamera(
+                    cameraPos,
+                    DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+                    DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+                ));
+             });
+        }
+        // extra cubes
+        for (size_t i{}; i < 100; ++i) {
+            // add dynamic cube at random position
+            m_pJobSystem->AddJob([&]() {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> posDist(-100.0, 100.0);
+                m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
+                    m_pDevice,
+                    m_pCommandQueueCopy,
+                    m_pMeshAtlas,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    DirectX::XMMatrixTranslation(
+                        posDist(gen),
+                        posDist(gen),
+                        posDist(gen)
+                    )
+                ));
+                });
+        }
+        m_pJobSystem->AddJob([&]() {
+            m_pScenes[3]->SetSceneReadiness(true);
+        });
     }
     m_pPSOLibrary->FlushCacheToFile();
 }

@@ -2,9 +2,16 @@
 
 #include <codecvt> 
 
-void RenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, std::shared_ptr<Atlas<Mesh>> pMeshAtlas, const MeshData& meshData, const std::wstring& meshFilename) {
+void RenderObject::InitMesh(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
+    , std::shared_ptr<Atlas<Mesh>> pMeshAtlas
+    , const MeshData& meshData
+    , const std::wstring& meshFilename
+) {
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, meshData);
 }
+
 void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
     const LPCWSTR& vertexShaderFilepath,
@@ -13,8 +20,10 @@ void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
     const std::wstring& rootSignatureFilename,
     std::shared_ptr<PSOLibrary> pPSOLibrary,
+    D3D12_INPUT_ELEMENT_DESC* inputLayout,
+    size_t inputLayoutSize,
     std::shared_ptr<Texture> pTexture
-){
+) {
     m_pVertexShaderResource = pShaderAtlas->Assign(vertexShaderFilepath);
     m_pPixelShaderResource = pShaderAtlas->Assign(pixelShaderFilepath);
 
@@ -24,16 +33,13 @@ void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     };
     m_pRootSignatureResource = pRootSignatureAtlas->Assign(rootSignatureFilename, rootSignatureResData);
 
-
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{
-        CreatePipelineStateDesc(pDevice, m_pRootSignatureResource, m_pVertexShaderResource, m_pPixelShaderResource)
+        CreatePipelineStateDesc(m_pRootSignatureResource, inputLayout, inputLayoutSize, m_pVertexShaderResource, m_pPixelShaderResource)
     };
 
     m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc);
 
-    if (pTexture) {
-        m_pTexture = pTexture;
-    }
+    m_pTexture = pTexture;
 }
 
 void RenderObject::Update() {
@@ -55,9 +61,9 @@ void RenderObject::Render(
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
     if (m_pTexture) {
-        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->m_pTextureDescHeap.Get() };
+        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->GetTextureDescHeap().Get()};
         pCommandListDirect->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-        pCommandListDirect->SetGraphicsRootDescriptorTable(2, m_pTexture->m_pTextureDescHeap->GetGPUDescriptorHandleForHeapStart());
+        pCommandListDirect->SetGraphicsRootDescriptorTable(2, m_pTexture->GetTextureDescHeap()->GetGPUDescriptorHandleForHeapStart());
     }
 
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -76,13 +82,13 @@ void RenderObject::Render(
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);
 }
 
-D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<RootSignatureResource> pRootSignatureResource, std::shared_ptr<ShaderResource> pVertexShaderResource, std::shared_ptr<ShaderResource> pPixelShaderResource) {
-    // Create the vertex input layout
-    static D3D12_INPUT_ELEMENT_DESC inputLayout[]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    };
-
+D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(
+    std::shared_ptr<RootSignatureResource> pRootSignatureResource,
+    D3D12_INPUT_ELEMENT_DESC* inputLayout,
+    size_t inputLayoutSize,
+    std::shared_ptr<ShaderResource> pVertexShaderResource,
+    std::shared_ptr<ShaderResource> pPixelShaderResource
+) {
     D3D12_RT_FORMAT_ARRAY rtvFormats{};
     rtvFormats.NumRenderTargets = 1;
     rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -92,7 +98,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(Microso
 
     CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
     pipelineStateStream.pRootSignature = pRootSignatureResource->pRootSignature.Get();
-    pipelineStateStream.InputLayout = { inputLayout, _countof(inputLayout) };
+    pipelineStateStream.InputLayout = { inputLayout, UINT(inputLayoutSize) };
     pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderResource->pShaderBlob.Get());
     pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderResource->pShaderBlob.Get());

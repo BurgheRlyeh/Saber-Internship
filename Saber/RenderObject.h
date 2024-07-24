@@ -15,7 +15,6 @@ class RenderObject {
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
     std::shared_ptr<ShaderResource> m_pVertexShaderResource{};
     std::shared_ptr<ShaderResource> m_pPixelShaderResource{};
-    //std::shared_ptr<PipelineStateResource> m_pPipelineStateResource{};
     std::shared_ptr<Texture> m_pTexture{};
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
@@ -45,6 +44,8 @@ public:
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
         const std::wstring& rootSignatureFilename,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
+        D3D12_INPUT_ELEMENT_DESC* inputLayout,
+        size_t inputLayoutSize,
         std::shared_ptr<Texture> pTexture = nullptr
     );
 
@@ -61,14 +62,20 @@ public:
 
 private:
     D3D12_GRAPHICS_PIPELINE_STATE_DESC CreatePipelineStateDesc(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<RootSignatureResource> pRootSignatureResource,
+        D3D12_INPUT_ELEMENT_DESC* inputLayout,
+        size_t inputLayoutSize,
         std::shared_ptr<ShaderResource> pVertexShaderResource,
         std::shared_ptr<ShaderResource> pPixelShaderResource
     );
 };
 
 class TestRenderObject : RenderObject {
+    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayout[2]{
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
 public:
     static RenderObject createTriangle(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -108,8 +115,9 @@ public:
             pRootSignatureAtlas,
             CreateRootSignatureBlob(pDevice),
             L"SimpleRootSignature",
-            //pPipelineStateAtlas
-            pPSOLibrary
+            pPSOLibrary,
+            m_inputLayout,
+            _countof(m_inputLayout)
         );
 
         return obj;
@@ -166,13 +174,60 @@ public:
             pRootSignatureAtlas,
             CreateRootSignatureBlob(pDevice),
             L"SimpleRootSignature",
-            //pPipelineStateAtlas
-            pPSOLibrary
+            pPSOLibrary,
+            m_inputLayout,
+            _countof(m_inputLayout)
         );
 
         return obj;
     }
 
+private:
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    ) {
+        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
+        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+        }
+
+        // Allow input layout and deny unnecessary access to certain pipeline stages.
+        D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
+        };
+
+        // A single 32-bit constant root parameter that is used by the vertex shader.
+        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
+        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
+        rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
+
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+
+        // Serialize the root signature.
+        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+        ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
+            &rootSignatureDescription,
+            featureData.HighestVersion,
+            &rootSignatureBlob,
+            &errorBlob
+        ));
+
+        return rootSignatureBlob;
+    }
+};
+
+class TestTextureRenderObject : RenderObject {
+    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayout[2]{
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+public:
     static RenderObject createTextureCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -181,6 +236,8 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator = nullptr,
+        const LPCWSTR& textureFilename = L"",
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         VertexPositionUV vertices[24]{
@@ -237,11 +294,6 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
-        //DirectX::GetMetadataFromDDSFile()
-        //DirectX::LoadFromDDSFile()
-        //DirectX::ScratchImage image{};
-        //DirectX::LoadFromDDSFile(L"Kitty.dds", DirectX::DDS_FLAGS_NONE, nullptr, image);
-
         Microsoft::WRL::ComPtr<ID3D12Resource> res{};
 
         RenderObject obj{ modelMatrix };
@@ -255,50 +307,15 @@ public:
             CreateTextureCubeRootSignatureBlob(pDevice),
             L"SimpleTextureRootSignature",
             pPSOLibrary,
-            std::make_shared<Texture>(pDevice, pCommandQueueCopy, pCommandQueueDirect, nullptr, L"Kitty.dds")
+            m_inputLayout,
+            _countof(m_inputLayout),
+            std::make_shared<Texture>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textureFilename)
         );
 
         return obj;
     }
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
-        // Allow input layout and deny unnecessary access to certain pipeline stages.
-        D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
-        };
-
-        // A single 32-bit constant root parameter that is used by the vertex shader.
-        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
-        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
-        rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
-
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-        // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-        ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-            &rootSignatureDescription,
-            featureData.HighestVersion,
-            &rootSignatureBlob,
-            &errorBlob
-        ));
-
-        return rootSignatureBlob;
-    }
-
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateTextureCubeRootSignatureBlob(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {
