@@ -139,6 +139,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CommandList.h" />
     <ClInclude Include="CommandQueue.h" />
+    <ClInclude Include="ConstantBuffer.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Headers.h" />

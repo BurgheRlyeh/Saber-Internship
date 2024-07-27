@@ -52,7 +52,8 @@ void RenderObject::Render(
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-    DirectX::XMMATRIX viewProjectionMatrix
+    //DirectX::XMMATRIX viewProjectionMatrix
+    Microsoft::WRL::ComPtr<ID3D12Resource> pSceneCB
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -61,7 +62,7 @@ void RenderObject::Render(
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
     if (m_pTexture) {
-        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->GetTextureDescHeap().Get()};
+        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->GetTextureDescHeap().Get() };
         pCommandListDirect->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
         pCommandListDirect->SetGraphicsRootDescriptorTable(2, m_pTexture->GetTextureDescHeap()->GetGPUDescriptorHandleForHeapStart());
     }
@@ -76,7 +77,8 @@ void RenderObject::Render(
     pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, &depthStencilView);
 
     // Update the MVP matrix
-    pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &viewProjectionMatrix, 0);
+    //pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &viewProjectionMatrix, 0);
+    pCommandListDirect->SetGraphicsRootConstantBufferView(0, pSceneCB->GetGPUVirtualAddress());
     pCommandListDirect->SetGraphicsRoot32BitConstants(1, sizeof(DirectX::XMMATRIX) / 4, &m_modelMatrix, 0);
     
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);

@@ -6,9 +6,14 @@
 
 #include "RenderObject.h"
 #include "Camera.h"
+#include "ConstantBuffer.h"
 
-// TODO: UNSAFE!
 class Scene {
+    struct SceneBuffer {
+        DirectX::XMMATRIX viewProjMatrix{};
+    } m_sceneBuffer;
+    std::shared_ptr<ConstantBuffer> m_pConstantBuffer{};
+
     std::vector<std::shared_ptr<RenderObject>> m_staticObjects{};
     std::mutex m_staticObjectsMutex{};
 
@@ -23,6 +28,19 @@ class Scene {
     std::atomic<bool> m_isSceneReady{};
 
 public:
+    Scene() = delete;
+    Scene(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
+    ) {
+        
+        m_pConstantBuffer = std::make_shared<ConstantBuffer>(
+            pDevice,
+            pAllocator,
+            CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(ConstantBuffer), 0)
+        );
+    }
+
     void SetSceneReadiness(bool value) {
         m_isSceneReady.store(value);
     }

@@ -57,7 +57,7 @@ public:
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-        DirectX::XMMATRIX viewProjectionMatrix
+        Microsoft::WRL::ComPtr<ID3D12Resource> pSceneCB
     ) const;
 
 private:
@@ -202,7 +202,7 @@ private:
 
         // A single 32-bit constant root parameter that is used by the vertex shader.
         CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
-        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
+        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
         rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
@@ -332,18 +332,13 @@ private:
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
         };
 
-        CD3DX12_DESCRIPTOR_RANGE1 descriptorTableRange(
-            D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-            1,
-            0,
-            0
-        );
-
-        // A single 32-bit constant root parameter that is used by the vertex shader.
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[1]{};
+        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+        
         CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
-        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
+        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
         rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
-        rootParameters[2].InitAsDescriptorTable(1, &descriptorTableRange, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[2].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
             .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },

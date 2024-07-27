@@ -176,6 +176,21 @@ private:
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap
     );
 
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateSceneBufferDescriptorHeap(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    ) {
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap{};
+
+        D3D12_DESCRIPTOR_HEAP_DESC desc{
+            .Type{ D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV },
+            .NumDescriptors{ 1 },
+            .Flags{ D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE }
+        };
+        ThrowIfFailed(pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pDescHeap)));
+
+        return pDescHeap;
+    }
+
     // Ensure that any commands previously executed on the GPU have finished executing 
     // before the CPU thread is allowed to continue processing
     void Flush();

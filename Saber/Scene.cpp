@@ -11,8 +11,14 @@ void Scene::AddDynamicObject(const RenderObject&& object) {
 }
 
 void Scene::AddCamera(const StaticCamera&& camera) {
-    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    std::unique_lock<std::mutex> lock(m_camerasMutex);
     m_cameras.push_back(std::make_shared<StaticCamera>(camera));
+    lock.unlock();
+
+    if (m_pConstantBuffer->IsEmpty()) {
+        m_sceneBuffer.viewProjMatrix = GetViewProjectionMatrix(false);
+        m_pConstantBuffer->Update(&m_sceneBuffer);
+    }
 }
 
 void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
@@ -29,13 +35,18 @@ bool Scene::SetCurrentCamera(size_t cameraId) {
     lock.unlock();
 
     m_currCameraId = cameraId;
+    m_sceneBuffer.viewProjMatrix = GetViewProjectionMatrix(false);
+    m_pConstantBuffer->Update(&m_sceneBuffer);
+
     return true;
 }
 
 void Scene::NextCamera() {
-    std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    if (!m_cameras.empty())
-        m_currCameraId = (m_currCameraId + 1) % m_cameras.size();
+    std::unique_lock<std::mutex> lock(m_camerasMutex);
+    if (!m_cameras.empty()) {
+        lock.unlock();
+        SetCurrentCamera((m_currCameraId + 1) % m_cameras.size());
+    }
 }
 
 DirectX::XMMATRIX Scene::GetViewProjectionMatrix(bool isLH) {
@@ -65,7 +76,7 @@ void Scene::RenderStaticObjects(
             scissorRect,
             renderTargetView,
             depthStencilView,
-            viewProjectionMatrix
+            m_pConstantBuffer->GetResource()
         );
     }
 }
@@ -91,7 +102,7 @@ void Scene::RenderDynamicObjects(
             scissorRect,
             renderTargetView,
             depthStencilView,
-            viewProjectionMatrix
+            m_pConstantBuffer->GetResource()
         );
     }
 }

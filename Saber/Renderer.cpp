@@ -63,7 +63,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes.resize(4);
 
         // 1
-        m_pScenes[1] = std::make_unique<Scene>();
+        m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
             m_pDevice,
             m_pCommandQueueCopy,
@@ -85,7 +85,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[1]->SetSceneReadiness(true);
 
         // 2
-        m_pScenes[2] = std::make_unique<Scene>();
+        m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         m_pScenes[2]->AddStaticObject(TestTextureRenderObject::createTextureCube(
             m_pDevice,
             m_pCommandQueueCopy,
@@ -111,7 +111,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[2]->SetSceneReadiness(true);
 
         // 3
-        m_pScenes[3] = std::make_unique<Scene>();
+        m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         for (size_t i{}; i < 15; ++i) {
             // add static triangle at random position
             m_pJobSystem->AddJob([&]() {
