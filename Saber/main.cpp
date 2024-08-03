@@ -152,7 +152,8 @@ int CALLBACK wWinMain(
 
     g_pOutputContext->ShowWindow();
 
-    assert(g_pRenderer->StartRenderThread());
+    bool isStarted{ g_pRenderer->StartRenderThread() };
+    assert(isStarted);
 
     MSG msg = {};
     while (msg.message != WM_QUIT) {

@@ -2,10 +2,9 @@
 
 #include "Headers.h"
 
-#include "D3D12MemAlloc.h"
+#include "GPUResource.h"
 
-class ConstantBuffer {
-	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
+class ConstantBuffer : public GPUResource {
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pCBV{};
 	size_t m_CBVSizeInBytes{};
 	bool m_isEmpty{ true };
@@ -20,21 +19,12 @@ public:
 		const D3D12_HEAP_TYPE& heapType = D3D12_HEAP_TYPE_UPLOAD,
 		bool createCBV = false
 	) : m_CBVSizeInBytes((resAllocInfo.SizeInBytes + 255) & ~255) {
-		D3D12_RESOURCE_DESC resDesc{ CD3DX12_RESOURCE_DESC::Buffer(resAllocInfo, resFlags) };
-
-		D3D12MA::ALLOCATION_DESC allocDesc{
-			.HeapType{ heapType }
-		};
-
-		ThrowIfFailed(pAllocator->CreateResource(
-			&allocDesc,
-			&resDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			&m_pAllocation,
-			IID_NULL,
-			nullptr
-		));
+		CreateResource(
+			pAllocator,
+			CD3DX12_RESOURCE_DESC::Buffer(resAllocInfo, resFlags),
+			heapType,
+			D3D12_RESOURCE_STATE_GENERIC_READ
+		);
 
 		if (createCBV) {
 			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
@@ -70,10 +60,6 @@ public:
 		pDevice->CreateConstantBufferView(&cbvDesc, m_pCBV->GetCPUDescriptorHandleForHeapStart());
 	}
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() {
-		return m_pAllocation->GetResource();
-	}
-
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetCBV() {
 		return m_pCBV;
 	}
@@ -82,7 +68,8 @@ public:
 		void* pData{};
 		ThrowIfFailed(GetResource()->Map(0, &CD3DX12_RANGE(), &pData));
 		memcpy(pData, newData, m_CBVSizeInBytes);
-		m_isEmpty = false;
+		if (IsEmpty())
+			m_isEmpty = false;
 	}
 
 	bool IsEmpty() {

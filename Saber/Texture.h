@@ -3,11 +3,11 @@
 #include "Headers.h"
 
 #include "DirectXTex.h"
-#include "D3D12MemAlloc.h"
 
-class Texture {
+#include "GPUResource.h"
+
+class Texture : public GPUResource {
 	DirectX::ScratchImage m_image{};
-	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pTextureDescHeap{};
 
 public:
@@ -29,19 +29,12 @@ public:
 			m_image.GetMetadata().height
 		) };
 
-		D3D12MA::ALLOCATION_DESC allocationDesc{
-			.HeapType{ D3D12_HEAP_TYPE_DEFAULT }
-		};
-
-		ThrowIfFailed(pAllocator->CreateResource(
-			&allocationDesc,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			&m_pAllocation,
-			IID_NULL,
-			nullptr
-		));
+		CreateResource(
+			pAllocator,
+			resourceDesc,
+			D3D12_HEAP_TYPE_DEFAULT,
+			D3D12_RESOURCE_STATE_COPY_DEST
+		);
 
 		// create upload heap
 		uint64_t textureMemorySize{};
@@ -108,10 +101,6 @@ public:
 			&srvDesc,
 			m_pTextureDescHeap->GetCPUDescriptorHandleForHeapStart()
 		);
-	}
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() {
-		return m_pAllocation->GetResource();
 	}
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetTextureDescHeap() {

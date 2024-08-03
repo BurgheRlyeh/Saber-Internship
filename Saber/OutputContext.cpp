@@ -22,7 +22,8 @@ void OutputContext::RegisterWindowClass(LRESULT(*WndProc)(HWND, UINT, WPARAM, LP
         .hIconSm{ ::LoadIcon(m_hInst, NULL) }
     };
 
-    assert(::RegisterClassExW(&windowClass) > 0);
+    ATOM res{ ::RegisterClassExW(&windowClass) };
+    assert(res > 0);
 }
 
 void OutputContext::CreateAppWindow(uint32_t width, uint32_t height) {
