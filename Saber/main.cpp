@@ -63,6 +63,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case '3':
             g_pRenderer->SetSceneId(3);
             break;
+        case '4':
+            g_pRenderer->SetSceneId(4);
+            break;
         case 'C':
             g_pRenderer->SwitchToNextCamera();
             break;

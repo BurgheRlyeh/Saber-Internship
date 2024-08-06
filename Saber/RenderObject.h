@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include <filesystem>
+
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "Mesh.h"
@@ -31,7 +33,15 @@ public:
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        const MeshData& meshData,
+        const MeshData & meshData,
+        const std::wstring & meshFilename = L""
+    );
+
+    void InitMeshFromGLTF(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+        std::filesystem::path& filepath,
         const std::wstring& meshFilename = L""
     );
 
@@ -182,6 +192,34 @@ public:
         return obj;
     }
 
+    static RenderObject createModelFromGLTF(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+        std::filesystem::path& filepath,
+        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+        std::shared_ptr<PSOLibrary> pPSOLibrary,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    ) {
+        RenderObject obj{ modelMatrix };
+        obj.InitMeshFromGLTF(pDevice, pCommandQueueCopy, pMeshAtlas, filepath, L"MeshGLTF");
+        obj.InitMaterial(
+            pDevice,
+            pShaderAtlas,
+            L"SimpleVertexShader.cso",
+            L"SimplePixelShader.cso",
+            pRootSignatureAtlas,
+            CreateRootSignatureBlob(pDevice),
+            L"SimpleRootSignature",
+            pPSOLibrary,
+            m_inputLayout,
+            _countof(m_inputLayout)
+        );
+
+        return obj;
+    }
+
 private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
@@ -202,7 +240,8 @@ private:
 
         // A single 32-bit constant root parameter that is used by the vertex shader.
         CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
-        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+        //rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
         rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
@@ -336,7 +375,8 @@ private:
         rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
         
         CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
-        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+        //rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX); // ViewProj matrix
         rootParameters[1].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX); // Model matrix
         rootParameters[2].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs, D3D12_SHADER_VISIBILITY_PIXEL);
 

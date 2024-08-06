@@ -4,10 +4,64 @@ Mesh::Mesh(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
     , const MeshData& meshData
-) : m_indicesCount(meshData.indicesCnt)
+) {
+    InitFromMeshData(pDevice, pCommandQueueCopy, meshData);
+}
+
+Mesh::Mesh(
+    const std::wstring& filename
+    , Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
+    , const MeshData& meshData
+) : Mesh(pDevice, pCommandQueueCopy, meshData)
+{}
+
+Mesh::Mesh(
+    const std::wstring& filename,
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    std::filesystem::path& filepath
+) {
+    std::vector<uint32_t> indices{};
+    std::vector<VertexPositionColor> vertices{};
+    GLTFLoader::LoadMeshFromGLTF(filepath, indices, vertices);
+    MeshData meshData{
+        // vertices data
+        .vertices{ vertices.data() },
+        .verticesCnt{ vertices.size() },
+        .vertexSize{ sizeof(vertices[0])},
+        // indices data
+        .indices{ indices.data() },
+        .indicesCnt{ indices.size() },
+        .indexSize{ sizeof(indices[0]) },
+        .indexFormat{ DXGI_FORMAT_R32_UINT }
+    };
+
+    InitFromMeshData(pDevice, pCommandQueueCopy, meshData);
+}
+
+const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
+    return &m_vertexBufferView;
+}
+
+const D3D12_INDEX_BUFFER_VIEW* Mesh::GetIndexBufferView() const {
+    return &m_indexBufferView;
+}
+
+size_t Mesh::GetIndicesCount() const {
+    return m_indicesCount;
+}
+
+void Mesh::InitFromMeshData(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
+    , const MeshData& meshData
+)
 {
     assert(pCommandQueueCopy->GetCommandListType() == D3D12_COMMAND_LIST_TYPE_COPY);
-    
+
+    m_indicesCount = meshData.indicesCnt;
+
     std::shared_ptr<CommandList> commandList{
         pCommandQueueCopy->GetCommandList(pDevice)
     };
@@ -26,8 +80,8 @@ Mesh::Mesh(
     // Create the vertex buffer view
     m_vertexBufferView = {
         .BufferLocation{ m_pVertexBuffer->GetGPUVirtualAddress() },
-        .SizeInBytes{ static_cast<uint32_t>(meshData.verticesCnt * meshData.vertexSize) },
-        .StrideInBytes{ static_cast<uint32_t>(meshData.vertexSize) }
+        .SizeInBytes{ static_cast<UINT>(meshData.verticesCnt * meshData.vertexSize) },
+        .StrideInBytes{ static_cast<UINT>(meshData.vertexSize) }
     };
 
     // Upload index buffer data
@@ -38,37 +92,17 @@ Mesh::Mesh(
         &m_pIndexBuffer,
         &intermediateIndexBuffer,
         meshData.indices,
-        meshData.indicesCnt * meshData.indexSize
+        m_indicesCount * meshData.indexSize
     );
 
     // Create index buffer view
     m_indexBufferView = {
         .BufferLocation{ m_pIndexBuffer->GetGPUVirtualAddress() },
-        .SizeInBytes{ static_cast<uint32_t>(meshData.indicesCnt * meshData.indexSize) },
+        .SizeInBytes{ static_cast<UINT>(m_indicesCount * meshData.indexSize) },
         .Format{ meshData.indexFormat },
     };
 
     pCommandQueueCopy->ExecuteCommandListImmediately(commandList);
-}
-
-Mesh::Mesh(
-    const std::wstring& filename
-    , Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
-    , const MeshData& meshData
-) : Mesh(pDevice, pCommandQueueCopy, meshData)
-{};
-
-const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
-    return &m_vertexBufferView;
-}
-
-const D3D12_INDEX_BUFFER_VIEW* Mesh::GetIndexBufferView() const {
-    return &m_indexBufferView;
-}
-
-size_t Mesh::GetIndicesCount() const {
-    return m_indicesCount;
 }
 
 void Mesh::CreateBufferResource(

@@ -1,9 +1,20 @@
 #pragma once
 
+#include <GLTFSDK/GLTF.h>
+#include <GLTFSDK/GLTFResourceReader.h>
+#include <GLTFSDK/GLBResourceReader.h>
+#include <GLTFSDK/Deserialize.h>
+
 #include "Headers.h"
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <iostream>
 
 #include "CommandQueue.h"
 #include "CommandList.h"
+#include "GLTFLoader.h"
 
 struct MeshData {
     // vertices data
@@ -39,6 +50,12 @@ public:
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshData& meshData
     );
+    Mesh(
+        const std::wstring& filename,
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        std::filesystem::path& filepath
+    );
 
     const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferView() const;
 
@@ -47,6 +64,11 @@ public:
     size_t GetIndicesCount() const;
 
 private:
+    void InitFromMeshData(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const MeshData& meshData
+    );
     void CreateBufferResource(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,

@@ -1,6 +1,6 @@
 #include "RenderObject.h"
 
-#include <codecvt> 
+#include <codecvt>
 
 void RenderObject::InitMesh(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
@@ -10,6 +10,16 @@ void RenderObject::InitMesh(
     , const std::wstring& meshFilename
 ) {
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, meshData);
+}
+
+void RenderObject::InitMeshFromGLTF(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+    std::filesystem::path& filepath,
+    const std::wstring& meshFilename
+) {
+    m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, filepath);
 }
 
 void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -77,8 +87,10 @@ void RenderObject::Render(
     pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, &depthStencilView);
 
     // Update the MVP matrix
-    //pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, &viewProjectionMatrix, 0);
-    pCommandListDirect->SetGraphicsRootConstantBufferView(0, pSceneCB->GetGPUVirtualAddress());
+    void* pData{};
+    ThrowIfFailed(pSceneCB->Map(0, &CD3DX12_RANGE(), &pData));
+    pCommandListDirect->SetGraphicsRoot32BitConstants(0, sizeof(DirectX::XMMATRIX) / 4, pData, 0);
+    //pCommandListDirect->SetGraphicsRootConstantBufferView(0, pSceneCB->GetGPUVirtualAddress());
     pCommandListDirect->SetGraphicsRoot32BitConstants(1, sizeof(DirectX::XMMATRIX) / 4, &m_modelMatrix, 0);
     
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);

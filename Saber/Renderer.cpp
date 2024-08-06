@@ -60,7 +60,10 @@ void Renderer::Initialize(HWND hWnd) {
 
     // Create scenes
     {
-        m_pScenes.resize(4);
+        m_pScenes.resize(5);
+
+        // 0
+        m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
 
         // 1
         m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
@@ -95,7 +98,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
             m_pAllocator,
-            L"Kitty.dds",
+            L"../../Resources/Textures/Kitty.dds",
             DirectX::XMMatrixIdentity()
         ));
         m_pScenes[2]->AddCamera(StaticCamera(
@@ -194,6 +197,33 @@ void Renderer::Initialize(HWND hWnd) {
         m_pJobSystem->AddJob([&]() {
             m_pScenes[3]->SetSceneReadiness(true);
         });
+
+
+        // 4
+        m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        std::filesystem::path filepath{ L"../../Resources/StaticModels/nugget.glb" };
+
+        m_pScenes[4]->AddStaticObject(TestRenderObject::createModelFromGLTF(
+            m_pDevice,
+            m_pCommandQueueCopy,
+            m_pMeshAtlas,
+            filepath,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary,
+            DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f)
+        ));
+        m_pScenes[4]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[4]->AddCamera(StaticCamera(
+            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
+            DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
+        ));
+        m_pScenes[4]->SetSceneReadiness(true);
     }
     m_pPSOLibrary->FlushCacheToFile();
 }
