@@ -35,25 +35,12 @@ class CommandQueue {
 	std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
 	std::mutex m_commandListQueueMutex{};
 
-	//struct CommandListSmartPtrComparator {
-	//	bool operator()(const std::shared_ptr<CommandList>& lhs, const std::shared_ptr<CommandList>& rhs) {
-	//		return lhs->GetPriority() < rhs->GetPriority();
-	//	}
-	//};
-	//Concurrency::concurrent_priority_queue<std::shared_ptr<CommandList>, CommandListSmartPtrComparator> m_commandListPriorityQueue{};
-
 	struct PrioritySet {
 		std::mutex mutex{};
 		std::unordered_multiset<std::shared_ptr<CommandList>> pCommandLists{};
 	};
 	std::mutex m_commandListsSetsMutex{};
 	std::vector<std::unique_ptr<PrioritySet>> m_commandListSets{};
-
-	//struct CommandListCounter {
-	//	uint8_t count{};
-	//	std::mutex mutex{};
-	//};
-	//std::vector<CommandListCounter> m_commandListsCounters{ std::numeric_limits<uint8_t>::max() };
 
 public:
 	CommandQueue() = delete;

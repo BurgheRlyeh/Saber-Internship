@@ -201,7 +201,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 4
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        std::filesystem::path filepath{ L"../../Resources/StaticModels/nugget.glb" };
+        std::filesystem::path filepath{ L"../../Resources/StaticModels/nugget1k.glb" };
 
         m_pScenes[4]->AddStaticObject(TestRenderObject::createModelFromGLTF(
             m_pDevice,
