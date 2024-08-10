@@ -31,6 +31,7 @@ public:
 
     void InitMesh(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         const MeshData & meshData,
@@ -39,6 +40,7 @@ public:
 
     void InitMeshFromGLTF(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::filesystem::path& filepath,
@@ -89,6 +91,7 @@ class TestRenderObject : RenderObject {
 public:
     static RenderObject createTriangle(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
@@ -116,7 +119,7 @@ public:
         };
 
         RenderObject obj{ modelMatrix };
-        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
+        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
@@ -135,6 +138,7 @@ public:
 
     static RenderObject createCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
@@ -175,7 +179,7 @@ public:
         };
 
         RenderObject obj{ modelMatrix };
-        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
+        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
@@ -194,6 +198,7 @@ public:
 
     static RenderObject createModelFromGLTF(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::filesystem::path& filepath,
@@ -203,7 +208,7 @@ public:
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         RenderObject obj{ modelMatrix };
-        obj.InitMeshFromGLTF(pDevice, pCommandQueueCopy, pMeshAtlas, filepath, L"MeshGLTF");
+        obj.InitMeshFromGLTF(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, filepath, L"MeshGLTF");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
@@ -269,13 +274,13 @@ class TestTextureRenderObject : RenderObject {
 public:
     static RenderObject createTextureCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator = nullptr,
         const LPCWSTR& textureFilename = L"",
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -336,7 +341,7 @@ public:
         Microsoft::WRL::ComPtr<ID3D12Resource> res{};
 
         RenderObject obj{ modelMatrix };
-        obj.InitMesh(pDevice, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
+        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,

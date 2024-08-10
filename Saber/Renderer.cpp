@@ -69,6 +69,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
             m_pDevice,
+            m_pAllocator,
             m_pCommandQueueCopy,
             m_pMeshAtlas,
             m_pShaderAtlas,
@@ -91,13 +92,13 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         m_pScenes[2]->AddStaticObject(TestTextureRenderObject::createTextureCube(
             m_pDevice,
+            m_pAllocator,
             m_pCommandQueueCopy,
             m_pCommandQueueDirect,
             m_pMeshAtlas,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            m_pAllocator,
             L"../../Resources/Textures/Kitty.dds",
             DirectX::XMMatrixIdentity()
         ));
@@ -123,6 +124,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::uniform_real_distribution<float> posDist(-10.0, 10.0);
                 m_pScenes[3]->AddStaticObject(TestRenderObject::createTriangle(
                     m_pDevice,
+                    m_pAllocator,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
                     m_pShaderAtlas,
@@ -142,6 +144,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::uniform_real_distribution<float> posDist(-10.0, 10.0);
                 m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
                     m_pDevice,
+                    m_pAllocator,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
                     m_pShaderAtlas,
@@ -181,6 +184,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::uniform_real_distribution<float> posDist(-100.0, 100.0);
                 m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
                     m_pDevice,
+                    m_pAllocator,
                     m_pCommandQueueCopy,
                     m_pMeshAtlas,
                     m_pShaderAtlas,
@@ -205,6 +209,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         m_pScenes[4]->AddStaticObject(TestRenderObject::createModelFromGLTF(
             m_pDevice,
+            m_pAllocator,
             m_pCommandQueueCopy,
             m_pMeshAtlas,
             filepath,
