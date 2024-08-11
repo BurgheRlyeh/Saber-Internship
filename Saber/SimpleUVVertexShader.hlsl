@@ -14,7 +14,7 @@ ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
 struct VSInput
 {
-    float4 position : POSITION;
+    float3 position : POSITION;
     float2 uv : TEXCOORD;
 };
 
@@ -28,11 +28,11 @@ VSOutput main(VSInput vtxIn)
 {
     VSOutput vtxOut;
     
-    //matrix mvpMatrix = mul(ModelCB.modelMatrix, SceneCB.vpMatrix);
-    matrix mvpMatrix = mul(SceneCB.vpMatrix, ModelCB.modelMatrix);
-    
     vtxOut.uv = vtxIn.uv;
-    vtxOut.position = mul(mvpMatrix, vtxIn.position);
+    
+    matrix mvpMatrix = mul(SceneCB.vpMatrix, ModelCB.modelMatrix);
+    float4 position = float4(vtxIn.position.x, vtxIn.position.y, vtxIn.position.z, 1.f);
+    vtxOut.position = mul(mvpMatrix, position);
     
     return vtxOut;
 }

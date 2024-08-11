@@ -18,12 +18,7 @@ public:
 		uint8_t priority = 0,
 		std::function<void(void)> beforeExec = [=]() { return; },
 		std::function<void(void)> afterExec = [=]() { return; }
-	)
-		: m_pCommandList(pCommandList)
-		, m_priority(priority)
-		, m_beforeExec(beforeExec)
-		, m_afterExec(afterExec)
-	{}
+	);
 
 	template <typename T>
 	inline T operator->() const {
@@ -34,23 +29,13 @@ public:
 		return m_pCommandList;
 	}
 
-	uint16_t GetPriority() {
-		return m_priority;
-	}
+	uint16_t GetPriority() const;
 
-	bool IsReadyForExection() {
-		return m_isReadyForExecution.load();
-	}
+	bool IsReadyForExection() const;
 
-	void SetReadyForExection() {
-		m_isReadyForExecution.store(true);
-	}
+	void SetReadyForExection();
 
-	void BeforeExecute() {
-		m_beforeExec();
-	};
+	void BeforeExecute() const;
 
-	void AfterExecute() {
-		m_afterExec();
-	};
+	void AfterExecute() const;
 };

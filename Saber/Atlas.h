@@ -102,31 +102,35 @@ public:
         assert(m_map.empty());
     }
 
-    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
-        auto res = m_map.find(m_hasher(filename));
+    std::shared_ptr<T> Find(const size_t& hash) {
+        auto res = m_map.find(hash);
         return res != m_map.end() ? res->second.lock() : std::shared_ptr<T>(nullptr);
+    }
+
+    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
+        return Find(m_hasher(filename));
     }
 
     template <typename... Params>
     std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
-        std::shared_ptr<T> res{ Find(filename) };
+        size_t hash{ m_hasher(filename) };
+        std::shared_ptr<T> res{ Find(hash) };
         if (res) {
             return res;
         }
 
-        size_t hash{ m_hasher(filename) };
         res = std::shared_ptr<T>(new T(m_resourceFolder + filename, params...), Deleter(this, hash));
         m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, res));
         return res;
     }
 
     bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
-        std::shared_ptr<T> resource{ Find(filename) };
+        size_t hash{ m_hasher(filename) };
+        std::shared_ptr<T> resource{ Find(hash) };
         if (resource) {
             return false;
         }
 
-        size_t hash{ m_hasher(filename) };
         m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, val));
         return true;
     }

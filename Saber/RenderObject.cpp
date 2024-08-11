@@ -3,23 +3,26 @@
 #include <codecvt>
 
 void RenderObject::InitMesh(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    , std::shared_ptr<CommandQueue> const& pCommandQueueCopy
-    , std::shared_ptr<Atlas<Mesh>> pMeshAtlas
-    , const MeshData& meshData
-    , const std::wstring& meshFilename
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+    const Mesh::MeshData& meshData,
+    const std::wstring& meshFilename
 ) {
-    m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, meshData);
+    m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshData);
 }
 
 void RenderObject::InitMeshFromGLTF(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
     std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
     std::filesystem::path& filepath,
-    const std::wstring& meshFilename
+    const std::wstring& meshFilename,
+    const std::initializer_list<Mesh::Attribute>& attributes
 ) {
-    m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pCommandQueueCopy, filepath);
+    m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pAllocator, pCommandQueueCopy, filepath, attributes);
 }
 
 void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -62,7 +65,6 @@ void RenderObject::Render(
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-    //DirectX::XMMATRIX viewProjectionMatrix
     Microsoft::WRL::ComPtr<ID3D12Resource> pSceneCB
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -78,7 +80,7 @@ void RenderObject::Render(
     }
 
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    pCommandListDirect->IASetVertexBuffers(0, 1, m_pMesh->GetVertexBufferView());
+    pCommandListDirect->IASetVertexBuffers(0, m_pMesh->GetVertexBuffersCount(), m_pMesh->GetVertexBufferViews());
     pCommandListDirect->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
 
     pCommandListDirect->RSSetViewports(1, &viewport);
