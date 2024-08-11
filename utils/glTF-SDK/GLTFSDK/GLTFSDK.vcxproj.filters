@@ -8,7 +8,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="GLTFSDK.CPP.autopkg" />
-    <None Include="packages.config" />
     <None Include="GenerateSchemaJsonHeader.ps1" />
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>
