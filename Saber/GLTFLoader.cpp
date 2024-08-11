@@ -38,11 +38,32 @@ private:
     std::filesystem::path m_pathBase;
 };
 
-void GLTFLoader::LoadMeshFromGLTF(
-    std::filesystem::path& filepath,
-    std::vector<uint32_t>& indices,
-    std::vector<VertexPositionColor>& vertices
-) {
+GLTFLoader::GLTFLoader(std::filesystem::path& filepath) {
+    CheckFilepathCorrectness(filepath);
+    GetResourceReaderAndDocument(filepath, m_pResourceReader, m_document);
+}
+
+void GLTFLoader::GetIndices(std::vector<uint32_t>& indices) {
+    const auto& mesh = m_document.meshes.Elements()[0];
+    const Microsoft::glTF::Accessor& accessor = m_document.accessors.Get(mesh.primitives.front().indicesAccessorId);
+    indices = m_pResourceReader->ReadBinaryData<uint32_t>(m_document, accessor);
+}
+
+bool GLTFLoader::GetVerticesData(std::vector<float>& data, const std::string& attributeName) {
+    const auto& mesh = m_document.meshes.Elements()[0];
+
+    std::string accessorId{};
+    if (!mesh.primitives.front().TryGetAttributeAccessorId(attributeName, accessorId)) {
+        return false;
+    }
+
+    const Microsoft::glTF::Accessor& accessor{ m_document.accessors.Get(accessorId) };
+    data = m_pResourceReader->ReadBinaryData<float>(m_document, accessor);
+
+    return true;
+}
+
+void GLTFLoader::CheckFilepathCorrectness(std::filesystem::path& filepath) {
     if (filepath.is_relative()) {
         std::filesystem::path pathCurrent{ std::filesystem::current_path() };
 
@@ -56,40 +77,34 @@ void GLTFLoader::LoadMeshFromGLTF(
     if (!filepath.has_extension()) {
         throw std::runtime_error("Filepath has no filename extension");
     }
+}
 
+void GLTFLoader::GetResourceReaderAndDocument(const std::filesystem::path& filepath, std::unique_ptr<Microsoft::glTF::GLBResourceReader>& pResourceReader, Microsoft::glTF::Document& document) {
     // Pass the absolute path, without the filename, to the stream reader
-    auto streamReader = std::make_unique<StreamReader>(filepath.parent_path());
+    std::unique_ptr<StreamReader> streamReader{ std::make_unique<StreamReader>(filepath.parent_path()) };
 
-    std::filesystem::path filename = filepath.filename();
-    std::filesystem::path fileExtension = filename.extension();
-
+    std::filesystem::path filename{ filepath.filename() };
+    std::filesystem::path fileExtension{ filename.extension() };
 
     auto MakePathExt = [](const std::string& ext) { return "." + ext; };
     assert(fileExtension == MakePathExt(Microsoft::glTF::GLB_EXTENSION));
 
     // Pass a UTF-8 encoded filename to GetInputString
     std::u8string u8string{ filename.u8string() };
-    std::shared_ptr<std::istream> glbStream{
+    std::shared_ptr<std::istream> pGLBStream{
         streamReader->GetInputStream(std::string(u8string.begin(), u8string.end()))
     };
-    std::unique_ptr<Microsoft::glTF::GLBResourceReader> glbResourceReader{
-        std::make_unique<Microsoft::glTF::GLBResourceReader>(
-            std::move(streamReader),
-            std::move(glbStream)
-        )
-    };
+    pResourceReader = std::make_unique<Microsoft::glTF::GLBResourceReader>(
+        std::move(streamReader),
+        std::move(pGLBStream)
+    );
 
-    std::string manifest{ glbResourceReader->GetJson() }; // Get the manifest from the JSON chunk
-
-    std::unique_ptr<Microsoft::glTF::GLTFResourceReader> resourceReader{
-        std::move(glbResourceReader)
-    };
-
-    if (!resourceReader) {
+    if (!pResourceReader) {
         throw std::runtime_error("Command line argument path filename extension must be .gltf or .glb");
     }
 
-    Microsoft::glTF::Document document{};
+    std::string manifest{ pResourceReader->GetJson() }; // Get the manifest from the JSON chunk
+
     try {
         document = Microsoft::glTF::Deserialize(manifest);
     }
@@ -100,66 +115,5 @@ void GLTFLoader::LoadMeshFromGLTF(
         ss << ex.what();
 
         throw std::runtime_error(ss.str());
-    }
-
-    const auto& mesh = document.meshes.Elements()[0];
-
-    for (const auto& meshPrimitive : mesh.primitives) {
-        std::string accessorId;
-
-        std::vector<float> vPositions;
-        size_t num_vert = 0;
-
-        if (meshPrimitive.TryGetAttributeAccessorId(Microsoft::glTF::ACCESSOR_POSITION, accessorId)) {
-            const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessorId);
-            num_vert = accessor.count;
-            const auto data = resourceReader->ReadBinaryData<float>(document, accessor);
-            vPositions = std::move(data);
-        }
-
-        //if (meshPrimitive.TryGetAttributeAccessorId(Microsoft::glTF::ACCESSOR_TEXCOORD_0, accessorId)) {
-        //    const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessorId);
-        //    const auto data = resourceReader->ReadBinaryData<float>(document, accessor);
-        //    vUV = std::move(data);
-        //}
-
-        //std::vector<float> vUV;
-        //std::vector<float> vNormals;
-        //if (meshPrimitive.TryGetAttributeAccessorId(Microsoft::glTF::ACCESSOR_NORMAL, accessorId)) {
-        //    const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessorId);
-        //    const auto data = resourceReader->ReadBinaryData<float>(document, accessor);
-        //    vNormals = std::move(data);
-        //}
-
-        //std::vector<float> vTangent;
-        //if (meshPrimitive.TryGetAttributeAccessorId(Microsoft::glTF::ACCESSOR_TANGENT, accessorId)) {
-        //    const Microsoft::glTF::Accessor& accessor = document.accessors.Get(accessorId);
-        //    const auto data = resourceReader->ReadBinaryData<float>(document, accessor);
-        //    vTangent = std::move(data);
-        //}
-
-        indices.clear();
-        {
-            const Microsoft::glTF::Accessor& accessor = document.accessors.Get(meshPrimitive.indicesAccessorId);
-            const auto indexes = resourceReader->ReadBinaryData<uint32_t>(document, accessor);
-            indices.reserve(indexes.size());
-            for (size_t i{}; i < indexes.size() / 3; ++i) {
-                size_t i3 = i * 3;
-                indices.emplace_back(indexes[i3]);
-                indices.emplace_back(indexes[i3 + 1]);
-                indices.emplace_back(indexes[i3 + 2]);
-            }
-        }
-
-        vertices.clear();
-        {
-            vertices.reserve(num_vert);
-            for (size_t i{}; i < num_vert; ++i) {
-                vertices.emplace_back(VertexPositionColor{
-                    { vPositions[3 * i], vPositions[3 * i + 1], vPositions[3 * i + 2], 1.f },
-                    {}
-                    });
-            }
-        }
     }
 }

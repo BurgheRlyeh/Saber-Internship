@@ -207,24 +207,26 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         std::filesystem::path filepath{ L"../../Resources/StaticModels/nugget1k.glb" };
 
-        m_pScenes[4]->AddStaticObject(TestRenderObject::createModelFromGLTF(
+        m_pScenes[4]->AddStaticObject(TestGLTFRenderObject::createModelFromGLTF(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,
+            m_pCommandQueueDirect,
             m_pMeshAtlas,
             filepath,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
+            L"../../Resources/Textures/nugget1k.dds",
             DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f)
         ));
         m_pScenes[4]->AddCamera(StaticCamera(
-            DirectX::XMVectorSet(0.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(0.f, 0.f, 5.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));
         m_pScenes[4]->AddCamera(StaticCamera(
-            DirectX::XMVectorSet(3.f, 0.f, 3.f, 1.f),
+            DirectX::XMVectorSet(5.f, 0.f, 5.f, 1.f),
             DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f),
             DirectX::XMVectorSet(0.f, 1.f, 0.f, 0.f)
         ));

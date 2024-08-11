@@ -15,10 +15,22 @@
 #include "Vertices.h"
 
 class GLTFLoader {
+    std::unique_ptr<Microsoft::glTF::GLBResourceReader> m_pResourceReader{};
+    Microsoft::glTF::Document m_document{};
+
 public:
-    static void LoadMeshFromGLTF(
-        std::filesystem::path& filepath,
-        std::vector<uint32_t>& indices,
-        std::vector<VertexPositionColor>& vertices
+    GLTFLoader(std::filesystem::path& filepath);
+
+    void GetIndices(std::vector<uint32_t>& indices);
+
+    bool GetVerticesData(std::vector<float>& data, const std::string& attributeName);
+
+private:
+    void CheckFilepathCorrectness(std::filesystem::path& filepath);
+
+    void GetResourceReaderAndDocument(
+        const std::filesystem::path& filepath,
+        std::unique_ptr<Microsoft::glTF::GLBResourceReader>& pResourceReader,
+        Microsoft::glTF::Document& document
     );
 };
