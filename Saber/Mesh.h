@@ -39,6 +39,7 @@ public:
         void* data{};
         size_t count{};
         size_t size{};
+        DXGI_FORMAT format{};
     };
 
     struct Attribute {

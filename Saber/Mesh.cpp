@@ -28,14 +28,41 @@ Mesh::Mesh(
 ) {
     GLTFLoader gltfLoader{ filepath };
 
-    std::vector<uint32_t> indices{};
-    gltfLoader.GetIndices(indices);
-    BufferData indexBufferData{
-        .data{ indices.data() },
-        .count{ indices.size() },
-        .size{ sizeof(indices.front()) }
-    };
-    AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, DXGI_FORMAT_R32_UINT);
+    DXGI_FORMAT format = gltfLoader.GetIndicesFormat();
+    switch(format)
+    {
+    case DXGI_FORMAT_R32_UINT:
+    {
+        std::vector<uint32_t> indices{};
+        gltfLoader.GetIndices(indices);
+        BufferData indexBufferData{
+            .data{ indices.data() },
+            .count{ indices.size() },
+            .size{ sizeof(indices.front())},
+            .format{format}
+        };
+        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+    }
+        break;
+    case DXGI_FORMAT_R16_UINT:
+    {
+        std::vector<uint16_t> indices{};
+
+        gltfLoader.GetIndices(indices);
+        BufferData indexBufferData{
+            .data{ indices.data() },
+            .count{ indices.size() },
+            .size{ sizeof(indices.front())},
+            .format{format}
+        };
+        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+    }
+        break;
+    default:
+        assert(0);
+        break;
+    }
+
 
     for (const Attribute& attribute : attributes) {
         std::vector<float> vertexData{};
@@ -48,7 +75,8 @@ Mesh::Mesh(
         BufferData vertexBufferData{
             .data{ vertexData.data() },
             .count{ vertexData.size() / (attribute.size / 4) },
-            .size{ attribute.size }
+            .size{ attribute.size},
+            .format{DXGI_FORMAT_R32_FLOAT}
         };
         AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
     }

@@ -21,7 +21,15 @@ class GLTFLoader {
 public:
     GLTFLoader(std::filesystem::path& filepath);
 
-    void GetIndices(std::vector<uint32_t>& indices);
+    template<typename T>
+    void GetIndices(std::vector<T>& indices) {
+        const auto& mesh = m_document.meshes.Elements()[0];
+        const Microsoft::glTF::Accessor& accessor = m_document.accessors.Get(mesh.primitives.front().indicesAccessorId);
+        indices = m_pResourceReader->ReadBinaryData<T>(m_document, accessor);
+    }
+
+    DXGI_FORMAT GetIndicesFormat();
+    DXGI_FORMAT GetDXGIFormat(const Microsoft::glTF::Accessor& accessor);
 
     bool GetVerticesData(std::vector<float>& data, const std::string& attributeName);
 

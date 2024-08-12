@@ -80,7 +80,7 @@ void RenderObject::Render(
     }
 
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    pCommandListDirect->IASetVertexBuffers(0, m_pMesh->GetVertexBuffersCount(), m_pMesh->GetVertexBufferViews());
+    pCommandListDirect->IASetVertexBuffers(0, static_cast<UINT>(m_pMesh->GetVertexBuffersCount()), m_pMesh->GetVertexBufferViews());
     pCommandListDirect->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
 
     pCommandListDirect->RSSetViewports(1, &viewport);

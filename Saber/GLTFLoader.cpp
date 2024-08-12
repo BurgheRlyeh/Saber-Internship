@@ -43,10 +43,39 @@ GLTFLoader::GLTFLoader(std::filesystem::path& filepath) {
     GetResourceReaderAndDocument(filepath, m_pResourceReader, m_document);
 }
 
-void GLTFLoader::GetIndices(std::vector<uint32_t>& indices) {
+
+DXGI_FORMAT GLTFLoader::GetIndicesFormat()
+{
     const auto& mesh = m_document.meshes.Elements()[0];
     const Microsoft::glTF::Accessor& accessor = m_document.accessors.Get(mesh.primitives.front().indicesAccessorId);
-    indices = m_pResourceReader->ReadBinaryData<uint32_t>(m_document, accessor);
+
+    return GetDXGIFormat(accessor);
+}
+
+DXGI_FORMAT GLTFLoader::GetDXGIFormat(const Microsoft::glTF::Accessor& accessor)
+{
+    switch (accessor.componentType)
+    {
+    case Microsoft::glTF::COMPONENT_BYTE:
+        return DXGI_FORMAT_R8_SINT;
+    case Microsoft::glTF::COMPONENT_UNSIGNED_BYTE:
+        return DXGI_FORMAT_R8_UINT;
+        break;
+    case Microsoft::glTF::COMPONENT_SHORT:
+        return DXGI_FORMAT_R16_SINT;
+        break;
+    case Microsoft::glTF::COMPONENT_UNSIGNED_SHORT:
+        return DXGI_FORMAT_R16_UINT;
+        break;
+    case Microsoft::glTF::COMPONENT_UNSIGNED_INT:
+        return DXGI_FORMAT_R32_UINT;
+        break;
+    case Microsoft::glTF::COMPONENT_FLOAT:
+        return DXGI_FORMAT_R32_FLOAT;
+        break;
+    default:
+        return DXGI_FORMAT_UNKNOWN;
+    }
 }
 
 bool GLTFLoader::GetVerticesData(std::vector<float>& data, const std::string& attributeName) {
