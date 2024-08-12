@@ -456,3 +456,6 @@ FodyWeavers.xsd
 # Additional files built by Visual Studio
 
 # End of https://www.toptal.com/developers/gitignore/api/c++,visualstudio,windows
+/Resources/StaticModels/barbarian_rig_axe_2_a.glb
+/Resources/StaticModels/barb_rig.glb
+/Resources/Textures/barbarian_diffuse.dds
