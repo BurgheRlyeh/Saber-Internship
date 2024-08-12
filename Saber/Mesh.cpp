@@ -53,7 +53,7 @@ Mesh::Mesh(
             .data{ indices.data() },
             .count{ indices.size() },
             .size{ sizeof(indices.front())},
-            .format{format}
+            .format{ format }
         };
         AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
     }
@@ -76,7 +76,7 @@ Mesh::Mesh(
             .data{ vertexData.data() },
             .count{ vertexData.size() / (attribute.size / 4) },
             .size{ attribute.size},
-            .format{DXGI_FORMAT_R32_FLOAT}
+            .format{ DXGI_FORMAT_R32_FLOAT }
         };
         AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
     }

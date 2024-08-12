@@ -108,7 +108,10 @@ public:
             { {  0.0f,  1.0f, 0.f }, { 0.0f, 1.0f, 0.0f, 0.f } },
             { {  1.0f, -1.0f, 0.f }, { 0.0f, 0.0f, 1.0f, 0.f } }
         };
-        uint32_t indices[]{ 0, 1, 2, 2, 1, 0 };
+        uint32_t indices[]{
+            0, 2, 1,
+            2, 0, 1
+        };
 
         Mesh::MeshData meshData{
             // vertices data
@@ -162,12 +165,12 @@ public:
         };
 
         uint32_t indices[]{
-            0, 2, 1, 0, 3, 2,
-            4, 5, 6, 4, 6, 7,
-            4, 1, 5, 4, 0, 1,
-            3, 6, 2, 3, 7, 6,
-            1, 6, 5, 1, 2, 6,
-            4, 3, 0, 4, 7, 3
+            0, 1, 2, 0, 2, 3,
+            4, 6, 5, 4, 7, 6,
+            4, 5, 1, 4, 1, 0,
+            3, 2, 6, 3, 6, 7,
+            1, 5, 6, 1, 6, 2,
+            4, 0, 3, 4, 3, 7
         };
 
         Mesh::MeshData meshData{
@@ -293,12 +296,12 @@ public:
         };
 
         uint32_t indices[36]{
-             0,  1,	 2,  0,  2,  3,
-             4,  5,	 6,  4,  6,  7,
-             8,  9,	10,  8, 10, 11,
-            12, 13, 14, 12, 14, 15,
-            16, 17, 18, 16, 18, 19,
-            20, 21, 22, 20, 22, 23
+             0,	 2,  1,  0,  3,  2,
+             4,	 6,  5,  4,  7,  6,
+             8,	10,  9,  8, 11, 10,
+            12, 14, 13, 12, 15, 14,
+            16, 18, 17, 16, 19, 18,
+            20, 22, 21, 20, 23, 22
         };
 
         Mesh::MeshData meshData{
@@ -395,7 +398,7 @@ private:
 class TestGLTFRenderObject : RenderObject {
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayout[2]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
 public:

@@ -112,6 +112,10 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(
     CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc{ D3D12_DEFAULT };
     depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
+    CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT };
+    //rasterizerDesc.CullMode = D3D12_CULL_MODE_FRONT;
+    rasterizerDesc.FrontCounterClockwise = true;
+
     CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
     pipelineStateStream.pRootSignature = pRootSignatureResource->pRootSignature.Get();
     pipelineStateStream.InputLayout = { inputLayout, UINT(inputLayoutSize) };
@@ -120,6 +124,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC RenderObject::CreatePipelineStateDesc(
     pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderResource->pShaderBlob.Get());
     pipelineStateStream.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     pipelineStateStream.DepthStencilState = depthStencilDesc;
+    pipelineStateStream.RasterizerState = rasterizerDesc;
     pipelineStateStream.RTVFormats = rtvFormats;
 
     return pipelineStateStream.GraphicsDescV0();

@@ -205,7 +205,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 4
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        std::filesystem::path filepath{ L"../../Resources/StaticModels/nugget1k.glb" };
+        std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
 
         m_pScenes[4]->AddStaticObject(TestGLTFRenderObject::createModelFromGLTF(
             m_pDevice,
@@ -217,8 +217,8 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            L"../../Resources/Textures/nugget1k.dds",
-            DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f)
+            L"../../Resources/Textures/barbarian_diffuse.dds"
+            , DirectX::XMMatrixScaling(2.1f, 2.1f, 2.1f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
         ));
         m_pScenes[4]->AddCamera(StaticCamera(
             DirectX::XMVectorSet(0.f, 0.f, 5.f, 1.f),
@@ -465,7 +465,7 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_PRESENT
         );
         // This method must be called on the command list before being executed on the command queue
-        m_pCommandQueueDirect->ExecuteCommandListImmediately(commandList);
+        m_pCommandQueueDirect->ExecuteCommandList(commandList);
     }
 
     // two command lists: 1. static, 1,5. static too same priority; 2. dynamic
