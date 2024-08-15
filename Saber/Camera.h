@@ -3,9 +3,9 @@
 #include "Headers.h"
 
 class StaticCamera {
-	DirectX::XMVECTOR m_pos{ 0.0f, 0.0f, 0.0f, 1.0f };
-	DirectX::XMVECTOR m_poi{ 0.0f, 0.0f, 0.0f, 1.0f };
-	DirectX::XMVECTOR  m_up{ 0.0f, 1.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 m_pos{ 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 m_poi{ 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3  m_up{ 0.0f, 1.0f, 0.0f };
 
 public:
 	float m_near{ 0.1f };
@@ -14,14 +14,15 @@ public:
 	float m_aspectRatio{ 16.0f / 9.0f};
 
 	StaticCamera(
-		const DirectX::XMVECTOR& pos,
-		const DirectX::XMVECTOR& poi,
-		const DirectX::XMVECTOR& upDir
+		const DirectX::XMFLOAT3& pos,
+		const DirectX::XMFLOAT3& poi,
+		const DirectX::XMFLOAT3& upDir
 	);;
 
-	virtual DirectX::XMVECTOR GetPosition() const;
-	virtual DirectX::XMVECTOR GetPointOfInterest() const;
-	virtual DirectX::XMVECTOR GetUpDirection() const;
+	virtual DirectX::XMFLOAT3 GetPosition() const;
+	virtual DirectX::XMFLOAT3 GetPointOfInterest() const;
+	virtual DirectX::XMFLOAT3 GetUpDirection() const;
+	virtual DirectX::XMFLOAT3 GetViewDirection() const;
 
 	DirectX::XMMATRIX GetViewMatrixLH() const;
 	DirectX::XMMATRIX GetViewMatrixRH() const;

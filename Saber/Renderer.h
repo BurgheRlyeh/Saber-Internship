@@ -91,11 +91,11 @@ class Renderer {
     //Scene m_scene{};
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
     size_t m_currSceneId{ 2 };
-    bool m_isCurrentHandLeft{};
+    //bool m_isCurrentHandLeft{};
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
-    std::atomic<bool> m_isLeftHand{ m_isCurrentHandLeft };
+    //std::atomic<bool> m_isLeftHand{ m_isCurrentHandLeft };
 
     // Atlases
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
