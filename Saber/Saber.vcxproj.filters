@@ -93,6 +93,9 @@
     <ClInclude Include="GLTFLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Textures.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -141,6 +144,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Textures.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

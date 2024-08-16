@@ -33,14 +33,8 @@ struct ModelBuffer
 ConstantBuffer<ModelBuffer> ModelCB : register(b2);
 
 Texture2D t1 : register(t0);
+Texture2D t2 : register(t1);
 SamplerState s1 : register(s0);
-
-struct PSInput
-{
-    float3 worldPos : POSITION;
-    float3 norm : NORMAL;
-    float2 uv : TEXCOORD;
-};
 
 struct Lighting
 {
@@ -106,9 +100,21 @@ Lighting GetPointLight(
     return lighting;
 }
 
+struct PSInput
+{
+    float3 worldPos : POSITION;
+    float3 norm : NORMAL;
+    float3 tang : TANGENT;
+    float2 uv : TEXCOORD;
+};
+
 float4 main(PSInput input) : SV_TARGET
 {
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
+    
+    float3 binorm = normalize(cross(input.norm, input.tang));
+    float3 localNorm = 2.f * t2.Sample(s1, input.uv).xyz - float3(1.f, 1.f, 1.f);
+    float3 norm = localNorm.x * normalize(input.tang) + localNorm.y * binorm + localNorm.z * normalize(input.norm);
     
     for (uint i = 0; i < LightCB.lightCount.x; ++i)
     {
@@ -116,7 +122,7 @@ float4 main(PSInput input) : SV_TARGET
             LightCB.lights[i],
             input.worldPos,
             input.worldPos - SceneCB.cameraPosition.xyz,
-            input.norm,
+            norm,
             10.f
         );
 

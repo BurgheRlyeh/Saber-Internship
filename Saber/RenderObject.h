@@ -14,14 +14,14 @@
 #include "PSOLibrary.h"
 #include "Resources.h"
 #include "Vertices.h"
-#include "Texture.h"
+#include "Textures.h"
 
 class RenderObject {
     std::shared_ptr<Mesh> m_pMesh{};
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
     std::shared_ptr<ShaderResource> m_pVertexShaderResource{};
     std::shared_ptr<ShaderResource> m_pPixelShaderResource{};
-    std::shared_ptr<Texture> m_pTexture{};
+    std::shared_ptr<Textures> m_pTextures{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
 
 protected:
@@ -82,7 +82,7 @@ public:
         std::shared_ptr<PSOLibrary> pPSOLibrary,
         D3D12_INPUT_ELEMENT_DESC* inputLayout,
         size_t inputLayoutSize,
-        std::shared_ptr<Texture> pTexture = nullptr
+        std::shared_ptr<Textures> pTexture = nullptr
     );
 
     void Update();
@@ -285,16 +285,18 @@ private:
 };
 
 class TestTextureRenderObject : RenderObject {
-    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutAoS[3]{
+    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutAoS[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
-    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[3]{
+    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
 public:
@@ -307,34 +309,35 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename = L"",
+        const LPCWSTR& textureFilename,
+        const LPCWSTR& normalMapFilename,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
-        VertexPosNormUV vertices[24]{
-            { { -1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, { 0.f, 0.f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, { 0.f, 0.f } },
-            { {  1.f, -1.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f,  1.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f,  1.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { {  1.f,  1.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } },
-            { { -1.f, -1.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { { -1.f, -1.f, -1.f }, { -1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { { -1.f,  1.f, -1.f }, { -1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 0.f } },
-            { {  1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { 0.f, 1.f } },
-            { { -1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.f, 1.f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.f, 0.f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { 0.f, 0.f } },
-            { { -1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.f, 0.f } }
+        VertexPosNormTangUV vertices[24]{
+            { { -1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
+            { {  1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
+            { {  1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
+            { { -1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } },
+            { { -1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
+            { {  1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
+            { {  1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
+            { { -1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } },
+            { {  1.f, -1.f, -1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 0.f, 1.f } },
+            { {  1.f, -1.f,  1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 1.f, 1.f } },
+            { {  1.f,  1.f,  1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 1.f, 0.f } },
+            { {  1.f,  1.f, -1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 0.f, 0.f } },
+            { { -1.f, -1.f,  1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 0.f, 1.f } },
+            { { -1.f, -1.f, -1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 1.f, 1.f } },
+            { { -1.f,  1.f, -1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 1.f, 0.f } },
+            { { -1.f,  1.f,  1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 0.f, 0.f } },
+            { {  1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 1.f } },
+            { { -1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.f, 1.f } },
+            { { -1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.f, 0.f } },
+            { {  1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 0.f } },
+            { { -1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
+            { {  1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
+            { {  1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
+            { { -1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } }
         };
 
         uint32_t indices[36]{
@@ -362,6 +365,8 @@ public:
 
         RenderObject obj{ pDevice, pAllocator, modelMatrix };
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
+
+        LPCWSTR textures[]{ textureFilename, normalMapFilename };
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
@@ -373,7 +378,7 @@ public:
             pPSOLibrary,
             m_inputLayoutAoS,
             _countof(m_inputLayoutSoA),
-            std::make_shared<Texture>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textureFilename)
+            std::make_shared<Textures>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textures, _countof(textures))
         );
 
         return obj;
@@ -389,7 +394,8 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename = L"",
+        const LPCWSTR& textureFilename,
+        const LPCWSTR& normalMapFilename,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         RenderObject obj{ pDevice, pAllocator, modelMatrix };
@@ -403,10 +409,16 @@ public:
                 .size{ sizeof(DirectX::XMFLOAT3) }
             },
             Mesh::Attribute{
+                .name{ Microsoft::glTF::ACCESSOR_TANGENT },
+                .size{ sizeof(DirectX::XMFLOAT3) }
+            },
+            Mesh::Attribute{
                 .name{ Microsoft::glTF::ACCESSOR_TEXCOORD_0 },
                 .size{ sizeof(DirectX::XMFLOAT2) }
             }
             });
+
+        LPCWSTR textures[]{ textureFilename, normalMapFilename };
         obj.InitMaterial(
             pDevice,
             pShaderAtlas,
@@ -418,7 +430,7 @@ public:
             pPSOLibrary,
             m_inputLayoutSoA,
             _countof(m_inputLayoutSoA),
-            std::make_shared<Texture>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textureFilename)
+            std::make_shared<Textures>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textures, _countof(textures))
         );
 
         return obj;
@@ -442,7 +454,7 @@ private:
         };
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[1]{};
-        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
         
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
         rootParameters[0].InitAsConstantBufferView(0);  // scene CB

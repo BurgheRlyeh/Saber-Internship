@@ -17,7 +17,8 @@ public:
 		, std::shared_ptr<CommandQueue> const& pCommandQueueCopy
 		, std::shared_ptr<CommandQueue> const& pCommandQueueDirect
 		, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
-		, const wchar_t* filename
+		, const LPCWSTR& filename
+		, D3D12_CPU_DESCRIPTOR_HANDLE* pCPUDescHeap = nullptr
 		, DirectX::DDS_FLAGS flags = DirectX::DDS_FLAGS_NONE
 	);
 

@@ -13,8 +13,9 @@ struct VertexPosUV {
     DirectX::XMFLOAT2 uv{ 0.f, 0.f };
 };
 
-struct VertexPosNormUV {
+struct VertexPosNormTangUV {
     DirectX::XMFLOAT3 position{ 0.f, 0.f, 0.f };
     DirectX::XMFLOAT3 norm{ 0.f, 0.f, 0.f };
+    DirectX::XMFLOAT3 tang{ 0.f, 0.f, 0.f };
     DirectX::XMFLOAT2 uv{ 0.f, 0.f };
 };

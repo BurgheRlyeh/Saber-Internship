@@ -88,7 +88,8 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            L"../../Resources/Textures/Kitty.dds",
+            L"../../Resources/Textures/Brick.dds",
+            L"../../Resources/Textures/BrickNM.dds",
             DirectX::XMMatrixIdentity()
         ));
 
@@ -151,8 +152,9 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            L"../../Resources/Textures/barbarian_diffuse.dds"
-            , DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+            L"../../Resources/Textures/barbarian_diffuse.dds",
+            L"../../Resources/Textures/barb2_n.dds",
+            DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
         ));
 
         // cameras for all scenes

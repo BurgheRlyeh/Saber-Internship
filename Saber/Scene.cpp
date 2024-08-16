@@ -36,7 +36,7 @@ void Scene::AddCamera(const StaticCamera&& camera) {
 
 void Scene::SetAmbientLight(
     const DirectX::XMFLOAT3& color,
-    const float& power = 1.f
+    const float& power
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
 

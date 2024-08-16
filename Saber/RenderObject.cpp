@@ -35,7 +35,7 @@ void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     std::shared_ptr<PSOLibrary> pPSOLibrary,
     D3D12_INPUT_ELEMENT_DESC* inputLayout,
     size_t inputLayoutSize,
-    std::shared_ptr<Texture> pTexture
+    std::shared_ptr<Textures> pTexture
 ) {
     m_pVertexShaderResource = pShaderAtlas->Assign(vertexShaderFilepath);
     m_pPixelShaderResource = pShaderAtlas->Assign(pixelShaderFilepath);
@@ -52,7 +52,7 @@ void RenderObject::InitMaterial (Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 
     m_pPipelineState = pPSOLibrary->Assign(pDevice, (std::wstring(vertexShaderFilepath) + std::wstring(pixelShaderFilepath)).c_str(), &desc);
 
-    m_pTexture = pTexture;
+    m_pTextures = pTexture;
 }
 
 void RenderObject::Update() {
@@ -74,10 +74,12 @@ void RenderObject::Render(
 
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
-    if (m_pTexture) {
-        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTexture->GetTextureDescHeap().Get() };
+    if (m_pTextures) {
+        ID3D12DescriptorHeap* descriptorHeaps[] = { m_pTextures->GetDescHeap().Get() };
         pCommandListDirect->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-        pCommandListDirect->SetGraphicsRootDescriptorTable(3, m_pTexture->GetTextureDescHeap()->GetGPUDescriptorHandleForHeapStart());
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE gpuDescHandle(m_pTextures->GetDescHeap()->GetGPUDescriptorHandleForHeapStart());
+        pCommandListDirect->SetGraphicsRootDescriptorTable(3, gpuDescHandle);
     }
 
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
