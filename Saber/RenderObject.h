@@ -93,8 +93,8 @@ public:
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-        Microsoft::WRL::ComPtr<ID3D12Resource> pLightCB,
-        Microsoft::WRL::ComPtr<ID3D12Resource> pSceneCB
+        D3D12_GPU_VIRTUAL_ADDRESS sceneCBGPUVirtualAddress,
+        D3D12_GPU_VIRTUAL_ADDRESS lightCBGPUVirtualAddress
     ) const;
 
 private:

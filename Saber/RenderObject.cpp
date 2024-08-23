@@ -65,8 +65,8 @@ void RenderObject::Render(
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-    Microsoft::WRL::ComPtr<ID3D12Resource> pLightCB,
-    Microsoft::WRL::ComPtr<ID3D12Resource> pSceneCB
+    D3D12_GPU_VIRTUAL_ADDRESS sceneCBGPUVirtualAddress,
+    D3D12_GPU_VIRTUAL_ADDRESS lightCBGPUVirtualAddress
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -92,8 +92,8 @@ void RenderObject::Render(
     pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, &depthStencilView);
 
     // Update the MVP matrix
-    pCommandListDirect->SetGraphicsRootConstantBufferView(0, pSceneCB->GetGPUVirtualAddress());
-    pCommandListDirect->SetGraphicsRootConstantBufferView(1, pLightCB->GetGPUVirtualAddress());
+    pCommandListDirect->SetGraphicsRootConstantBufferView(0, sceneCBGPUVirtualAddress);
+    pCommandListDirect->SetGraphicsRootConstantBufferView(1, lightCBGPUVirtualAddress);
     pCommandListDirect->SetGraphicsRootConstantBufferView(2, m_pModelCB->GetResource()->GetGPUVirtualAddress());
     
     pCommandListDirect->DrawIndexedInstanced(static_cast<UINT>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0);

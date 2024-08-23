@@ -104,7 +104,7 @@ std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 // Returns the fence value to wait for for this command list.
 uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandList) {
 	ThrowIfFailed(commandList->m_pCommandList->Close());
-
+	
 	ID3D12CommandAllocator* pCommandAllocator{};
 	uint32_t dataSize{ sizeof(pCommandAllocator) };
 	ThrowIfFailed(commandList->m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
@@ -142,7 +142,9 @@ void CommandQueue::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
 	pCommandList->SetReadyForExection();
 }
 
-void CommandQueue::ExecutionTask() {
+uint64_t CommandQueue::ExecutionTask() {
+	uint64_t lastFrameValue{};
+
 	for (std::unique_ptr<PrioritySet>& priorityVector : m_commandListSets) {
 		std::unordered_multiset<std::shared_ptr<CommandList>>& pCommandLists{ priorityVector->pCommandLists };
 
@@ -152,7 +154,7 @@ void CommandQueue::ExecutionTask() {
 				iter = pCommandLists.begin();
 			}
 			if ((*iter)->IsReadyForExection()) {
-				ExecuteCommandList(*iter);
+				lastFrameValue = ExecuteCommandList(*iter);
 				pCommandLists.erase(iter);
 				iter = pCommandLists.begin();
 			}
@@ -161,6 +163,8 @@ void CommandQueue::ExecutionTask() {
 			}
 		}
 	}
+
+	return lastFrameValue;
 }
 
 uint64_t CommandQueue::Signal() {

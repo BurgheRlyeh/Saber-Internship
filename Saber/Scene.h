@@ -4,9 +4,10 @@
 
 #include <mutex>
 
-#include "RenderObject.h"
 #include "Camera.h"
 #include "ConstantBuffer.h"
+#include "DynamicUploadRingBuffer.h"
+#include "RenderObject.h"
 
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
@@ -16,7 +17,8 @@ class Scene {
         DirectX::XMFLOAT4 cameraPosition{};
     } m_sceneBuffer;
     std::mutex m_sceneBufferMutex{};
-    std::shared_ptr<ConstantBuffer> m_pSceneCB{};
+    std::shared_ptr<DynamicUploadHeap> m_pCPUAccessibleDynamicUploadHeap{};
+    DynamicAllocation m_sceneCBDynamicAllocation{};
     std::atomic<bool> m_isUpdateSceneCB{};
 
     struct Light {
@@ -33,39 +35,38 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::vector<std::shared_ptr<RenderObject>> m_staticObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_pStaticObjects{};
     std::mutex m_staticObjectsMutex{};
 
-    std::vector<std::shared_ptr<RenderObject>> m_dynamicObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_pDynamicObjects{};
     std::mutex m_dynamicObjectsMutex{};
 
-    std::vector<std::shared_ptr<StaticCamera>> m_cameras{};
+    std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
+    std::atomic<bool> m_isUpdateCamera{};
 
     size_t m_currCameraId{};
-    
+
     std::atomic<bool> m_isSceneReady{};
-    std::atomic<bool> m_isLH{};
+
+    std::atomic<bool> m_isFinishFrame{};
 
 public:
     Scene() = delete;
     Scene(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
+        //, std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
     );
 
     void SetSceneReadiness(bool value) {
         m_isSceneReady.store(value);
     }
 
-    void SwapViewProjMatrixHand() {
-        m_isLH.store(!m_isLH.load());
-    }
-
     void AddStaticObject(const RenderObject&& object);
     void AddDynamicObject(const RenderObject&& object);
 
-    void AddCamera(const StaticCamera&& camera);
+    void AddCamera(const std::shared_ptr<Camera>&& pCamera);
 
     void SetAmbientLight(
         const DirectX::XMFLOAT3& color,
@@ -82,9 +83,17 @@ public:
 
     void UpdateCamerasAspectRatio(float aspectRatio);
 
+    void Update(float deltaTime);
+
     bool SetCurrentCamera(size_t cameraId);
 
     void NextCamera();
+
+    bool TryMoveCamera(float forwardCoef, float rightCoef);
+
+    bool TryRotateCamera(float deltaX, float deltaY);
+
+    bool TryUpdateCamera(float deltaTime);
 
     DirectX::XMMATRIX GetViewProjectionMatrix();
 
@@ -102,6 +111,8 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
     );
+
+    void FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
 
 private:
     void UpdateSceneBuffer();

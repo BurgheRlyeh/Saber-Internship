@@ -2,6 +2,7 @@
 
 #include <shellapi.h> // For CommandLineToArgvW
 #include <Shlwapi.h>
+#include "windowsx.h"
 
 #include "OutputContext.h"
 #include "JobSystem.h"
@@ -18,6 +19,11 @@ std::unique_ptr<OutputContext> g_pOutputContext{};
 std::shared_ptr<JobSystem<>> g_pJobSystem{};
 std::unique_ptr<Renderer> g_pRenderer{};
 bool g_isInitialized{};
+
+bool g_pressedKeys[255]{};
+bool g_isRButtonDown{};
+int g_mouseX{}, g_mouseY{};
+float g_speed{ 1.f };
 
 void ParseCommandLineArguments() {
     int argc{};
@@ -52,25 +58,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
         switch (wParam) {
         case '0':
-            g_pRenderer->SetSceneId(0);
-            break;
         case '1':
-            g_pRenderer->SetSceneId(1);
-            break;
         case '2':
-            g_pRenderer->SetSceneId(2);
-            break;
         case '3':
-            g_pRenderer->SetSceneId(3);
-            break;
         case '4':
-            g_pRenderer->SetSceneId(4);
+            g_pRenderer->SetSceneId(wParam - '0');
             break;
         case 'C':
             g_pRenderer->SwitchToNextCamera();
-            break;
-        case 'H':
-            g_pRenderer->SwitchHand();
             break;
         case 'V':
             g_pRenderer->SwitchVSync();
@@ -84,6 +79,106 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_pOutputContext->SwitchFullscreen();
             }
             break;
+
+        case VK_SHIFT: {
+            if (!g_pressedKeys[wParam]) {
+                g_speed *= 2.f;
+                g_pressedKeys[wParam] = true;
+            }
+            break;
+        }
+
+        case 'W':
+        case 'w':
+            if (!g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(-g_speed, 0.f);
+                g_pressedKeys[wParam] = true;
+            }
+            break;
+        case 'S':
+        case 's':
+            if (!g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(g_speed, 0.f);
+                g_pressedKeys[wParam] = true;
+            }
+            break;
+
+        case 'A':
+        case 'a':
+            if (!g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(0.f, -g_speed);
+                g_pressedKeys[wParam] = true;
+            }
+            break;
+        case 'D':
+        case 'd':
+            if (!g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(0.f, g_speed);
+                g_pressedKeys[wParam] = true;
+            }
+            break;
+        }
+        break;
+    }
+    case WM_KEYUP: {
+        switch (wParam) {
+        case VK_SHIFT: {
+            if (g_pressedKeys[wParam]) {
+                g_speed *= 0.5f;
+            }
+            g_pressedKeys[wParam] = false;
+            break;
+        }
+
+        case 'W':
+        case 'w':
+            if (g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(g_speed, 0.f);
+            }
+            g_pressedKeys[wParam] = false;
+            break;
+        case 'S':
+        case 's':
+            if (g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(-g_speed, 0.f);
+            }
+            g_pressedKeys[wParam] = false;
+            break;
+
+        case 'A':
+        case 'a':
+            if (g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(0.f, g_speed);
+            }
+            g_pressedKeys[wParam] = false;
+            break;
+        case 'D':
+        case 'd':
+            if (g_pressedKeys[wParam]) {
+                g_pRenderer->MoveCamera(0.f, -g_speed);
+            }
+            g_pressedKeys[wParam] = false;
+            break;
+        }
+        break;
+    }
+    case WM_RBUTTONDOWN: {
+        g_isRButtonDown = true;
+        g_mouseX = GET_X_LPARAM(lParam);
+        g_mouseY = GET_Y_LPARAM(lParam);
+        break;
+    }
+    case WM_RBUTTONUP: {
+        g_isRButtonDown = false;
+        break;
+    }
+    case WM_MOUSEMOVE: {
+        if (g_isRButtonDown) {
+            int oldX{ g_mouseX }, oldY{ g_mouseY };
+            g_mouseX = GET_X_LPARAM(lParam);
+            g_mouseY = GET_Y_LPARAM(lParam);
+
+            g_pRenderer->RotateCamera(oldX - g_mouseX, g_mouseY - oldY);
         }
         break;
     }

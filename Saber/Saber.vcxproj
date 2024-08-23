@@ -161,6 +161,7 @@
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="ConstantBuffer.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
+    <ClInclude Include="DynamicUploadRingBuffer.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GLTFLoader.h" />
     <ClInclude Include="GPUResource.h" />
@@ -188,6 +189,7 @@
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="ConstantBuffer.cpp" />
     <ClCompile Include="D3D12MemAlloc.cpp" />
+    <ClCompile Include="DynamicUploadRingBuffer.cpp" />
     <ClCompile Include="GLTFLoader.cpp" />
     <ClCompile Include="GPUResource.cpp" />
     <ClCompile Include="main.cpp" />

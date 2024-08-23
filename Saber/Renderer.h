@@ -29,6 +29,7 @@
 #include "Resources.h"
 #include "Scene.h"
 #include "JobSystem.h"
+#include "DynamicUploadRingBuffer.h"
 
 class Renderer {
     // The number of swap chain back buffers.
@@ -88,22 +89,17 @@ class Renderer {
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
-    //Scene m_scene{};
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
     size_t m_currSceneId{ 2 };
-    //bool m_isCurrentHandLeft{};
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
-    //std::atomic<bool> m_isLeftHand{ m_isCurrentHandLeft };
 
     // Atlases
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
     std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
     std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
     std::shared_ptr<PSOLibrary> m_pPSOLibrary{};
-    //std::shared_ptr<Atlas<PipelineStateResource>> m_pPipelineStateAtlas{};
-    //std::shared_ptr<MaterialAtlas<>> m_pMaterialAtlas{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
@@ -131,13 +127,14 @@ public:
 
     void SwitchToNextCamera();
 
-    void SwitchHand();
-
     void Resize(uint32_t width, uint32_t height);
 
     void PerformResize();
     void Update();
     void Render();
+
+    void MoveCamera(float forwardCoef, float rightCoef);
+    void RotateCamera(float deltaX, float deltaY);
 
 private:
     void RenderLoop();

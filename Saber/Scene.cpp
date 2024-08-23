@@ -1,10 +1,20 @@
 #include "Scene.h"
 
-Scene::Scene(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator) {
-    m_pSceneCB = std::make_shared<ConstantBuffer>(
-        pDevice,
+Scene::Scene(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+    , Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
+    //, std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
+) {
+    //m_pSceneCB = std::make_shared<ConstantBuffer>(
+    //    pDevice,
+    //    pAllocator,
+    //    CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(SceneBuffer), 0)
+    //);
+
+    m_pCPUAccessibleDynamicUploadHeap = std::make_shared<DynamicUploadHeap>(
         pAllocator,
-        CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(SceneBuffer), 0)
+        2 * sizeof(SceneBuffer),
+        true
     );
 
     m_pLightCB = std::make_shared<ConstantBuffer>(
@@ -16,20 +26,21 @@ Scene::Scene(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComP
 
 void Scene::AddStaticObject(const RenderObject&& object) {
     std::scoped_lock<std::mutex> lock(m_staticObjectsMutex);
-    m_staticObjects.push_back(std::make_shared<RenderObject>(object));
+    m_pStaticObjects.push_back(std::make_shared<RenderObject>(object));
 }
 
 void Scene::AddDynamicObject(const RenderObject&& object) {
     std::scoped_lock<std::mutex> lock(m_dynamicObjectsMutex);
-    m_dynamicObjects.push_back(std::make_shared<RenderObject>(object));
+    m_pDynamicObjects.push_back(std::make_shared<RenderObject>(object));
 }
 
-void Scene::AddCamera(const StaticCamera&& camera) {
+void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
     std::unique_lock<std::mutex> lock(m_camerasMutex);
-    m_cameras.push_back(std::make_shared<StaticCamera>(camera));
+    m_pCameras.push_back(pCamera);
     lock.unlock();
 
-    if (m_pSceneCB->IsEmpty()) {
+    //if (m_pSceneCB->IsEmpty()) {
+    if (!m_sceneCBDynamicAllocation.pBuffer) {
         m_isUpdateSceneCB.store(true);
     }
 }
@@ -83,13 +94,18 @@ bool Scene::AddLightSource(
 
 void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    for (auto& camera : m_cameras) {
-        camera->m_aspectRatio = aspectRatio;
+    for (auto& camera : m_pCameras) {
+        camera->SetAspectRatio(aspectRatio);
     }
+    m_isUpdateSceneCB.store(true);
+}
+
+void Scene::Update(float deltaTime) {
+    TryUpdateCamera(deltaTime);
 }
 
 bool Scene::SetCurrentCamera(size_t cameraId) {
-    if (std::unique_lock<std::mutex> lock(m_camerasMutex);  m_cameras.size() <= cameraId)
+    if (std::unique_lock<std::mutex> lock(m_camerasMutex); m_pCameras.size() <= cameraId)
         return false;
 
     m_currCameraId = cameraId;
@@ -101,16 +117,57 @@ bool Scene::SetCurrentCamera(size_t cameraId) {
 
 void Scene::NextCamera() {
     std::unique_lock<std::mutex> lock(m_camerasMutex);
-    if (!m_cameras.empty()) {
+    if (!m_pCameras.empty()) {
         lock.unlock();
-        SetCurrentCamera((m_currCameraId + 1) % m_cameras.size());
+        SetCurrentCamera((m_currCameraId + 1) % m_pCameras.size());
     }
+}
+
+bool Scene::TryMoveCamera(float forwardCoef, float rightCoef) {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pSphereCamera) {
+        return false;
+    }
+
+    pSphereCamera->Move(forwardCoef, rightCoef);
+
+    m_isUpdateCamera.store(true);
+    return true;
+}
+
+bool Scene::TryRotateCamera(float deltaX, float deltaY) {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pSphereCamera) {
+        return false;
+    }
+
+    pSphereCamera->Rotate(deltaX, deltaY);
+
+    m_isUpdateCamera.store(true);
+    return true;
+}
+
+bool Scene::TryUpdateCamera(float deltaTime) {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    if (!m_isUpdateCamera.load()) {
+        return false;
+    }
+
+    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pSphereCamera) {
+        return false;
+    }
+
+    pSphereCamera->Update(deltaTime);
+    m_isUpdateSceneCB.store(true);
+    return true;
 }
 
 DirectX::XMMATRIX Scene::GetViewProjectionMatrix() {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    return m_isLH.load() ? m_cameras.at(m_currCameraId)->GetViewProjectionMatrixLH()
-        : m_cameras.at(m_currCameraId)->GetViewProjectionMatrixRH();
+    return m_pCameras.at(m_currCameraId)->GetViewProjectionMatrix();
 }
 
 void Scene::RenderStaticObjects(
@@ -120,24 +177,24 @@ void Scene::RenderStaticObjects(
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
 ) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_cameras.empty())
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
 
     UpdateSceneBuffer();
     UpdateLightBuffer();
 
-    DirectX::XMMATRIX viewProjectionMatrix{ GetViewProjectionMatrix() };
-
     std::scoped_lock<std::mutex> staticObjectsLock(m_staticObjectsMutex);
-    for (auto const& obj : m_staticObjects) {
+    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
+    for (const auto& obj : m_pStaticObjects) {
         obj->Render(
             pCommandListDirect,
             viewport,
             scissorRect,
             renderTargetView,
             depthStencilView,
-            m_pLightCB->GetResource(),
-            m_pSceneCB->GetResource()
+            m_sceneCBDynamicAllocation.gpuAddress,
+            m_pLightCB->GetResource()->GetGPUVirtualAddress()
         );
     }
 }
@@ -149,47 +206,59 @@ void Scene::RenderDynamicObjects(
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
 ) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_cameras.empty())
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
 
     UpdateSceneBuffer();
     UpdateLightBuffer();
 
     std::scoped_lock<std::mutex> dynamicObjectsLock(m_dynamicObjectsMutex);
-    for (auto const& obj : m_dynamicObjects) {
+    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
+    for (const auto& obj : m_pDynamicObjects) {
         obj->Render(
             pCommandListDirect,
             viewport,
             scissorRect,
             renderTargetView,
             depthStencilView,
-            m_pLightCB->GetResource(),
-            m_pSceneCB->GetResource()
+            //m_pSceneCB->GetResource()->GetGPUVirtualAddress(),
+            m_sceneCBDynamicAllocation.gpuAddress,
+            m_pLightCB->GetResource()->GetGPUVirtualAddress()
         );
     }
 }
 
-void Scene::UpdateSceneBuffer() {
-    if (!m_isUpdateSceneCB.load()) {
+void Scene::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
+    if (!m_isFinishFrame.load()) {
         return;
     }
-    m_isUpdateSceneCB.store(false);
+    m_pCPUAccessibleDynamicUploadHeap->FinishFrame(fenceValue, lastCompletedFenceValue);
+    m_isFinishFrame.store(false);
+}
 
-    std::scoped_lock<std::mutex> lock(m_sceneBufferMutex);
-    m_sceneBuffer.viewProjMatrix = GetViewProjectionMatrix();
+void Scene::UpdateSceneBuffer() {
+    bool expected{ true };
+    if (m_isUpdateSceneCB.compare_exchange_strong(expected, false)) {
+        m_isFinishFrame.store(true);
 
-    DirectX::XMFLOAT3 cameraPosition{ m_cameras.at(m_currCameraId)->GetPosition() };
-    m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
+        std::scoped_lock<std::mutex> lock(m_sceneBufferMutex);
+        m_sceneBuffer.viewProjMatrix = GetViewProjectionMatrix();
 
-    m_pSceneCB->Update(&m_sceneBuffer);
+        DirectX::XMFLOAT3 cameraPosition{ m_pCameras.at(m_currCameraId)->GetPosition() };
+        m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
+
+        m_sceneCBDynamicAllocation = m_pCPUAccessibleDynamicUploadHeap->Allocate(sizeof(SceneBuffer));
+
+        memcpy(m_sceneCBDynamicAllocation.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+        //m_pSceneCB->Update(&m_sceneBuffer);
+    }
 }
 
 void Scene::UpdateLightBuffer() {
-    if (!m_isUpdateLightCB.load()) {
-        return;
+    bool expected{ true };
+    if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
+        std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+        m_pLightCB->Update(&m_lightBuffer);
     }
-    m_isUpdateLightCB.store(false);
-
-    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-    m_pLightCB->Update(&m_lightBuffer);
 }

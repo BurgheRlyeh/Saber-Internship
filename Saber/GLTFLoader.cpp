@@ -78,8 +78,8 @@ DXGI_FORMAT GLTFLoader::GetDXGIFormat(const Microsoft::glTF::Accessor& accessor)
     }
 }
 
-bool GLTFLoader::GetVerticesData(std::vector<float>& data, const std::string& attributeName) {
-    const auto& mesh = m_document.meshes.Elements()[0];
+bool GLTFLoader::GetVerticesData(std::vector<float>& data, const std::string& attributeName, size_t meshId) {
+    const auto& mesh = m_document.meshes.Elements()[meshId];
 
     std::string accessorId{};
     if (!mesh.primitives.front().TryGetAttributeAccessorId(attributeName, accessorId)) {

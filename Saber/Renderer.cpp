@@ -159,44 +159,26 @@ void Renderer::Initialize(HWND hWnd) {
 
         // cameras for all scenes
         for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
-            // standart cameras
-            m_pScenes[sceneId]->AddCamera(StaticCamera(
-                { 0.f, 0.f, 3.f },
-                { 0.f, 0.f, 0.f },
-                { 0.f, 1.f, 0.f }
-            ));
-            m_pScenes[sceneId]->AddCamera(StaticCamera(
-                { 3.f, 0.f, 3.f },
-                { 0.f, 0.f, 0.f },
-                { 0.f, 1.f, 0.f }
-            ));
+            m_pJobSystem->AddJob([&, sceneId]() {
+                // dynamic camera
+                m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
 
-            // random cameras
-            for (size_t i{}; i < 13; ++i) {
-                // add camera at random position
-                m_pJobSystem->AddJob([&, sceneId]() {
-                    std::random_device rd;
-                    std::mt19937 gen(rd());
-                    std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-                    m_pScenes[sceneId]->AddCamera(StaticCamera(
-                        { posDist(gen), 0.f, posDist(gen) },
-                        { 0.f, 0.f, 0.f },
-                        { 0.f, 1.f, 0.f }
-                    ));
-                });
-            }
+                // standart camera
+                m_pScenes[sceneId]->AddCamera(std::make_shared<StaticCamera>(
+                    DirectX::XMFLOAT3{ 0.f, 0.f, 3.f },
+                    DirectX::XMFLOAT3{ 0.f, 0.f, 0.f },
+                    DirectX::XMFLOAT3{ 0.f, 1.f, 0.f }
+                ));
 
-            // standart light
-            m_pScenes[sceneId]->AddLightSource(
-                { -1.5f, 0.f, 1.5f, 1.f },
-                { 1.f, 1.f, 0.f },
-                { 1.f, 1.f, 0.f }
-            );
+                // standart light
+                m_pScenes[sceneId]->AddLightSource(
+                    { -1.5f, 0.f, 1.5f, 1.f },
+                    { 1.f, 1.f, 0.f },
+                    { 1.f, 1.f, 0.f }
+                );
 
-            // random lights
-            for (size_t i{}; i < 9; ++i) {
-                // add camera at random position
-                m_pJobSystem->AddJob([&, sceneId]() {
+                // random lights
+                for (size_t i{}; i < 9; ++i) {
                     std::random_device rd;
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
@@ -206,12 +188,8 @@ void Renderer::Initialize(HWND hWnd) {
                         { colorDist(gen), colorDist(gen), colorDist(gen) },
                         { colorDist(gen), colorDist(gen), colorDist(gen) }
                     );
-                });
-            }
-        }
+                }
 
-        for (size_t sceneId{}; sceneId < 5; ++sceneId) {
-            m_pJobSystem->AddJob([=]() {
                 m_pScenes[sceneId]->SetSceneReadiness(true);
             });
         }
@@ -250,10 +228,6 @@ void Renderer::SetSceneId(size_t sceneId) {
 
 void Renderer::SwitchToNextCamera() {
     m_isSwitchToNextCamera.store(true);
-}
-
-void Renderer::SwitchHand() {
-    m_pScenes.at(m_currSceneId)->SwapViewProjMatrixHand();
 }
 
 inline void Renderer::RenderLoop() {
@@ -376,6 +350,8 @@ void Renderer::Update() {
     auto deltaTime = t1 - m_time;
     m_time = t1;
 
+    m_pScenes.at(m_currSceneId)->Update(deltaTime.count() * 1e-9f);
+
     m_elapsedSeconds += deltaTime.count() * 1e-9;
     if (m_elapsedSeconds > 1.0) {
         auto fps = m_frameCounter / m_elapsedSeconds;
@@ -452,11 +428,7 @@ void Renderer::Render() {
     }
 
     // two command lists: 1. static, 1,5. static too same priority; 2. dynamic
-    std::shared_ptr<CommandList> commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1, []() {
-        //std::wstringstream wss{};
-        //wss << "Static triangles second" << std::endl;
-        //OutputDebugString(wss.str().c_str());
-    }) };
+    std::shared_ptr<CommandList> commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1) };
     m_pJobSystem->AddJob([&]() {
         m_pScenes[m_currSceneId]->RenderStaticObjects(
             commandListForStaticObjects->m_pCommandList,
@@ -468,11 +440,7 @@ void Renderer::Render() {
         commandListForStaticObjects->SetReadyForExection();
         });
 
-    std::shared_ptr<CommandList> commandListForDynamicObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0, []() {
-        //std::wstringstream wss{};
-        //wss << "Dynamic cubes first" << std::endl;
-        //OutputDebugString(wss.str().c_str());
-    }) };
+    std::shared_ptr<CommandList> commandListForDynamicObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0) };
     m_pJobSystem->AddJob([&]() {
         m_pScenes[m_currSceneId]->RenderDynamicObjects(
             commandListForDynamicObjects->m_pCommandList,
@@ -482,13 +450,13 @@ void Renderer::Render() {
             dsv
         );
         commandListForDynamicObjects->SetReadyForExection();
-        });
+    });
 
-    m_pCommandQueueDirect->ExecutionTask();
-    // TODO: Signal()
-    //std::wstringstream wss{};
-    //wss << "All objects rendered!" << std::endl << std::endl;
-    //OutputDebugString(wss.str().c_str());
+    uint64_t lastCompletedFenceValue{
+        m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
+    };
+    m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecutionTask();
+    uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
     // Present
     {
@@ -507,6 +475,16 @@ void Renderer::Render() {
         // when using the DXGI_SWAP_EFFECT_FLIP_DISCARD flip model
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
+
+    m_pScenes.at(m_currSceneId)->FinishFrame(fenceValue, lastCompletedFenceValue);
+}
+
+void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
+    m_pScenes.at(m_currSceneId)->TryMoveCamera(forwardCoef, rightCoef);
+}
+
+void Renderer::RotateCamera(float deltaX, float deltaY) {
+    m_pScenes.at(m_currSceneId)->TryRotateCamera(deltaX / m_clientWidth, deltaY / m_clientHeight);
 }
 
 bool Renderer::CheckTearingSupport() {
@@ -804,97 +782,3 @@ void Renderer::CreateDSVDescHeap() {
 
     ResizeDepthBuffer();
 }
-
-//void Renderer::CreateRootSignature() {
-//    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-//    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-//        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-//    }
-//
-//    // Allow input layout and deny unnecessary access to certain pipeline stages.
-//    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
-//        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-//        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-//        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-//        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-//        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
-//    };
-//
-//    // A single 32-bit constant root parameter that is used by the vertex shader.
-//    CD3DX12_ROOT_PARAMETER1 rootParameters[1]{};
-//    rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-//
-//    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-//    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-//
-//    // Serialize the root signature.
-//    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-//    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-//        &rootSignatureDescription,
-//        featureData.HighestVersion,
-//        &rootSignatureBlob,
-//        &errorBlob
-//    ));
-//
-//    // Create the root signature.
-//    ThrowIfFailed(m_pDevice->CreateRootSignature(
-//        0,
-//        rootSignatureBlob->GetBufferPointer(),
-//        rootSignatureBlob->GetBufferSize(),
-//        IID_PPV_ARGS(&m_pRootSignature)
-//    ));
-//}
-
-//void Renderer::CreatePipelineState() {
-//    // Load the vertex shader.
-//    Microsoft::WRL::ComPtr<ID3DBlob> pVertexShaderBlob;
-//    ThrowIfFailed(D3DReadFileToBlob(L"SimpleVertexShader.cso", &pVertexShaderBlob));
-//
-//    // Load the pixel shader.
-//    Microsoft::WRL::ComPtr<ID3DBlob> pPixelShaderBlob;
-//    ThrowIfFailed(D3DReadFileToBlob(L"SimplePixelShader.cso", &pPixelShaderBlob));
-//
-//    // Create the vertex input layout
-//    D3D12_INPUT_ELEMENT_DESC inputLayout[]{
-//        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-//        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-//    };
-//
-//    D3D12_RT_FORMAT_ARRAY rtvFormats{};
-//    rtvFormats.NumRenderTargets = 1;
-//    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-//
-//    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc{ D3D12_DEFAULT };
-//    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
-//
-//    CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT }; // CD3DX12_DEFAULT D3D12_DEFAULT
-//    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
-//
-//    struct PipelineStateStream {
-//        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
-//        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
-//        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
-//        CD3DX12_PIPELINE_STATE_STREAM_VS VS;
-//        CD3DX12_PIPELINE_STATE_STREAM_PS PS;
-//        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
-//        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL DepthStencil;
-//        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER Rasterizer;
-//        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-//    } pipelineStateStream{
-//        .pRootSignature{ m_pRootSignature.Get() },
-//        .InputLayout{ { inputLayout, _countof(inputLayout) } },
-//        .PrimitiveTopologyType{ D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE },
-//        .VS{ CD3DX12_SHADER_BYTECODE(pVertexShaderBlob.Get()) },
-//        .PS{ CD3DX12_SHADER_BYTECODE(pPixelShaderBlob.Get()) },
-//        .DSVFormat{ DXGI_FORMAT_D32_FLOAT },
-//        .DepthStencil{ depthStencilDesc },
-//        .Rasterizer{ rasterizerDesc },
-//        .RTVFormats{ rtvFormats }
-//    };
-//
-//    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc{
-//        .SizeInBytes{ sizeof(PipelineStateStream) },
-//        .pPipelineStateSubobjectStream{ &pipelineStateStream }
-//    };
-//    ThrowIfFailed(m_pDevice->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pPipelineState)));
-//}

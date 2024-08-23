@@ -31,7 +31,7 @@ public:
     DXGI_FORMAT GetIndicesFormat();
     DXGI_FORMAT GetDXGIFormat(const Microsoft::glTF::Accessor& accessor);
 
-    bool GetVerticesData(std::vector<float>& data, const std::string& attributeName);
+    bool GetVerticesData(std::vector<float>& data, const std::string& attributeName, size_t meshId = 0);
 
 private:
     void CheckFilepathCorrectness(std::filesystem::path& filepath);
