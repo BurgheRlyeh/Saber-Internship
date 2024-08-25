@@ -34,8 +34,8 @@ VSOutput main(
     float4 pos = float4(position.xyz, 1.f);
     vtxOut.worldPos = mul(ModelCB.modelMatrix, pos);
     
-    vtxOut.norm = mul(ModelCB.modelMatrix, float4(norm.xyz, 0.f)).xyz;
-    vtxOut.tang.xyz = mul(ModelCB.modelMatrix, float4(tang.xyz, 0.f)).xyz;
+    vtxOut.norm = mul(ModelCB.normalMatrix, float4(norm.xyz, 0.f)).xyz;
+    vtxOut.tang.xyz = mul(ModelCB.normalMatrix, float4(tang.xyz, 0.f)).xyz;
     vtxOut.tang.w = tang.w;
     
     vtxOut.uv = uv;
