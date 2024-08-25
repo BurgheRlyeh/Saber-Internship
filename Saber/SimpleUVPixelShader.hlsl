@@ -104,17 +104,18 @@ struct PSInput
 {
     float3 worldPos : POSITION;
     float3 norm : NORMAL;
-    float3 tang : TANGENT;
+    float4 tang : TANGENT;
     float2 uv : TEXCOORD;
 };
 
 float4 main(PSInput input) : SV_TARGET
 {
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
-    
-    float3 binorm = normalize(cross(input.norm, input.tang));
-    float3 localNorm = 2.f * t2.Sample(s1, input.uv).xyz - float3(1.f, 1.f, 1.f);
-    float3 norm = localNorm.x * normalize(input.tang) + localNorm.y * binorm + localNorm.z * normalize(input.norm);
+    float3 t = normalize(input.tang);
+    float3 n = normalize(input.norm);
+    float3 binorm = (cross(n, t)) * input.tang.w; // no need to normalize
+    float3 localNorm = normalize(2.f * t2.Sample(s1, input.uv).xyz - float3(1.f, 1.f, 1.f)); // normalize to avoid unnormalized texture
+    float3 norm = localNorm.x * t + localNorm.y * binorm + localNorm.z * n;
     
     for (uint i = 0; i < LightCB.lightCount.x; ++i)
     {

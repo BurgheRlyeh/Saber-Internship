@@ -410,7 +410,7 @@ public:
             },
             Mesh::Attribute{
                 .name{ Microsoft::glTF::ACCESSOR_TANGENT },
-                .size{ sizeof(DirectX::XMFLOAT3) }
+                .size{ sizeof(DirectX::XMFLOAT4) }
             },
             Mesh::Attribute{
                 .name{ Microsoft::glTF::ACCESSOR_TEXCOORD_0 },
