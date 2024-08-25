@@ -304,6 +304,15 @@ void Renderer::PerformResize() {
 
     // TODO update during switch
     m_pScenes[m_currSceneId]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+
+    for (size_t i{ 1 }; i < m_pScenes.size(); ++i) {
+        m_pScenes.at(i)->ResizeGBuffer(
+            m_pDevice,
+            m_pAllocator,
+            m_clientWidth,
+            m_clientHeight
+        );
+    }
     
     ResizeDepthBuffer();
 }

@@ -5,7 +5,12 @@ RenderTarget::RenderTarget(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Micros
     Resize(pDevice, pAllocator, resDesc, clearValue);
 }
 
-void RenderTarget::Resize(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, const D3D12_RESOURCE_DESC& resDesc, const D3D12_CLEAR_VALUE& clearValue) {
+void RenderTarget::Resize(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    const D3D12_RESOURCE_DESC& resDesc,
+    const D3D12_CLEAR_VALUE& clearValue
+) {
     m_pBuffers.clear();
     m_pBuffers.resize(m_numBuffers);
 
