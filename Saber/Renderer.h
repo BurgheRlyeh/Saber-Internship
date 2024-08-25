@@ -192,12 +192,5 @@ private:
     // before the CPU thread is allowed to continue processing
     void Flush();
 
-    void TransitionResource(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-        Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
-        D3D12_RESOURCE_STATES stateBefore,
-        D3D12_RESOURCE_STATES stateAfter
-    );
-
     void CreateDSVDescHeap();
 };

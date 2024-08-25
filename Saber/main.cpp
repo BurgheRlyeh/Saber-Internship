@@ -178,7 +178,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_mouseX = GET_X_LPARAM(lParam);
             g_mouseY = GET_Y_LPARAM(lParam);
 
-            g_pRenderer->RotateCamera(oldX - g_mouseX, g_mouseY - oldY);
+            g_pRenderer->RotateCamera(
+                static_cast<float>(oldX - g_mouseX), 
+                static_cast<float>(g_mouseY - oldY)
+            );
         }
         break;
     }

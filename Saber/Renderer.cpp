@@ -160,6 +160,14 @@ void Renderer::Initialize(HWND hWnd) {
         // cameras for all scenes
         for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
             m_pJobSystem->AddJob([&, sceneId]() {
+                m_pScenes.at(sceneId)->CreateGBuffer(
+                    m_pDevice,
+                    m_pAllocator,
+                    m_numFrames,
+                    m_clientWidth,
+                    m_clientHeight
+                );
+
                 // dynamic camera
                 m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
 
@@ -334,7 +342,7 @@ void Renderer::ResizeDepthBuffer() {
         .Format{ DXGI_FORMAT_D32_FLOAT },
         .ViewDimension{ D3D12_DSV_DIMENSION_TEXTURE2D },
         .Flags{ D3D12_DSV_FLAG_NONE },
-        .Texture2D{.MipSlice{} }
+        .Texture2D{ .MipSlice{} }
     };
 
     m_pDevice->CreateDepthStencilView(
@@ -372,42 +380,23 @@ void Renderer::Render() {
     // the CPU thread is stalled using the WaitForFenceValue function described earlier.
     m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
-    std::shared_ptr<CommandList> commandList{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice)
+    std::shared_ptr<CommandList> commandListBeforeFrame{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
     };
 
     // CPU descriptor handle to a RTV
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-        m_pRTVDescHeap->GetCPUDescriptorHandleForHeapStart(),  // RTV desc heap start
-        m_currBackBufferId,                                   // current index (offset) from start
-        m_RTVDescriptorSize                                         // RTV desc size
+        m_pRTVDescHeap->GetCPUDescriptorHandleForHeapStart(),   // RTV desc heap start
+        m_currBackBufferId,                                     // current index (offset) from start
+        m_RTVDescriptorSize                                     // RTV desc size
     );
     auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
 
-    // Clear the render target.
-    {
-        // Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state.
-        TransitionResource(
-            commandList->m_pCommandList,
-            backBuffer,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
+    m_pScenes.at(m_currSceneId)->SetCurrentBackBuffer(m_currBackBufferId);
+    m_pJobSystem->AddJob([&]() {
+        RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr);
 
-        FLOAT clearColor[] = {
-            0.4f,
-            0.6f,
-            0.9f,
-            1.0f
-        };
-
-        commandList->m_pCommandList->ClearRenderTargetView(
-            rtv,        // cpu desc handle
-            clearColor, // color to fill RTV
-            0,          // number of rectangles in array
-            nullptr     // array of rectangles in resource view, if nullptr then clears entire resouce view
-        );
-        commandList->m_pCommandList->ClearDepthStencilView(
+        commandListBeforeFrame->m_pCommandList->ClearDepthStencilView(
             dsv,
             D3D12_CLEAR_FLAG_DEPTH,
             0.f,
@@ -415,20 +404,16 @@ void Renderer::Render() {
             0,
             nullptr
         );
-    }
-    {
-        TransitionResource(
-            commandList->m_pCommandList,
-            backBuffer,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-        // This method must be called on the command list before being executed on the command queue
-        m_pCommandQueueDirect->ExecuteCommandList(commandList);
-    }
 
-    // two command lists: 1. static, 1,5. static too same priority; 2. dynamic
-    std::shared_ptr<CommandList> commandListForStaticObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1) };
+        m_pScenes.at(m_currSceneId)->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
+
+        commandListBeforeFrame->SetReadyForExection();
+    });
+
+    // two command lists: static (1), dynamic (2)
+    std::shared_ptr<CommandList> commandListForStaticObjects{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
+    };
     m_pJobSystem->AddJob([&]() {
         m_pScenes[m_currSceneId]->RenderStaticObjects(
             commandListForStaticObjects->m_pCommandList,
@@ -438,9 +423,11 @@ void Renderer::Render() {
             dsv
         );
         commandListForStaticObjects->SetReadyForExection();
-        });
+    });
 
-    std::shared_ptr<CommandList> commandListForDynamicObjects{ m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0) };
+    std::shared_ptr<CommandList> commandListForDynamicObjects{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2)
+    };
     m_pJobSystem->AddJob([&]() {
         m_pScenes[m_currSceneId]->RenderDynamicObjects(
             commandListForDynamicObjects->m_pCommandList,
@@ -452,6 +439,24 @@ void Renderer::Render() {
         commandListForDynamicObjects->SetReadyForExection();
     });
 
+    std::shared_ptr<CommandList> commandListAfterFrame{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
+    };
+    m_pJobSystem->AddJob([&]() {
+        m_pScenes.at(m_currSceneId)->CopyRTV(
+            commandListAfterFrame->m_pCommandList,
+            m_pBackBuffers.at(m_currBackBufferId)
+        );
+
+        GPUResource::ResourceTransition(
+            commandListAfterFrame->m_pCommandList,
+            backBuffer,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
+        commandListAfterFrame->SetReadyForExection();
+    });
+
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
     };
@@ -460,7 +465,7 @@ void Renderer::Render() {
 
     // Present
     {
-        UINT syncInterval{ m_isVSync ? 1u : 0};
+        UINT syncInterval{ m_isVSync ? 1u : 0 };
         UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };
         ThrowIfFailed(m_pSwapChain->Present(
             // 0 - Cancel the remaining time on the previously presented frame 
@@ -476,7 +481,7 @@ void Renderer::Render() {
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
-    m_pScenes.at(m_currSceneId)->FinishFrame(fenceValue, lastCompletedFenceValue);
+    m_pScenes.at(m_currSceneId)->UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
@@ -754,22 +759,6 @@ void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> dev
 void Renderer::Flush() {
     m_pCommandQueueDirect->Flush();
     m_pCommandQueueCopy->Flush();
-}
-
-void Renderer::TransitionResource(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-    Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
-    D3D12_RESOURCE_STATES stateBefore,
-    D3D12_RESOURCE_STATES stateAfter
-) {
-    CD3DX12_RESOURCE_BARRIER barrier{ CD3DX12_RESOURCE_BARRIER::Transition(
-        pResource.Get(),
-        stateBefore,
-        stateAfter
-    ) };
-
-    // Notifies the driver that it needs to synchronize multiple accesses to resources
-    pCommandList->ResourceBarrier(1, &barrier);
 }
 
 void Renderer::CreateDSVDescHeap() {

@@ -3,15 +3,8 @@
 Scene::Scene(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     , Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
-    //, std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
 ) {
-    //m_pSceneCB = std::make_shared<ConstantBuffer>(
-    //    pDevice,
-    //    pAllocator,
-    //    CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(SceneBuffer), 0)
-    //);
-
-    m_pCPUAccessibleDynamicUploadHeap = std::make_shared<DynamicUploadHeap>(
+    m_pCameraHeap = std::make_shared<DynamicUploadHeap>(
         pAllocator,
         2 * sizeof(SceneBuffer),
         true
@@ -39,7 +32,6 @@ void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
     m_pCameras.push_back(pCamera);
     lock.unlock();
 
-    //if (m_pSceneCB->IsEmpty()) {
     if (!m_sceneCBDynamicAllocation.pBuffer) {
         m_isUpdateSceneCB.store(true);
     }
@@ -191,7 +183,8 @@ void Scene::RenderStaticObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            renderTargetView,
+            m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
+            //renderTargetView,
             depthStencilView,
             m_sceneCBDynamicAllocation.gpuAddress,
             m_pLightCB->GetResource()->GetGPUVirtualAddress()
@@ -220,27 +213,27 @@ void Scene::RenderDynamicObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            renderTargetView,
+            m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
+            //renderTargetView,
             depthStencilView,
-            //m_pSceneCB->GetResource()->GetGPUVirtualAddress(),
             m_sceneCBDynamicAllocation.gpuAddress,
             m_pLightCB->GetResource()->GetGPUVirtualAddress()
         );
     }
 }
 
-void Scene::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-    if (!m_isFinishFrame.load()) {
+void Scene::UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
+    if (!m_isUpdateCameraHeap.load()) {
         return;
     }
-    m_pCPUAccessibleDynamicUploadHeap->FinishFrame(fenceValue, lastCompletedFenceValue);
-    m_isFinishFrame.store(false);
+    m_pCameraHeap->FinishFrame(fenceValue, lastCompletedFenceValue);
+    m_isUpdateCameraHeap.store(false);
 }
 
 void Scene::UpdateSceneBuffer() {
     bool expected{ true };
     if (m_isUpdateSceneCB.compare_exchange_strong(expected, false)) {
-        m_isFinishFrame.store(true);
+        m_isUpdateCameraHeap.store(true);
 
         std::scoped_lock<std::mutex> lock(m_sceneBufferMutex);
         m_sceneBuffer.viewProjMatrix = GetViewProjectionMatrix();
@@ -248,7 +241,7 @@ void Scene::UpdateSceneBuffer() {
         DirectX::XMFLOAT3 cameraPosition{ m_pCameras.at(m_currCameraId)->GetPosition() };
         m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
 
-        m_sceneCBDynamicAllocation = m_pCPUAccessibleDynamicUploadHeap->Allocate(sizeof(SceneBuffer));
+        m_sceneCBDynamicAllocation = m_pCameraHeap->Allocate(sizeof(SceneBuffer));
 
         memcpy(m_sceneCBDynamicAllocation.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
         //m_pSceneCB->Update(&m_sceneBuffer);
