@@ -385,9 +385,6 @@ void Renderer::Update() {
 void Renderer::Render() {
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
 
-    // Before overwriting the contents of the current back buffer with the content of the next frame,
-    // the CPU thread is stalled using the WaitForFenceValue function described earlier.
-    //m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
@@ -400,8 +397,8 @@ void Renderer::Render() {
         m_RTVDescriptorSize                                     // RTV desc size
     );
     auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
-
-    m_pScenes.at(m_currSceneId)->SetCurrentBackBuffer(m_currBackBufferId);
+    auto& scene = m_pScenes.at(m_currSceneId);
+    scene->SetCurrentBackBuffer(m_currBackBufferId);
     m_pJobSystem->AddJob([&]() {
         RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr);
 
@@ -414,7 +411,7 @@ void Renderer::Render() {
             nullptr
         );
 
-        m_pScenes.at(m_currSceneId)->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
+        scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
 
         commandListBeforeFrame->SetReadyForExection();
     });
@@ -424,7 +421,7 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
     };
     m_pJobSystem->AddJob([&]() {
-        m_pScenes[m_currSceneId]->RenderStaticObjects(
+        scene->RenderStaticObjects(
             commandListForStaticObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
@@ -438,7 +435,7 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2)
     };
     m_pJobSystem->AddJob([&]() {
-        m_pScenes[m_currSceneId]->RenderDynamicObjects(
+        scene->RenderDynamicObjects(
             commandListForDynamicObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
@@ -452,7 +449,7 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
     };
     m_pJobSystem->AddJob([&]() {
-        m_pScenes.at(m_currSceneId)->CopyRTV(
+        scene->CopyRTV(
             commandListAfterFrame->m_pCommandList,
             m_pBackBuffers.at(m_currBackBufferId)
         );
@@ -490,7 +487,7 @@ void Renderer::Render() {
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
-    m_pScenes.at(m_currSceneId)->UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
+    scene->UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
