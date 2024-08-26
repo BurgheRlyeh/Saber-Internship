@@ -400,7 +400,7 @@ void Renderer::Render() {
     auto& scene = m_pScenes.at(m_currSceneId);
     scene->SetCurrentBackBuffer(m_currBackBufferId);
     m_pJobSystem->AddJob([&]() {
-        RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr);
+        //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
 
         commandListBeforeFrame->m_pCommandList->ClearDepthStencilView(
             dsv,
