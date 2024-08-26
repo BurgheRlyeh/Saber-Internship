@@ -66,7 +66,7 @@ public:
 	void ExecuteCommandListImmediately(std::shared_ptr<CommandList> commandList);
 
 	void PushForExecution(std::shared_ptr<CommandList> pCommandList);
-	uint64_t ExecutionTask();
+	uint64_t ExecutionTask(uint64_t waitFenceValue);
 
 	uint64_t Signal();
 	bool IsFenceComplete(uint64_t fenceValue);

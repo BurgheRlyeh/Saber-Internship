@@ -142,9 +142,9 @@ void CommandQueue::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
 	pCommandList->SetReadyForExection();
 }
 
-uint64_t CommandQueue::ExecutionTask() {
+uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 	uint64_t lastFrameValue{};
-
+	bool waitFence { true };
 	for (std::unique_ptr<PrioritySet>& priorityVector : m_commandListSets) {
 		std::unordered_multiset<std::shared_ptr<CommandList>>& pCommandLists{ priorityVector->pCommandLists };
 
@@ -154,6 +154,11 @@ uint64_t CommandQueue::ExecutionTask() {
 				iter = pCommandLists.begin();
 			}
 			if ((*iter)->IsReadyForExection()) {
+				if(waitFence)
+				{
+					WaitForFenceValue(waitFenceValue);
+					waitFence = false;
+				}
 				lastFrameValue = ExecuteCommandList(*iter);
 				pCommandLists.erase(iter);
 				iter = pCommandLists.begin();

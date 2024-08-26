@@ -387,7 +387,7 @@ void Renderer::Render() {
 
     // Before overwriting the contents of the current back buffer with the content of the next frame,
     // the CPU thread is stalled using the WaitForFenceValue function described earlier.
-    m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
+    //m_pCommandQueueDirect->WaitForFenceValue(m_frameFenceValues[m_currBackBufferId]);
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
@@ -469,7 +469,7 @@ void Renderer::Render() {
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
     };
-    m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecutionTask();
+    m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
     uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
     // Present
