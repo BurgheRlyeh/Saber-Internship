@@ -383,6 +383,10 @@ void Renderer::Update() {
 }
 
 void Renderer::Render() {
+    auto& scene = m_pScenes.at(m_currSceneId);
+    if (!scene->IsSceneReady())
+        return;
+
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
 
 
@@ -397,9 +401,10 @@ void Renderer::Render() {
         m_RTVDescriptorSize                                     // RTV desc size
     );
     auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
-    auto& scene = m_pScenes.at(m_currSceneId);
+    
     scene->SetCurrentBackBuffer(m_currBackBufferId);
-    m_pJobSystem->AddJob([&]() {
+    //m_pJobSystem->AddJob([&]()  // Some small work doesn't need to be moved to jobs, just as example
+        {
         //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
 
         commandListBeforeFrame->m_pCommandList->ClearDepthStencilView(
@@ -413,8 +418,8 @@ void Renderer::Render() {
 
         scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
 
-        commandListBeforeFrame->SetReadyForExection();
-    });
+        commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
+    }//);
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{
@@ -448,7 +453,7 @@ void Renderer::Render() {
     std::shared_ptr<CommandList> commandListAfterFrame{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
     };
-    m_pJobSystem->AddJob([&]() {
+    m_pJobSystem->AddJob([&]() { // Some small work doesn't need to be moved to jobs, just as example? but here will be postprocessing or vfx or whatever else? so it will fit as job
         scene->CopyRTV(
             commandListAfterFrame->m_pCommandList,
             m_pBackBuffers.at(m_currBackBufferId)

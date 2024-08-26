@@ -31,7 +31,7 @@ class Scene {
         DirectX::XMFLOAT4 specularColorAndPower{};
     };
     struct LightBuffer {
-        DirectX::XMFLOAT4 ambientColorAndPower{ 0.5f, 0.5f, 0.5f, 1.f};
+        DirectX::XMFLOAT4 ambientColorAndPower{ 0.5f, 0.5f, 0.5f, 1.f };
         DirectX::XMUINT4 lightsCount{};
         Light lights[LIGHTS_MAX_COUNT]{};
     } m_lightBuffer;
@@ -66,6 +66,10 @@ public:
 
     void SetSceneReadiness(bool value) {
         m_isSceneReady.store(value);
+    }
+
+    bool IsSceneReady() {
+        return m_isSceneReady.load();
     }
 
     void AddStaticObject(const RenderObject&& object);
