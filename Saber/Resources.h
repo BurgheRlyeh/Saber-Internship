@@ -13,19 +13,15 @@ struct ShaderResource {
 struct RootSignatureResource {
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature{};
 
-	struct RootSignatureResourceData {
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice{};
-		Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
-	};
-
 	RootSignatureResource(
 		const std::wstring& filename,
-		const RootSignatureResourceData& data
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob
 	) {
-		ThrowIfFailed(data.pDevice->CreateRootSignature(
+		ThrowIfFailed(pDevice->CreateRootSignature(
 			0,
-			data.pRootSignatureBlob->GetBufferPointer(),
-			data.pRootSignatureBlob->GetBufferSize(),
+			pRootSignatureBlob->GetBufferPointer(),
+			pRootSignatureBlob->GetBufferSize(),
 			IID_PPV_ARGS(&pRootSignature)
 		));
 	}

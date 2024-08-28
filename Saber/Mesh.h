@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iostream>
 #include <initializer_list>
+#include <variant>
 
 #include "CommandQueue.h"
 #include "CommandList.h"
@@ -22,8 +23,15 @@ class Mesh {
     
     size_t m_indicesCount{};
 
+    struct BufferData {
+        void* data{};
+        size_t count{};
+        size_t size{};
+        DXGI_FORMAT format{};
+    };
+
 public:
-    struct MeshData {
+    struct MeshDataVerticesIndices {
         // vertices data
         void* vertices{};
         size_t verticesCnt{};
@@ -35,39 +43,38 @@ public:
         DXGI_FORMAT indexFormat{};
     };
 
-    struct BufferData {
-        void* data{};
-        size_t count{};
-        size_t size{};
-        DXGI_FORMAT format{};
-    };
-
     struct Attribute {
         const std::string& name{};
         const size_t& size{};
     };
 
+    struct MeshDataGLTF {
+        const std::filesystem::path& filepath{};
+        const std::initializer_list<Attribute>& attributes{};
+    };
+
+    struct MeshData {
+        std::variant<
+            MeshDataVerticesIndices,
+            MeshDataGLTF
+        > data{};
+
+        MeshData() = delete;
+        MeshData(const MeshDataVerticesIndices& vertexIndexData)
+            : data(vertexIndexData)
+        {}
+        MeshData(const MeshDataGLTF & gltfData)
+            : data(gltfData)
+        {}
+    };
+
     Mesh() = delete;
     Mesh(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const MeshData& meshData
-    );
-    Mesh(
         const std::wstring& filename,
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshData& meshData
-    );
-    Mesh(
-        const std::wstring& filename,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::filesystem::path& filepath,
-        const std::initializer_list<Attribute>& attributes
     );
 
     const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferView() const;
@@ -81,6 +88,19 @@ public:
     size_t GetIndicesCount() const;
 
 private:
+    void InitFromVerticesIndices(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const MeshDataVerticesIndices& meshData
+    );
+    void InitFromGLTF(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const MeshDataGLTF& meshData
+    );
+
     void AddVertexBuffer(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
@@ -94,13 +114,6 @@ private:
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const BufferData& bufferData,
         DXGI_FORMAT indexFormat
-    );
-
-    void InitFromMeshData(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const MeshData& meshData
     );
 
     std::shared_ptr<GPUResource> CreateBuffer(

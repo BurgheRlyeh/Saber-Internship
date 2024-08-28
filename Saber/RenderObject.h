@@ -17,479 +17,84 @@
 #include "Textures.h"
 
 class RenderObject {
-    std::shared_ptr<Mesh> m_pMesh{};
+protected:
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
     std::shared_ptr<ShaderResource> m_pVertexShaderResource{};
     std::shared_ptr<ShaderResource> m_pPixelShaderResource{};
-    std::shared_ptr<Textures> m_pTextures{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
 
-protected:
-    struct ModelBuffer {
-        DirectX::XMMATRIX modelMatrix{ DirectX::XMMatrixIdentity() };
-        DirectX::XMMATRIX normalMatrix{ DirectX::XMMatrixTranspose(
-                DirectX::XMMatrixInverse(nullptr, DirectX::XMMatrixIdentity())
-        ) };
-    } m_modelBuffer;
-    std::shared_ptr<ConstantBuffer> m_pModelCB{};
-
 public:
-    RenderObject(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
-    )
-    {
-        m_modelBuffer.modelMatrix = modelMatrix;
-        m_modelBuffer.normalMatrix = DirectX::XMMatrixTranspose(
-            DirectX::XMMatrixInverse(nullptr, m_modelBuffer.modelMatrix)
-        );
-        m_pModelCB = std::make_shared<ConstantBuffer>(
-            pDevice,
-            pAllocator,
-            CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(ModelBuffer), 0),
-            static_cast<void*>(&m_modelBuffer)
-        );
-    }
+    struct RootSignatureData {
+        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
+        Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
+        std::wstring rootSignatureFilename{};
 
-    void InitMesh(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        const Mesh::MeshData& meshData,
-        const std::wstring & meshFilename 
-    );
+        RootSignatureData(
+            std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+            Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
+            std::wstring rootSignatureFilename
+        ) : pRootSignatureAtlas(pRootSignatureAtlas),
+            pRootSignatureBlob(pRootSignatureBlob),
+            rootSignatureFilename(rootSignatureFilename)
+        {}
+    };
+    struct ShaderData {
+        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas{};
+        LPCWSTR vertexShaderFilepath{};
+        LPCWSTR pixelShaderFilepath{};
 
-    void InitMeshFromGLTF(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::filesystem::path& filepath,
-        const std::wstring& meshFilename,
-        const std::initializer_list<Mesh::Attribute>& attributes
-    );
-
+        ShaderData(
+            std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+            LPCWSTR vertexShaderFilepath,
+            LPCWSTR pixelShaderFilepath
+        ) : pShaderAtlas(pShaderAtlas),
+            vertexShaderFilepath(vertexShaderFilepath),
+            pixelShaderFilepath(pixelShaderFilepath)
+        {}
+    };
+    struct PipelineStateData {
+        std::shared_ptr<PSOLibrary> pPSOLibrary{};
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+        
+        PipelineStateData(
+            std::shared_ptr<PSOLibrary> pPSOLibrary,
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC desc
+        ) : pPSOLibrary(pPSOLibrary),
+            desc(desc)
+        {}
+    };
     void InitMaterial(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        const LPCWSTR& vertexShaderFilepath,
-        const LPCWSTR& pixelShaderFilepath,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
-        const std::wstring& rootSignatureFilename,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        D3D12_INPUT_ELEMENT_DESC* inputLayout,
-        size_t inputLayoutSize,
-        std::shared_ptr<Textures> pTexture = nullptr
+        const RootSignatureData& rootSignatureData,
+        const ShaderData& shaderData,
+        PipelineStateData& pipelineStateData
     );
 
-    void Update();
+    virtual void Update();
 
-    void Render(
+    virtual void Render(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
+        D3D12_RECT rect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView,
-        D3D12_GPU_VIRTUAL_ADDRESS sceneCBGPUVirtualAddress,
-        D3D12_GPU_VIRTUAL_ADDRESS lightCBGPUVirtualAddress
+        D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView,
+        std::function<
+            void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)
+        > outerRootParametersSetter = [](
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+            UINT& rootParamId
+        ) {
+            return rootParamId;
+        }
     ) const;
 
-private:
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC CreatePipelineStateDesc(
-        std::shared_ptr<RootSignatureResource> pRootSignatureResource,
-        D3D12_INPUT_ELEMENT_DESC* inputLayout,
-        size_t inputLayoutSize,
-        std::shared_ptr<ShaderResource> pVertexShaderResource,
-        std::shared_ptr<ShaderResource> pPixelShaderResource
-    );
-};
+protected:
+    virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
+    virtual void InnerRootParametersSetter(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        UINT& rootParamId
+    ) const;
 
-class TestRenderObject : RenderObject {
-    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayout[3]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    };
-
-public:
-    static RenderObject createTriangle(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
-    ) {
-        VertexPosNormCl vertices[]{
-            { { -1.0f, -1.0f, 0.f }, {  0.f,  0.f,  1.f }, { 1.0f, 0.0f, 0.0f, 0.f } },
-            { {  0.0f,  1.0f, 0.f }, {  0.f,  0.f,  1.f }, { 0.0f, 1.0f, 0.0f, 0.f } },
-            { {  1.0f, -1.0f, 0.f }, {  0.f,  0.f,  1.f }, { 0.0f, 0.0f, 1.0f, 0.f } },
-            { { -1.0f, -1.0f, 0.f }, {  0.f,  0.f, -1.f }, { 1.0f, 0.0f, 0.0f, 0.f } },
-            { {  0.0f,  1.0f, 0.f }, {  0.f,  0.f, -1.f }, { 0.0f, 1.0f, 0.0f, 0.f } },
-            { {  1.0f, -1.0f, 0.f }, {  0.f,  0.f, -1.f }, { 0.0f, 0.0f, 1.0f, 0.f } }
-        };
-        uint32_t indices[]{
-            0, 2, 1,
-            3, 4, 5
-        };
-
-        Mesh::MeshData meshData{
-            // vertices data
-            .vertices{ vertices },
-            .verticesCnt{ _countof(vertices) },
-            .vertexSize{ sizeof(*vertices) },
-            // indices data
-            .indices{ indices },
-            .indicesCnt{ _countof(indices) },
-            .indexSize{ sizeof(*indices) },
-            .indexFormat{ DXGI_FORMAT_R32_UINT }
-        };
-
-        RenderObject obj{ pDevice, pAllocator, modelMatrix };
-        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
-        obj.InitMaterial(
-            pDevice,
-            pShaderAtlas,
-            L"SimpleVertexShader.cso",
-            L"SimplePixelShader.cso",
-            pRootSignatureAtlas,
-            CreateRootSignatureBlob(pDevice),
-            L"SimpleRootSignature",
-            pPSOLibrary,
-            m_inputLayout,
-            _countof(m_inputLayout)
-        );
-
-        return obj;
-    }
-
-    static RenderObject createCube(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
-    ) {
-        VertexPosNormCl vertices[24]{
-            { { -1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, { 1.0f, 0.0f, 0.0f, 0.0f } },
-            { {  1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, { 1.0f, 1.0f, 1.0f, 0.0f } },
-            { {  1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, { 0.0f, 1.0f, 1.0f, 0.0f } },
-            { { -1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, { 0.0f, 0.0f, 0.0f, 0.0f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, { 0.0f, 0.0f, 1.0f, 0.0f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, { 0.0f, 1.0f, 0.0f, 0.0f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, { 1.0f, 1.0f, 0.0f, 0.0f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, { 1.0f, 0.0f, 1.0f, 0.0f } },
-            { {  1.f, -1.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.0f, 1.0f, 1.0f, 0.0f } },
-            { {  1.f, -1.f,  1.f }, {  1.f,  0.f,  0.f }, { 1.0f, 1.0f, 1.0f, 0.0f } },
-            { {  1.f,  1.f,  1.f }, {  1.f,  0.f,  0.f }, { 1.0f, 1.0f, 0.0f, 0.0f } },
-            { {  1.f,  1.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.0f, 1.0f, 0.0f, 0.0f } },
-            { { -1.f, -1.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.0f, 0.0f, 0.0f, 0.0f } },
-            { { -1.f, -1.f, -1.f }, { -1.f,  0.f,  0.f }, { 0.0f, 0.0f, 0.0f, 0.0f } },
-            { { -1.f,  1.f, -1.f }, { -1.f,  0.f,  0.f }, { 0.0f, 0.0f, 1.0f, 0.0f } },
-            { { -1.f,  1.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.0f, 0.0f, 1.0f, 0.0f } },
-            { {  1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.0f, 1.0f, 1.0f, 0.0f } },
-            { { -1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.0f, 0.0f, 0.0f, 0.0f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.0f, 0.0f, 1.0f, 0.0f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { 1.0f, 1.0f, 0.0f, 0.0f } },
-            { { -1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.0f, 0.0f, 0.0f, 0.0f } },
-            { {  1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.0f, 1.0f, 1.0f, 0.0f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.0f, 1.0f, 0.0f, 0.0f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, { 0.0f, 0.0f, 1.0f, 0.0f } }
-        };
-
-        uint32_t indices[36]{
-             0,	 2,  1,  0,  3,  2,
-             4,	 6,  5,  4,  7,  6,
-             8,	10,  9,  8, 11, 10,
-            12, 14, 13, 12, 15, 14,
-            16, 18, 17, 16, 19, 18,
-            20, 22, 21, 20, 23, 22
-        };
-
-        Mesh::MeshData meshData{
-            // vertices data
-            .vertices{ vertices },
-            .verticesCnt{ _countof(vertices) },
-            .vertexSize{ sizeof(*vertices) },
-            // indices data
-            .indices{ indices },
-            .indicesCnt{ _countof(indices) },
-            .indexSize{ sizeof(*indices) },
-            .indexFormat{ DXGI_FORMAT_R32_UINT }
-        };
-
-        RenderObject obj{ pDevice, pAllocator, modelMatrix };
-        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
-        obj.InitMaterial(
-            pDevice,
-            pShaderAtlas,
-            L"SimpleVertexShader.cso",
-            L"SimplePixelShader.cso",
-            pRootSignatureAtlas,
-            CreateRootSignatureBlob(pDevice),
-            L"SimpleRootSignature",
-            pPSOLibrary,
-            m_inputLayout,
-            _countof(m_inputLayout)
-        );
-
-        return obj;
-    }
-
-private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
-        // Allow input layout and deny unnecessary access to certain pipeline stages.
-        D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
-        };
-
-        // A single 32-bit constant root parameter that is used by the vertex shader.
-        CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // light CB
-        rootParameters[2].InitAsConstantBufferView(2);  // model CB
-
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-        // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-        ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-            &rootSignatureDescription,
-            featureData.HighestVersion,
-            &rootSignatureBlob,
-            &errorBlob
-        ));
-
-        return rootSignatureBlob;
-    }
-};
-
-class TestTextureRenderObject : RenderObject {
-    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutAoS[4]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
-    static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
-public:
-    static RenderObject createTextureCube(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename,
-        const LPCWSTR& normalMapFilename,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
-    ) {
-        VertexPosNormTangUV vertices[24]{
-            { { -1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f,  1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f, -1.f, -1.f }, {  0.f, -1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  1.f,  0.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } },
-            { {  1.f, -1.f, -1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f,  1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f,  1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 1.f, 0.f } },
-            { {  1.f,  1.f, -1.f }, {  1.f,  0.f,  0.f }, {  0.f,  0.f,  1.f }, { 0.f, 0.f } },
-            { { -1.f, -1.f,  1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 0.f, 1.f } },
-            { { -1.f, -1.f, -1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 1.f, 1.f } },
-            { { -1.f,  1.f, -1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f,  1.f }, { -1.f,  0.f,  0.f }, {  0.f,  0.f, -1.f }, { 0.f, 0.f } },
-            { {  1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { { -1.f, -1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { { -1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { {  1.f,  1.f,  1.f }, {  0.f,  0.f,  1.f }, { -1.f,  0.f,  0.f }, { 0.f, 0.f } },
-            { { -1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 1.f } },
-            { {  1.f, -1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 1.f, 1.f } },
-            { {  1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 1.f, 0.f } },
-            { { -1.f,  1.f, -1.f }, {  0.f,  0.f, -1.f }, {  1.f,  0.f,  0.f }, { 0.f, 0.f } }
-        };
-
-        uint32_t indices[36]{
-             0,	 2,  1,  0,  3,  2,
-             4,	 6,  5,  4,  7,  6,
-             8,	10,  9,  8, 11, 10,
-            12, 14, 13, 12, 15, 14,
-            16, 18, 17, 16, 19, 18,
-            20, 22, 21, 20, 23, 22
-        };
-
-        Mesh::MeshData meshData{
-            // vertices data
-            .vertices{ vertices },
-            .verticesCnt{ _countof(vertices) },
-            .vertexSize{ sizeof(*vertices) },
-            // indices data
-            .indices{ indices },
-            .indicesCnt{ _countof(indices) },
-            .indexSize{ sizeof(*indices) },
-            .indexFormat{ DXGI_FORMAT_R32_UINT }
-        };
-
-        Microsoft::WRL::ComPtr<ID3D12Resource> res{};
-
-        RenderObject obj{ pDevice, pAllocator, modelMatrix };
-        obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
-
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
-        obj.InitMaterial(
-            pDevice,
-            pShaderAtlas,
-            L"SimpleUVVertexShader.cso",
-            L"SimpleUVPixelShader.cso",
-            pRootSignatureAtlas,
-            CreateTextureRootSignatureBlob(pDevice),
-            L"SimpleTextureRootSignature",
-            pPSOLibrary,
-            m_inputLayoutAoS,
-            _countof(m_inputLayoutSoA),
-            std::make_shared<Textures>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textures, _countof(textures))
-        );
-
-        return obj;
-    }
-
-    static RenderObject createModelFromGLTF(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::filesystem::path& filepath,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename,
-        const LPCWSTR& normalMapFilename,
-        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
-    ) {
-        RenderObject obj{ pDevice, pAllocator, modelMatrix };
-        obj.InitMeshFromGLTF(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, filepath, L"MeshGLTF", {
-            Mesh::Attribute{
-                .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                .size{ sizeof(DirectX::XMFLOAT3) }
-            },
-            Mesh::Attribute{
-                .name{ Microsoft::glTF::ACCESSOR_NORMAL },
-                .size{ sizeof(DirectX::XMFLOAT3) }
-            },
-            Mesh::Attribute{
-                .name{ Microsoft::glTF::ACCESSOR_TANGENT },
-                .size{ sizeof(DirectX::XMFLOAT4) }
-            },
-            Mesh::Attribute{
-                .name{ Microsoft::glTF::ACCESSOR_TEXCOORD_0 },
-                .size{ sizeof(DirectX::XMFLOAT2) }
-            }
-            });
-
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
-        obj.InitMaterial(
-            pDevice,
-            pShaderAtlas,
-            L"SoAUVVertexShader.cso",
-            L"SimpleUVPixelShader.cso",
-            pRootSignatureAtlas,
-            CreateTextureRootSignatureBlob(pDevice),
-            L"GLTFRootSignature",
-            pPSOLibrary,
-            m_inputLayoutSoA,
-            _countof(m_inputLayoutSoA),
-            std::make_shared<Textures>(pDevice, pCommandQueueCopy, pCommandQueueDirect, pAllocator, textures, _countof(textures))
-        );
-
-        return obj;
-    }
-
-private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateTextureRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
-        // Allow input layout and deny unnecessary access to certain pipeline stages.
-        D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
-        };
-
-        CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[1]{};
-        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
-        
-        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // light CB
-        rootParameters[2].InitAsConstantBufferView(2);  // model CB
-        rootParameters[3].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs, D3D12_SHADER_VISIBILITY_PIXEL);
-
-        D3D12_STATIC_SAMPLER_DESC sampler{
-            .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },
-            .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .MipLODBias{},
-            .MaxAnisotropy{},
-            .ComparisonFunc{ D3D12_COMPARISON_FUNC_NEVER },
-            .BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
-            .MinLOD{},
-            .MaxLOD{ D3D12_FLOAT32_MAX },
-            .ShaderRegister{},
-            .RegisterSpace{},
-            .ShaderVisibility{ D3D12_SHADER_VISIBILITY_PIXEL }
-        };
-
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
-
-        // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-        ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-            &rootSignatureDescription,
-            featureData.HighestVersion,
-            &rootSignatureBlob,
-            &errorBlob
-        ));
-
-        return rootSignatureBlob;
-    }
+    virtual UINT GetIndexCountPerInstance() const;
+    virtual UINT GetInstanceCount() const;
 };

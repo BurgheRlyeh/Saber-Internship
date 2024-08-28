@@ -38,9 +38,9 @@ private:
     std::filesystem::path m_pathBase;
 };
 
-GLTFLoader::GLTFLoader(std::filesystem::path& filepath) {
-    CheckFilepathCorrectness(filepath);
-    GetResourceReaderAndDocument(filepath, m_pResourceReader, m_document);
+GLTFLoader::GLTFLoader(const std::filesystem::path& filepath) {
+    std::filesystem::path correctFilepath{ FilepathToCorrect(filepath) };
+    GetResourceReaderAndDocument(correctFilepath, m_pResourceReader, m_document);
 }
 
 
@@ -92,20 +92,24 @@ bool GLTFLoader::GetVerticesData(std::vector<float>& data, const std::string& at
     return true;
 }
 
-void GLTFLoader::CheckFilepathCorrectness(std::filesystem::path& filepath) {
-    if (filepath.is_relative()) {
-        std::filesystem::path pathCurrent{ std::filesystem::current_path() };
+std::filesystem::path GLTFLoader::FilepathToCorrect(const std::filesystem::path& filepath) {
+    std::filesystem::path correctFilepath{ filepath };
+
+    if (correctFilepath.is_relative()) {
+        std::filesystem::path absolute{ std::filesystem::current_path() };
 
         // Convert the relative path into an absolute path by appending the command line argument to the current path
-        pathCurrent /= filepath;
-        pathCurrent.swap(filepath);
+        absolute /= correctFilepath;
+        absolute.swap(correctFilepath);
     }
-    if (!filepath.has_filename()) {
+    if (!correctFilepath.has_filename()) {
         throw std::runtime_error("Filepath has no filename");
     }
-    if (!filepath.has_extension()) {
+    if (!correctFilepath.has_extension()) {
         throw std::runtime_error("Filepath has no filename extension");
     }
+
+    return correctFilepath;
 }
 
 void GLTFLoader::GetResourceReaderAndDocument(const std::filesystem::path& filepath, std::unique_ptr<Microsoft::glTF::GLBResourceReader>& pResourceReader, Microsoft::glTF::Document& document) {

@@ -17,14 +17,14 @@ Scene::Scene(
     );
 }
 
-void Scene::AddStaticObject(const RenderObject&& object) {
+void Scene::AddStaticObject(const MeshRenderObject& object) {
     std::scoped_lock<std::mutex> lock(m_staticObjectsMutex);
-    m_pStaticObjects.push_back(std::make_shared<RenderObject>(object));
+    m_pStaticObjects.push_back(std::make_shared<MeshRenderObject>(object));
 }
 
-void Scene::AddDynamicObject(const RenderObject&& object) {
+void Scene::AddDynamicObject(const MeshRenderObject& object) {
     std::scoped_lock<std::mutex> lock(m_dynamicObjectsMutex);
-    m_pDynamicObjects.push_back(std::make_shared<RenderObject>(object));
+    m_pDynamicObjects.push_back(std::make_shared<MeshRenderObject>(object));
 }
 
 void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
@@ -175,6 +175,20 @@ void Scene::RenderStaticObjects(
     UpdateSceneBuffer();
     UpdateLightBuffer();
 
+    auto outerRootParametersSetter = [&](
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+            UINT& rootParamId
+        ) {
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_sceneCBDynamicAllocation.gpuAddress
+            );
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            );
+        };
+
     std::scoped_lock<std::mutex> staticObjectsLock(m_staticObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
@@ -184,10 +198,8 @@ void Scene::RenderStaticObjects(
             viewport,
             scissorRect,
             m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
-            //renderTargetView,
-            depthStencilView,
-            m_sceneCBDynamicAllocation.gpuAddress,
-            m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            &depthStencilView,
+            outerRootParametersSetter
         );
     }
 }
@@ -205,6 +217,20 @@ void Scene::RenderDynamicObjects(
     UpdateSceneBuffer();
     UpdateLightBuffer();
 
+    auto outerRootParametersSetter = [&](
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        UINT& rootParamId
+        ) {
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_sceneCBDynamicAllocation.gpuAddress
+            );
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            );
+        };
+
     std::scoped_lock<std::mutex> dynamicObjectsLock(m_dynamicObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
@@ -214,10 +240,8 @@ void Scene::RenderDynamicObjects(
             viewport,
             scissorRect,
             m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
-            //renderTargetView,
-            depthStencilView,
-            m_sceneCBDynamicAllocation.gpuAddress,
-            m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            &depthStencilView,
+            outerRootParametersSetter
         );
     }
 }

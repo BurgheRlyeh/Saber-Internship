@@ -19,7 +19,7 @@ class GLTFLoader {
     Microsoft::glTF::Document m_document{};
 
 public:
-    GLTFLoader(std::filesystem::path& filepath);
+    GLTFLoader(const std::filesystem::path& filepath);
 
     template<typename T>
     void GetIndices(std::vector<T>& indices) {
@@ -34,7 +34,7 @@ public:
     bool GetVerticesData(std::vector<float>& data, const std::string& attributeName, size_t meshId = 0);
 
 private:
-    void CheckFilepathCorrectness(std::filesystem::path& filepath);
+    std::filesystem::path FilepathToCorrect(const std::filesystem::path& filepath);
 
     void GetResourceReaderAndDocument(
         const std::filesystem::path& filepath,

@@ -9,7 +9,7 @@
 #include "CommandList.h"
 #include "ConstantBuffer.h"
 #include "DynamicUploadRingBuffer.h"
-#include "RenderObject.h"
+#include "MeshRenderObject.h"
 #include "RenderTarget.h"
 #include "Texture.h"
 
@@ -39,10 +39,10 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::vector<std::shared_ptr<RenderObject>> m_pStaticObjects{};
+    std::vector<std::shared_ptr<MeshRenderObject>> m_pStaticObjects{};
     std::mutex m_staticObjectsMutex{};
 
-    std::vector<std::shared_ptr<RenderObject>> m_pDynamicObjects{};
+    std::vector<std::shared_ptr<MeshRenderObject>> m_pDynamicObjects{};
     std::mutex m_dynamicObjectsMutex{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
@@ -72,8 +72,8 @@ public:
         return m_isSceneReady.load();
     }
 
-    void AddStaticObject(const RenderObject&& object);
-    void AddDynamicObject(const RenderObject&& object);
+    void AddStaticObject(const MeshRenderObject& object);
+    void AddDynamicObject(const MeshRenderObject& object);
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
 

@@ -67,7 +67,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 1
         m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        m_pScenes[1]->AddStaticObject(TestRenderObject::createTriangle(
+        m_pScenes[1]->AddStaticObject(TestColorRenderObject::CreateTriangle(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,
@@ -79,7 +79,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 2
         m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        m_pScenes[2]->AddStaticObject(TestTextureRenderObject::createTextureCube(
+        m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,
@@ -101,7 +101,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-                m_pScenes[3]->AddStaticObject(TestRenderObject::createTriangle(
+                m_pScenes[3]->AddStaticObject(TestColorRenderObject::CreateTriangle(
                     m_pDevice,
                     m_pAllocator,
                     m_pCommandQueueCopy,
@@ -121,7 +121,7 @@ void Renderer::Initialize(HWND hWnd) {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-                m_pScenes[3]->AddDynamicObject(TestRenderObject::createCube(
+                m_pScenes[3]->AddDynamicObject(TestColorRenderObject::CreateCube(
                     m_pDevice,
                     m_pAllocator,
                     m_pCommandQueueCopy,
@@ -141,8 +141,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 4
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-
-        m_pScenes[4]->AddStaticObject(TestTextureRenderObject::createModelFromGLTF(
+        m_pScenes[4]->AddStaticObject(TestTextureRenderObject::CreateModelFromGLTF(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,

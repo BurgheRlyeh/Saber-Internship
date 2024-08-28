@@ -1,85 +1,21 @@
 #include "Mesh.h"
 
 Mesh::Mesh(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    const MeshData& meshData
-) {
-    InitFromMeshData(pDevice, pAllocator, pCommandQueueCopy, meshData);
-}
-
-Mesh::Mesh(
     const std::wstring& filename,
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
     const MeshData& meshData
-) : Mesh(pDevice, pAllocator, pCommandQueueCopy, meshData)
-{}
-
-Mesh::Mesh(
-    const std::wstring& filename,
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    std::filesystem::path& filepath,
-    const std::initializer_list<Attribute>& attributes
 ) {
-    GLTFLoader gltfLoader{ filepath };
-
-    DXGI_FORMAT format = gltfLoader.GetIndicesFormat();
-    switch(format)
-    {
-    case DXGI_FORMAT_R32_UINT:
-    {
-        std::vector<uint32_t> indices{};
-        gltfLoader.GetIndices(indices);
-        BufferData indexBufferData{
-            .data{ indices.data() },
-            .count{ indices.size() },
-            .size{ sizeof(indices.front())},
-            .format{format}
-        };
-        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
-    }
-        break;
-    case DXGI_FORMAT_R16_UINT:
-    {
-        std::vector<uint16_t> indices{};
-
-        gltfLoader.GetIndices(indices);
-        BufferData indexBufferData{
-            .data{ indices.data() },
-            .count{ indices.size() },
-            .size{ sizeof(indices.front())},
-            .format{ format }
-        };
-        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
-    }
-        break;
-    default:
-        assert(0);
-        break;
-    }
-
-
-    for (const Attribute& attribute : attributes) {
-        std::vector<float> vertexData{};
-        if (!gltfLoader.GetVerticesData(vertexData, attribute.name)) {
-            std::stringstream ss;
-            ss << "Bad attribute " << attribute.name << " in file " << filepath;
-            throw std::runtime_error(ss.str());
+    std::visit([&](const auto& data) {
+        using T = std::decay_t<decltype(data)>;
+        if constexpr (std::is_same_v<T, MeshDataVerticesIndices>) {
+            InitFromVerticesIndices(pDevice, pAllocator, pCommandQueueCopy, data);
         }
-
-        BufferData vertexBufferData{
-            .data{ vertexData.data() },
-            .count{ vertexData.size() / (attribute.size / 4) },
-            .size{ attribute.size},
-            .format{ DXGI_FORMAT_R32_FLOAT }
-        };
-        AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
-    }
+        else if constexpr (std::is_same_v<T, MeshDataGLTF>) {
+            InitFromGLTF(pDevice, pAllocator, pCommandQueueCopy, data);
+        }
+    }, meshData.data);
 }
 
 const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
@@ -100,6 +36,98 @@ const D3D12_INDEX_BUFFER_VIEW* Mesh::GetIndexBufferView() const {
 
 size_t Mesh::GetIndicesCount() const {
     return m_indicesCount;
+}
+
+void Mesh::InitFromVerticesIndices(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const MeshDataVerticesIndices& meshData
+) {
+    AddVertexBuffer(
+        pDevice,
+        pAllocator,
+        pCommandQueueCopy,
+        BufferData{
+            .data{ meshData.vertices },
+            .count{ meshData.verticesCnt },
+            .size{ meshData.vertexSize }
+        }
+    );
+
+    AddIndexBuffer(
+        pDevice,
+        pAllocator,
+        pCommandQueueCopy,
+        BufferData{
+            .data{ meshData.indices },
+            .count{ meshData.indicesCnt },
+            .size{ meshData.indexSize }
+        },
+        meshData.indexFormat
+    );
+}
+
+void Mesh::InitFromGLTF(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const MeshDataGLTF& meshData
+) {
+    GLTFLoader gltfLoader{ meshData.filepath };
+
+    DXGI_FORMAT format = gltfLoader.GetIndicesFormat();
+    switch (format)
+    {
+    case DXGI_FORMAT_R32_UINT:
+    {
+        std::vector<uint32_t> indices{};
+        gltfLoader.GetIndices(indices);
+        BufferData indexBufferData{
+            .data{ indices.data() },
+            .count{ indices.size() },
+            .size{ sizeof(indices.front())},
+            .format{format}
+        };
+        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+    }
+    break;
+    case DXGI_FORMAT_R16_UINT:
+    {
+        std::vector<uint16_t> indices{};
+
+        gltfLoader.GetIndices(indices);
+        BufferData indexBufferData{
+            .data{ indices.data() },
+            .count{ indices.size() },
+            .size{ sizeof(indices.front())},
+            .format{ format }
+        };
+        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+    }
+    break;
+    default:
+        assert(0);
+        break;
+    }
+
+
+    for (const Attribute& attribute : meshData.attributes) {
+        std::vector<float> vertexData{};
+        if (!gltfLoader.GetVerticesData(vertexData, attribute.name)) {
+            std::stringstream ss;
+            ss << "Bad attribute " << attribute.name << " in file " << meshData.filepath;
+            throw std::runtime_error(ss.str());
+        }
+
+        BufferData vertexBufferData{
+            .data{ vertexData.data() },
+            .count{ vertexData.size() / (attribute.size / 4) },
+            .size{ attribute.size},
+            .format{ DXGI_FORMAT_R32_FLOAT }
+        };
+        AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
+    }
 }
 
 void Mesh::AddVertexBuffer(
@@ -143,36 +171,6 @@ void Mesh::AddIndexBuffer(
         .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
         .Format{ indexFormat }
     };
-}
-
-void Mesh::InitFromMeshData(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    const MeshData& meshData
-) {
-    AddVertexBuffer(
-        pDevice,
-        pAllocator,
-        pCommandQueueCopy,
-        BufferData{
-            .data{ meshData.vertices },
-            .count{ meshData.verticesCnt },
-            .size{ meshData.vertexSize }
-        }
-    );
-
-    AddIndexBuffer(
-        pDevice,
-        pAllocator,
-        pCommandQueueCopy,
-        BufferData{
-            .data{ meshData.indices },
-            .count{ meshData.indicesCnt },
-            .size{ meshData.indexSize }
-        },
-        meshData.indexFormat
-    );
 }
 
 std::shared_ptr<GPUResource> Mesh::CreateBuffer(
