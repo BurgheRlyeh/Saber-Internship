@@ -3,6 +3,7 @@
 #include "Headers.h"
 
 #include <deque>
+#include <list>
 
 #include "GPUResource.h"
 
@@ -88,7 +89,7 @@ private:
 class DynamicUploadHeap {
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
     const bool m_isCPUAccessible;
-    std::vector<GPURingBuffer> m_ringBuffers{};
+    std::list<GPURingBuffer> m_ringBuffers{};
 
 public:
     DynamicUploadHeap() = delete;

@@ -31,7 +31,6 @@ class MeshRenderObject : protected RenderObject {
 
 public:
     using RenderObject::InitMaterial;
-    using RenderObject::Update;
     using RenderObject::Render;
 
     MeshRenderObject(
@@ -49,6 +48,8 @@ public:
         const std::wstring& meshFilename
     );
     void BindTextures(std::shared_ptr<Textures> pTextures);
+
+    virtual void Update();
 
 protected:
     virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const override;

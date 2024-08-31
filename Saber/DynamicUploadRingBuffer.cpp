@@ -147,22 +147,20 @@ DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
 
     return dynamicAllocation;
 }
-
+ 
 void DynamicUploadHeap::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-    size_t numBuffersToDelete{};
+    auto lastForDeleting = m_ringBuffers.begin();
 
-    for (size_t i{}; i < m_ringBuffers.size(); ++i) {
-        GPURingBuffer& RingBuff{ m_ringBuffers.at(i) };
+    for (auto iter = m_ringBuffers.begin(); iter != m_ringBuffers.end(); ++iter) {
+        GPURingBuffer& RingBuff{ *iter };
 
         RingBuff.FinishCurrentFrame(fenceValue);
         RingBuff.ReleaseCompletedFrames(lastCompletedFenceValue);
 
-        if (numBuffersToDelete == i && i < m_ringBuffers.size() - 1 && RingBuff.IsEmpty()) {
-            ++numBuffersToDelete;
+        if (RingBuff.IsEmpty() && iter == lastForDeleting && iter != --m_ringBuffers.end()) {
+            ++lastForDeleting;
         }
     }
 
-    if (numBuffersToDelete) {
-        m_ringBuffers.erase(m_ringBuffers.begin(), m_ringBuffers.begin() + numBuffersToDelete);
-    }
+    m_ringBuffers.erase(m_ringBuffers.begin(), lastForDeleting);
 }

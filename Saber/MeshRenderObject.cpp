@@ -21,6 +21,10 @@ void MeshRenderObject::BindTextures(std::shared_ptr<Textures> pTextures) {
     m_pTextures = pTextures;
 }
 
+void MeshRenderObject::Update() {
+
+}
+
 void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {
     if (m_pMesh) {
         pCommandListDirect->IASetVertexBuffers(

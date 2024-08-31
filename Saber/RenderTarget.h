@@ -4,12 +4,12 @@
 
 #include <vector>
 
-#include "GPUResource.h"
+#include "Texture.h"
 
 class RenderTarget {
     const uint8_t m_numBuffers;
 
-    std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};
+    std::vector<std::shared_ptr<Texture>> m_pTextures{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
     UINT m_descSize;
 
@@ -74,7 +74,7 @@ private:
         uint32_t numDescriptors
     );
 
-    void CreateBuffers(
+    void UpdateTextures(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         const D3D12_RESOURCE_DESC& resourceDesc,

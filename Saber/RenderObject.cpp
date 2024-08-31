@@ -23,11 +23,14 @@ void RenderObject::InitMaterial(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, c
     );
 }
 
-void RenderObject::Update() {
-
-}
-
-void RenderObject::Render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, D3D12_VIEWPORT viewport, D3D12_RECT rect, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView, D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView, std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter) const {
+void RenderObject::Render(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT rect,
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView,
+    std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter
+) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
@@ -44,8 +47,6 @@ void RenderObject::Render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCo
 
     UINT rootParameterIndex{};
     outerRootParametersSetter(pCommandListDirect, rootParameterIndex);
-    //pCommandListDirect->SetGraphicsRootConstantBufferView(0, sceneCBGPUVirtualAddress);
-    //pCommandListDirect->SetGraphicsRootConstantBufferView(1, lightCBGPUVirtualAddress);
     InnerRootParametersSetter(pCommandListDirect, rootParameterIndex);
 
     pCommandListDirect->DrawIndexedInstanced(

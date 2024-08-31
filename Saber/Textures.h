@@ -27,8 +27,8 @@ public:
 
 	Textures(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const LPCWSTR* filenames,
 		size_t texturesCount
@@ -41,8 +41,8 @@ public:
 
 	bool AddTexture(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const LPCWSTR& filename,
 		DirectX::DDS_FLAGS flags = DirectX::DDS_FLAGS_NONE

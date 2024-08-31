@@ -70,8 +70,6 @@ public:
         PipelineStateData& pipelineStateData
     );
 
-    virtual void Update();
-
     virtual void Render(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
