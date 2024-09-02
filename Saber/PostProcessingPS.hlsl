@@ -9,4 +9,5 @@ SamplerState s0 : register(s0);
 float4 main(VSOutput pixel) : SV_TARGET
 {
     return t0.Sample(s0, pixel.uv);
+
 }

@@ -24,6 +24,7 @@
 #include "Camera.h"
 #include "CommandQueue.h"
 #include "CommandList.h"
+#include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
 #include "Resources.h"
@@ -88,6 +89,8 @@ class Renderer {
 
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
+
+    std::shared_ptr<PostProcessing> m_pPostProcessing{};
 
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
     size_t m_currSceneId{ 2 };

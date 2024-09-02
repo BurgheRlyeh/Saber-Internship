@@ -156,7 +156,7 @@ void Texture::InitSRVFromDDSFile(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, 
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{
 			.MipLevels{ 1 }
-	}
+		}
 	};
 
 	CreateShaderResourceView(pDevice, srvDesc, pCPUDescHandle);

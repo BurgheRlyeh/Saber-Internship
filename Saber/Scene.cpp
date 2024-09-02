@@ -197,7 +197,7 @@ void Scene::RenderStaticObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
+            m_pGBuffer ? m_pGBuffer->GetCPURTVDescHandle(m_currGBufferId) : renderTargetView,
             &depthStencilView,
             outerRootParametersSetter
         );
@@ -239,7 +239,7 @@ void Scene::RenderDynamicObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            m_pGBuffer ? m_pGBuffer->GetCPUDescHandle(m_currGBufferId) : renderTargetView,
+            m_pGBuffer ? m_pGBuffer->GetCPURTVDescHandle(m_currGBufferId) : renderTargetView,
             &depthStencilView,
             outerRootParametersSetter
         );

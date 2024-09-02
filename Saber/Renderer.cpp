@@ -25,6 +25,7 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 
 Renderer::~Renderer() {
     m_pScenes.clear();
+    m_pPostProcessing.reset();
     Flush();
 }
 
@@ -55,6 +56,14 @@ void Renderer::Initialize(HWND hWnd) {
     CreateDSVDescHeap();
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
+
+    m_pPostProcessing = SimplePostProcessing::CreateSimplePostProcessing(
+        m_pDevice,
+        m_pMeshAtlas,
+        m_pShaderAtlas,
+        m_pRootSignatureAtlas,
+        m_pPSOLibrary
+    );
 
     m_isInitialized = true;
 
@@ -403,7 +412,7 @@ void Renderer::Render() {
     
     scene->SetCurrentBackBuffer(m_currBackBufferId);
     //m_pJobSystem->AddJob([&]()  // Some small work doesn't need to be moved to jobs, just as example
-        {
+    {
         //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
 
         commandListBeforeFrame->m_pCommandList->ClearDepthStencilView(
@@ -415,6 +424,18 @@ void Renderer::Render() {
             nullptr
         );
 
+        GPUResource::ResourceTransition(
+            commandListBeforeFrame->m_pCommandList,
+            backBuffer,
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        GPUResource::ResourceTransition(
+            commandListBeforeFrame->m_pCommandList,
+            scene->GetGBuffer()->GetCurrentBufferResource(m_currBackBufferId).Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
         scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
 
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
@@ -453,17 +474,36 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
     };
     m_pJobSystem->AddJob([&]() { // Some small work doesn't need to be moved to jobs, just as example? but here will be postprocessing or vfx or whatever else? so it will fit as job
-        scene->CopyRTV(
-            commandListAfterFrame->m_pCommandList,
-            m_pBackBuffers.at(m_currBackBufferId)
-        );
+        //scene->CopyRTV(
+        //    commandListAfterFrame->m_pCommandList,
+        //    m_pBackBuffers.at(m_currBackBufferId)
+        //);
 
+        std::shared_ptr<RenderTarget> pGBuffer{ scene->GetGBuffer() };
+        GPUResource::ResourceTransition(
+            commandListAfterFrame->m_pCommandList,
+            pGBuffer->GetCurrentBufferResource(m_currBackBufferId).Get(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
+        m_pPostProcessing->Render(
+            commandListAfterFrame->m_pCommandList,
+            m_viewport,
+            m_scissorRect,
+            rtv,
+            [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
+                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ pGBuffer->GetSRVDescHeap() };
+                pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pGBuffer->GetGPUSRVDescHandle(m_currBackBufferId));
+            }
+        );
         GPUResource::ResourceTransition(
             commandListAfterFrame->m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
         );
+
         commandListAfterFrame->SetReadyForExection();
     });
 

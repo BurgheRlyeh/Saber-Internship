@@ -181,9 +181,13 @@ public:
         RenderTarget::ClearRenderTarget(
             pCommandList,
             m_pGBuffer->GetCurrentBufferResource(m_currGBufferId),
-            m_pGBuffer->GetCPUDescHandle(m_currGBufferId),
+            m_pGBuffer->GetCPURTVDescHandle(m_currGBufferId),
             clearColor
         );
+    }
+
+    std::shared_ptr<RenderTarget> GetGBuffer() {
+        return m_pGBuffer;
     }
 
     void SetCurrentBackBuffer(size_t bufferId) {

@@ -10,7 +10,8 @@ class RenderTarget {
     const uint8_t m_numBuffers;
 
     std::vector<std::shared_ptr<Texture>> m_pTextures{};
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescHeap{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pSRVDescHeap{};
     UINT m_descSize;
 
 public:
@@ -65,13 +66,20 @@ public:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> GetCurrentBufferResource(size_t bufferId) const;
 
-    D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescHandle(int bufferId) const;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetRTVDescHeap() const;
+    D3D12_CPU_DESCRIPTOR_HANDLE GetCPURTVDescHandle(int bufferId) const;
+    D3D12_GPU_DESCRIPTOR_HANDLE GetGPURTVDescHandle(int bufferId) const;
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetSRVDescHeap() const;
+    D3D12_CPU_DESCRIPTOR_HANDLE GetCPUSRVDescHandle(int bufferId) const;
+    D3D12_GPU_DESCRIPTOR_HANDLE GetGPUSRVDescHandle(int bufferId) const;
 
 private:
-    void CreateDescriptorHeap(
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
-        uint32_t numDescriptors
+        uint32_t numDescriptors,
+        D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
     );
 
     void UpdateTextures(
@@ -79,9 +87,5 @@ private:
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         const D3D12_RESOURCE_DESC& resourceDesc,
         const D3D12_CLEAR_VALUE& clearValue
-    );
-
-    void CreateRTVs(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     );
 };

@@ -81,9 +81,7 @@ public:
         > outerRootParametersSetter = [](
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
             UINT& rootParamId
-        ) {
-            return rootParamId;
-        }
+        ) {}
     ) const;
 
 protected:

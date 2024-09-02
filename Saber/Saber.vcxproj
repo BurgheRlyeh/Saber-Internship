@@ -199,6 +199,7 @@
     <ClCompile Include="MemoryMappedFile.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MeshRenderObject.cpp" />
+    <ClCompile Include="PostProcessing.cpp" />
     <ClCompile Include="PSOLibrary.cpp" />
     <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="OutputContext.cpp" />
