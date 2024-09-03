@@ -376,7 +376,7 @@ public:
                 CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS))
             )
         );
-        obj.BindTextures(std::make_shared<Textures>(
+        obj.BindTextures(Textures::LoadSRVsFromDDS(
             pDevice,
             pCommandQueueCopy,
             pCommandQueueDirect,
@@ -446,7 +446,7 @@ public:
                 CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA))
             )
         );
-        obj.BindTextures(std::make_shared<Textures>(
+        obj.BindTextures(Textures::LoadSRVsFromDDS(
             pDevice,
             pCommandQueueCopy,
             pCommandQueueDirect,

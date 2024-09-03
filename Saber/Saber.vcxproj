@@ -176,7 +176,6 @@
     <ClInclude Include="RenderObject.h" />
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
-    <ClInclude Include="RenderTarget.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Resources.h" />
     <ClInclude Include="Saber.h" />
@@ -204,7 +203,6 @@
     <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="OutputContext.cpp" />
     <ClCompile Include="Renderer.cpp" />
-    <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Textures.cpp" />

@@ -432,7 +432,7 @@ void Renderer::Render() {
         );
         GPUResource::ResourceTransition(
             commandListBeforeFrame->m_pCommandList,
-            scene->GetGBuffer()->GetCurrentBufferResource(m_currBackBufferId).Get(),
+            scene->GetGBuffer()->GetTexture(0)->GetResource().Get(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
@@ -479,10 +479,10 @@ void Renderer::Render() {
         //    m_pBackBuffers.at(m_currBackBufferId)
         //);
 
-        std::shared_ptr<RenderTarget> pGBuffer{ scene->GetGBuffer() };
+        std::shared_ptr<Textures> pGBuffer{ scene->GetGBuffer() };
         GPUResource::ResourceTransition(
             commandListAfterFrame->m_pCommandList,
-            pGBuffer->GetCurrentBufferResource(m_currBackBufferId).Get(),
+            pGBuffer->GetTexture(0)->GetResource(),
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
@@ -494,7 +494,7 @@ void Renderer::Render() {
             [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
                 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ pGBuffer->GetSRVDescHeap() };
                 pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
-                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pGBuffer->GetGPUSRVDescHandle(m_currBackBufferId));
+                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pGBuffer->GetGpuSrvDescHandle(0));
             }
         );
         GPUResource::ResourceTransition(

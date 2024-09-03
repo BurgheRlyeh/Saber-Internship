@@ -39,7 +39,7 @@ void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
 void MeshRenderObject::InnerRootParametersSetter(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) const {
     pCommandListDirect->SetGraphicsRootConstantBufferView(rootParamId++, m_pModelCB->GetResource()->GetGPUVirtualAddress());
     if (m_pTextures) {
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pTextures->GetDescHeap() };
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pTextures->GetSRVDescHeap() };
         pCommandListDirect->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
         pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pTexDescHeap->GetGPUDescriptorHandleForHeapStart());
     }

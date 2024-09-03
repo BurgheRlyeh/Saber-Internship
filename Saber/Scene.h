@@ -10,8 +10,8 @@
 #include "ConstantBuffer.h"
 #include "DynamicUploadRingBuffer.h"
 #include "MeshRenderObject.h"
-#include "RenderTarget.h"
 #include "Texture.h"
+#include "Textures.h"
 
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
@@ -53,7 +53,7 @@ class Scene {
     std::atomic<bool> m_isSceneReady{};
     std::atomic<bool> m_isUpdateCameraHeap{};
 
-    std::shared_ptr<RenderTarget> m_pGBuffer{};
+    std::shared_ptr<Textures> m_pGBuffer{};
     size_t m_currGBufferId{};
     std::atomic<bool> m_isGBufferNeedResize{};
 
@@ -136,13 +136,12 @@ public:
         resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         FLOAT clearColor[] = { .6f, .4f, .4f, 1.f };
 
-
-        m_pGBuffer = std::make_shared<RenderTarget>(
+        m_pGBuffer = Textures::CreateRTVs(
             pDevice,
             pAllocator,
-            numBuffers,
+            1,
             resDesc,
-            CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
+            &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
         );
     }
 
@@ -164,7 +163,7 @@ public:
             pDevice,
             pAllocator,
             resDesc,
-            CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
+            &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
         );
     }
 
@@ -178,20 +177,20 @@ public:
             1.f
         };
 
-        RenderTarget::ClearRenderTarget(
+        Texture::ClearRenderTarget(
             pCommandList,
-            m_pGBuffer->GetCurrentBufferResource(m_currGBufferId),
-            m_pGBuffer->GetCPURTVDescHandle(m_currGBufferId),
+            m_pGBuffer->GetTexture(0)->GetResource(),
+            m_pGBuffer->GetCpuRtvDescHandle(0),
             clearColor
         );
     }
 
-    std::shared_ptr<RenderTarget> GetGBuffer() {
+    std::shared_ptr<Textures> GetGBuffer() {
         return m_pGBuffer;
     }
 
     void SetCurrentBackBuffer(size_t bufferId) {
-        m_currGBufferId = bufferId;
+        //m_currGBufferId = bufferId;
     }
 
     void CopyRTV(
@@ -199,7 +198,7 @@ public:
         Microsoft::WRL::ComPtr<ID3D12Resource> pRenderTarget
     ) {
         Microsoft::WRL::ComPtr<ID3D12Resource> pTex{
-            m_pGBuffer->GetCurrentBufferResource(m_currGBufferId)
+            m_pGBuffer->GetTexture(0)->GetResource()
         };
 
         pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
