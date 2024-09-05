@@ -82,6 +82,7 @@ bool Scene::AddLightSource(
     };
 
     m_isUpdateLightCB.store(true);
+    return true;
 }
 
 void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
@@ -157,6 +158,10 @@ bool Scene::TryUpdateCamera(float deltaTime) {
     return true;
 }
 
+void Scene::SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing) {
+    m_pPostProcessing = pPostProcessing;
+}
+
 DirectX::XMMATRIX Scene::GetViewProjectionMatrix() {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     return m_pCameras.at(m_currCameraId)->GetViewProjectionMatrix();
@@ -189,6 +194,20 @@ void Scene::RenderStaticObjects(
             );
         };
 
+    size_t rtvsCount{ m_pGBuffer ? m_pGBuffer->GetTexturesCount() : 1 };
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{};
+    if (!m_pGBuffer) {
+        rtvsCount = 1;
+        rtvs.push_back(renderTargetView);
+    }
+    else {
+        rtvsCount = m_pGBuffer->GetTexturesCount();
+        rtvs.resize(rtvsCount);
+        for (size_t i{}; i < rtvsCount; ++i) {
+            rtvs[i] = m_pGBuffer->GetCpuRtvDescHandle(i);
+        }
+    }
+
     std::scoped_lock<std::mutex> staticObjectsLock(m_staticObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
@@ -197,7 +216,8 @@ void Scene::RenderStaticObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            m_pGBuffer ? m_pGBuffer->GetCpuRtvDescHandle(m_currGBufferId) : renderTargetView,
+            rtvs.data(),
+            rtvsCount,
             &depthStencilView,
             outerRootParametersSetter
         );
@@ -231,6 +251,20 @@ void Scene::RenderDynamicObjects(
             );
         };
 
+    size_t rtvsCount{ m_pGBuffer ? m_pGBuffer->GetTexturesCount() : 1 };
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{};
+    if (!m_pGBuffer) {
+        rtvsCount = 1;
+        rtvs.push_back(renderTargetView);
+    }
+    else {
+        rtvsCount = m_pGBuffer->GetTexturesCount();
+        rtvs.resize(rtvsCount);
+        for (size_t i{}; i < rtvsCount; ++i) {
+            rtvs[i] = m_pGBuffer->GetCpuRtvDescHandle(i);
+        }
+    }
+
     std::scoped_lock<std::mutex> dynamicObjectsLock(m_dynamicObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
@@ -239,7 +273,8 @@ void Scene::RenderDynamicObjects(
             pCommandListDirect,
             viewport,
             scissorRect,
-            m_pGBuffer ? m_pGBuffer->GetCpuRtvDescHandle(m_currGBufferId) : renderTargetView,
+            rtvs.data(),
+            rtvsCount,
             &depthStencilView,
             outerRootParametersSetter
         );

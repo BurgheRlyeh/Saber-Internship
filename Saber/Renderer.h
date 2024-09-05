@@ -17,7 +17,6 @@
 
 #include <atomic>
 #include <mutex>
-#include <condition_variable>
 #include <thread>
 
 #include "Atlas.h"
@@ -80,6 +79,7 @@ class Renderer {
     std::atomic<uint32_t> m_resolutionHeightForResize{};
 
     std::shared_ptr<CommandQueue> m_pCommandQueueDirect{};
+    std::shared_ptr<CommandQueue> m_pCommandQueueCompute{};
     std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
 
     // Depth buffer.
@@ -89,8 +89,6 @@ class Renderer {
 
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
-
-    std::shared_ptr<PostProcessing> m_pPostProcessing{};
 
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
     size_t m_currSceneId{ 2 };

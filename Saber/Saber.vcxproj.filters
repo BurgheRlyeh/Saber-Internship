@@ -105,6 +105,9 @@
     <ClInclude Include="MeshRenderObject.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ComputeObject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -197,11 +200,25 @@
     <FxCompile Include="SoAUVVertexShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PostProcessingVS.hlsl">
+    <FxCompile Include="CopyPostProcessingVS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PostProcessingPS.hlsl">
+    <FxCompile Include="CopyPostProcessingPS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="DeferredShadingComputeShader.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PostProcessingDeferredShadingVS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PostProcessingDeferredShadingPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BlinnPhongLighting.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

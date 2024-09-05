@@ -8,8 +8,10 @@
 #include "CommandQueue.h"
 #include "CommandList.h"
 #include "ConstantBuffer.h"
+#include "ComputeObject.h"
 #include "DynamicUploadRingBuffer.h"
 #include "MeshRenderObject.h"
+#include "PostProcessing.h"
 #include "Texture.h"
 #include "Textures.h"
 
@@ -54,8 +56,11 @@ class Scene {
     std::atomic<bool> m_isUpdateCameraHeap{};
 
     std::shared_ptr<Textures> m_pGBuffer{};
-    size_t m_currGBufferId{};
     std::atomic<bool> m_isGBufferNeedResize{};
+
+    std::shared_ptr<PostProcessing> m_pPostProcessing{};
+
+    std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
 public:
     Scene() = delete;
@@ -104,6 +109,8 @@ public:
 
     bool TryUpdateCamera(float deltaTime);
 
+    void SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing);
+
     DirectX::XMMATRIX GetViewProjectionMatrix();
 
     void RenderStaticObjects(
@@ -120,6 +127,94 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
     );
+    void RenderPostProcessing(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+    ) {
+        if (!m_pGBuffer) {
+            return;
+        }
+
+        //Texture::ClearRenderTarget(
+        //    commandListAfterFrame->m_pCommandList,
+        //    pGBuffer->GetTexture(0)->GetResource(),
+        //    pGBuffer->GetCpuRtvDescHandle(0),
+        //    nullptr
+        //);
+
+        //scene->RunDeferredShading(pCommandListCompute->m_pCommandList, m_clientWidth, m_clientHeight);
+        //pCommandListCompute->SetReadyForExection();
+
+        GPUResource::ResourceTransition(
+            pCommandListDirect,
+            m_pGBuffer->GetTexture(0)->GetResource(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
+        m_pPostProcessing->Render(
+            pCommandListDirect,
+            viewport,
+            scissorRect,
+            &renderTargetView,
+            1,
+            [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
+                pCommandListDirect->SetGraphicsRootConstantBufferView(
+                    rootParamId++,
+                    m_sceneCBDynamicAllocation.gpuAddress
+                );
+                pCommandListDirect->SetGraphicsRootConstantBufferView(
+                    rootParamId++,
+                    m_pLightCB->GetResource()->GetGPUVirtualAddress()
+                );
+
+                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ m_pGBuffer->GetSrvUavDescHeap() };
+                pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+            }
+        );
+    }
+
+    void InitDeferredShadingComputeObject(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+        std::shared_ptr<PSOLibrary> pPSOLibrary
+    ) {
+        m_pDeferredShadingComputeObject = DeferredShading::CreateDefferedShadingComputeObject(
+            pDevice,
+            pShaderAtlas,
+            pRootSignatureAtlas,
+            pPSOLibrary
+        );
+    }
+
+    void RunDeferredShading(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+        UINT width,
+        UINT height
+    ) {
+        m_pDeferredShadingComputeObject->Dispatch(
+            pCommandListCompute,
+            width,
+            height,
+            1,
+            [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
+                pCommandListCompute->SetGraphicsRootConstantBufferView(
+                    rootParamId++,
+                    m_sceneCBDynamicAllocation.gpuAddress
+                );
+                pCommandListCompute->SetGraphicsRootConstantBufferView(
+                    rootParamId++,
+                    m_pLightCB->GetResource()->GetGPUVirtualAddress()
+                );
+                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pGBuffer->GetSrvUavDescHeap() };
+                pCommandListCompute->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
+                pCommandListCompute->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+            }
+        );
+    }
 
     void CreateGBuffer(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -128,20 +223,23 @@ public:
         UINT64 width,
         UINT height
     ) {
-        D3D12_RESOURCE_DESC resDesc{ CD3DX12_RESOURCE_DESC::Tex2D(
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                width,
-                height
-        ) };
-        resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_RESOURCE_DESC resDescs[3]{
+            //CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height),   // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
+        };
+        for (auto& resDesc : resDescs) {
+            resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
         FLOAT clearColor[] = { .6f, .4f, .4f, 1.f };
 
-        m_pGBuffer = Textures::CreateRTVs(
+        m_pGBuffer = Textures::CreateTexturePack(
             pDevice,
             pAllocator,
-            1,
-            resDesc,
-            &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
+            resDescs,
+            _countof(resDescs)
+            //, &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
         );
     }
 
@@ -151,18 +249,25 @@ public:
         UINT64 width,
         UINT height
     ) {
-        D3D12_RESOURCE_DESC resDesc{ CD3DX12_RESOURCE_DESC::Tex2D(
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                width,
-                height
-        ) };
-        resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        if (!m_pGBuffer) {
+            return;
+        }
+
+        D3D12_RESOURCE_DESC resDescs[3]{
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32_FLOAT, width, height),   // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32_FLOAT, width, height),   // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
+        };
+        for (auto& resDesc : resDescs) {
+            resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
         FLOAT clearColor[] = { .6f, .4f, .4f, 1.f };
 
         m_pGBuffer->Resize(
             pDevice,
             pAllocator,
-            resDesc,
+            resDescs,
+            _countof(resDescs),
             &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
         );
     }
@@ -170,27 +275,31 @@ public:
     void ClearGBuffer(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
     ) {
-        float clearColor[]{
-            .6f,
-            .4f,
-            .4f,
-            1.f
-        };
+        for (size_t i{}; i < m_pGBuffer->GetTexturesCount(); ++i) {
+            GPUResource::ResourceTransition(
+                pCommandList,
+                m_pGBuffer->GetTexture(i)->GetResource().Get(),
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            );
+            float clearColor[]{
+                .6f,
+                .4f,
+                .4f,
+                1.f
+            };
 
-        Texture::ClearRenderTarget(
-            pCommandList,
-            m_pGBuffer->GetTexture(0)->GetResource(),
-            m_pGBuffer->GetCpuRtvDescHandle(0),
-            clearColor
-        );
+            Texture::ClearRenderTarget(
+                pCommandList,
+                m_pGBuffer->GetTexture(i)->GetResource(),
+                m_pGBuffer->GetCpuRtvDescHandle(i),
+                clearColor
+            );
+        }
     }
 
     std::shared_ptr<Textures> GetGBuffer() {
         return m_pGBuffer;
-    }
-
-    void SetCurrentBackBuffer(size_t bufferId) {
-        //m_currGBufferId = bufferId;
     }
 
     void CopyRTV(

@@ -73,6 +73,19 @@ void Texture::CreateShaderResourceView(Microsoft::WRL::ComPtr<ID3D12Device2> pDe
 	);
 }
 
+void Texture::CreateUnorderedAccessView(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, const D3D12_CPU_DESCRIPTOR_HANDLE* pCPUDescHandle) {
+	if (!pCPUDescHandle) {
+		CreateDescriptorHeap(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		pCPUDescHandle = &m_pTextureDescHeap->GetCPUDescriptorHandleForHeapStart();
+	}
+	pDevice->CreateUnorderedAccessView(
+		GetResource().Get(),
+		nullptr,
+		&uavDesc,
+		*pCPUDescHandle
+	);
+}
+
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Texture::GetTextureDescHeap() const {
 	return m_pTextureDescHeap;
 }

@@ -25,7 +25,6 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 
 Renderer::~Renderer() {
     m_pScenes.clear();
-    m_pPostProcessing.reset();
     Flush();
 }
 
@@ -39,6 +38,7 @@ void Renderer::Initialize(HWND hWnd) {
     m_pAllocator = CreateAllocator(m_pDevice, pAdapter);
 
     m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    //m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
     m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
@@ -56,14 +56,6 @@ void Renderer::Initialize(HWND hWnd) {
     CreateDSVDescHeap();
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
-
-    m_pPostProcessing = SimplePostProcessing::CreateSimplePostProcessing(
-        m_pDevice,
-        m_pMeshAtlas,
-        m_pShaderAtlas,
-        m_pRootSignatureAtlas,
-        m_pPSOLibrary
-    );
 
     m_isInitialized = true;
 
@@ -88,6 +80,26 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 2
         m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        m_pScenes[2]->CreateGBuffer(
+            m_pDevice,
+            m_pAllocator,
+            m_numFrames,
+            m_clientWidth,
+            m_clientHeight
+        );
+        m_pScenes[2]->SetPostProcessing(TemporaryPostProcessingForDeferredShading::Create(
+            m_pDevice,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ));
+        m_pScenes[2]->InitDeferredShadingComputeObject(
+            m_pDevice,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        );
         m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
             m_pDevice,
             m_pAllocator,
@@ -150,6 +162,26 @@ void Renderer::Initialize(HWND hWnd) {
         // 4
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+        m_pScenes[4]->CreateGBuffer(
+            m_pDevice,
+            m_pAllocator,
+            m_numFrames,
+            m_clientWidth,
+            m_clientHeight
+        );
+        m_pScenes[4]->SetPostProcessing(TemporaryPostProcessingForDeferredShading::Create(
+            m_pDevice,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ));
+        m_pScenes[4]->InitDeferredShadingComputeObject(
+            m_pDevice,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        );
         m_pScenes[4]->AddStaticObject(TestTextureRenderObject::CreateModelFromGLTF(
             m_pDevice,
             m_pAllocator,
@@ -168,13 +200,13 @@ void Renderer::Initialize(HWND hWnd) {
         // cameras for all scenes
         for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
             m_pJobSystem->AddJob([&, sceneId]() {
-                m_pScenes.at(sceneId)->CreateGBuffer(
-                    m_pDevice,
-                    m_pAllocator,
-                    m_numFrames,
-                    m_clientWidth,
-                    m_clientHeight
-                );
+                //m_pScenes.at(sceneId)->CreateGBuffer(
+                //    m_pDevice,
+                //    m_pAllocator,
+                //    m_numFrames,
+                //    m_clientWidth,
+                //    m_clientHeight
+                //);
 
                 // dynamic camera
                 m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
@@ -410,7 +442,6 @@ void Renderer::Render() {
     );
     auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
     
-    scene->SetCurrentBackBuffer(m_currBackBufferId);
     //m_pJobSystem->AddJob([&]()  // Some small work doesn't need to be moved to jobs, just as example
     {
         //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
@@ -430,13 +461,17 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
-        GPUResource::ResourceTransition(
-            commandListBeforeFrame->m_pCommandList,
-            scene->GetGBuffer()->GetTexture(0)->GetResource().Get(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
+        if (scene->GetGBuffer()) {
+            scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
+        }
+        else {
+            Texture::ClearRenderTarget(
+                commandListBeforeFrame->m_pCommandList,
+                backBuffer,
+                rtv,
+                nullptr
+            );
+        }
 
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
     }//);
@@ -474,28 +509,11 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
     };
     m_pJobSystem->AddJob([&]() { // Some small work doesn't need to be moved to jobs, just as example? but here will be postprocessing or vfx or whatever else? so it will fit as job
-        //scene->CopyRTV(
-        //    commandListAfterFrame->m_pCommandList,
-        //    m_pBackBuffers.at(m_currBackBufferId)
-        //);
-
-        std::shared_ptr<Textures> pGBuffer{ scene->GetGBuffer() };
-        GPUResource::ResourceTransition(
-            commandListAfterFrame->m_pCommandList,
-            pGBuffer->GetTexture(0)->GetResource(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-        );
-        m_pPostProcessing->Render(
+        scene->RenderPostProcessing(
             commandListAfterFrame->m_pCommandList,
             m_viewport,
             m_scissorRect,
-            rtv,
-            [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
-                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ pGBuffer->GetSRVDescHeap() };
-                pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
-                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pGBuffer->GetGpuSrvDescHandle(0));
-            }
+            rtv
         );
         GPUResource::ResourceTransition(
             commandListAfterFrame->m_pCommandList,
@@ -506,6 +524,7 @@ void Renderer::Render() {
 
         commandListAfterFrame->SetReadyForExection();
     });
+
 
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]

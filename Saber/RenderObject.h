@@ -74,7 +74,8 @@ public:
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT rect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
+        size_t rtvsCount,
         D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView,
         std::function<
             void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)

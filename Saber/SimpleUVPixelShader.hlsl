@@ -1,3 +1,5 @@
+#include "BlinnPhongLighting.hlsli"
+
 #define LIGHTS_MAX_COUNT 10
 
 struct SceneBuffer
@@ -7,13 +9,6 @@ struct SceneBuffer
 };
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
-struct Light
-{
-    float4 position;
-    float4 diffuseColorAndPower;
-    float4 specularColorAndPower;
-};
 
 struct LightBuffer
 {
@@ -36,70 +31,6 @@ Texture2D t1 : register(t0);
 Texture2D t2 : register(t1);
 SamplerState s1 : register(s0);
 
-struct Lighting
-{
-    float3 diffuse;
-    float3 specular;
-};
-
-Lighting GetPointLight(
-    Light light,
-    float3 position,
-    float3 cameraPosition,
-    float3 normal,
-    float shininess
-)
-{
-    Lighting lighting;
-    lighting.diffuse = 0.f;
-    lighting.specular = 0.f;
-    
-    if (light.diffuseColorAndPower.w <= 0.f) {
-        return lighting;
-    }
-    
-    float3 lightDir = light.position.xyz - position;
-    float lightDist = length(lightDir);
-    lightDir = lightDir / lightDist;
-    
-    float attenuation = saturate(1.f / (lightDist * lightDist));
-    
-    // diffuse part
-    {
-        float NdotL = dot(normal, lightDir);
-        float diffuseIntensity = saturate(NdotL);
-        
-        lighting.diffuse = diffuseIntensity * attenuation * light.diffuseColorAndPower.xyz * light.diffuseColorAndPower.w;
-    }
-    
-    if (shininess <= 0.f || light.specularColorAndPower.w <= 0.f)
-    {
-        return lighting;
-    }
-
-    
-    float3 viewDir = normalize(position - cameraPosition);
-    float specularIntensity;
-    
-    // specular phong
-    //{
-    //    float3 R = reflect(-lightDir, normal);
-    //    float VdotR = dot(viewDir, R);
-    //    specularIntensity = pow(saturate(VdotR), shininess);
-    //}
-    
-    // specular blinn
-    {
-        float3 H = normalize(lightDir + viewDir);
-        float NdotH = dot(normal, H);
-        specularIntensity = pow(saturate(NdotH), shininess);
-    }
-    
-    lighting.specular = specularIntensity * attenuation * light.specularColorAndPower.xyz * light.specularColorAndPower.w;
-
-    return lighting;
-}
-
 struct PSInput
 {
     float3 worldPos : POSITION;
@@ -108,7 +39,15 @@ struct PSInput
     float2 uv : TEXCOORD;
 };
 
-float4 main(PSInput input) : SV_TARGET
+struct PSOutput
+{
+    //float4 result : SV_Target0;
+    float4 position : SV_Target0;
+    float4 normal : SV_Target1;
+    float4 color : SV_Target2;
+};
+
+PSOutput main(PSInput input)
 {
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
     float3 t = normalize(input.tang);
@@ -131,6 +70,13 @@ float4 main(PSInput input) : SV_TARGET
         lightColor += lighting.specular;
     }
     
-    float3 finalColor = t1.Sample(s1, input.uv).xyz * lightColor;
-    return float4(finalColor.xyz, 0.f);
+    float4 texColor = t1.Sample(s1, input.uv);
+    float3 finalColor = texColor.xyz * lightColor;
+    
+    PSOutput output;
+    output.position = float4(input.worldPos, 1.f);
+    output.normal = float4(norm, 0.f);
+    output.color = texColor;
+    
+    return output;
 }

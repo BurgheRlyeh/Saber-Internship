@@ -1,6 +1,16 @@
 #include "PostProcessing.h"
 
-void PostProcessing::Render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, D3D12_VIEWPORT viewport, D3D12_RECT rect, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView, std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter) {
+void PostProcessing::Render(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT rect,
+    D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
+    size_t rtvsCount,
+    std::function<void(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>,
+        UINT& rootParameterIndex
+    )> outerRootParametersSetter
+) {
     pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
@@ -9,7 +19,7 @@ void PostProcessing::Render(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> p
     pCommandListDirect->RSSetViewports(1, &viewport);
     pCommandListDirect->RSSetScissorRects(1, &rect);
 
-    pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, nullptr);
+    pCommandListDirect->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, nullptr);
 
     RenderJob(pCommandListDirect);
 

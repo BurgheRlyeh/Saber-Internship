@@ -103,7 +103,7 @@ std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 // Execute a command list.
 // Returns the fence value to wait for for this command list.
 uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandList) {
-	ThrowIfFailed(commandList->m_pCommandList->Close());
+ 	ThrowIfFailed(commandList->m_pCommandList->Close());
 	
 	ID3D12CommandAllocator* pCommandAllocator{};
 	uint32_t dataSize{ sizeof(pCommandAllocator) };
@@ -146,6 +146,9 @@ uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 	uint64_t lastFrameValue{};
 	bool waitFence { true };
 	for (std::unique_ptr<PrioritySet>& priorityVector : m_commandListSets) {
+		if (!priorityVector) {
+			continue;
+		}
 		std::unordered_multiset<std::shared_ptr<CommandList>>& pCommandLists{ priorityVector->pCommandLists };
 
 		auto iter = pCommandLists.begin();

@@ -81,8 +81,13 @@ public:
 		const D3D12_DESCRIPTOR_HEAP_FLAGS& flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
 	);
 	void CreateShaderResourceView(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, 
 		const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+		const D3D12_CPU_DESCRIPTOR_HANDLE* pCPUDescHandle = nullptr
+	);
+	void CreateUnorderedAccessView(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc,
 		const D3D12_CPU_DESCRIPTOR_HANDLE* pCPUDescHandle = nullptr
 	);
 

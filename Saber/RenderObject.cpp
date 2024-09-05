@@ -1,6 +1,11 @@
 #include "RenderObject.h"
 
-void RenderObject::InitMaterial(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, const RootSignatureData& rootSignatureData, const ShaderData& shaderData, PipelineStateData& pipelineStateData) {
+void RenderObject::InitMaterial(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    const RootSignatureData& rootSignatureData,
+    const ShaderData& shaderData,
+    PipelineStateData& pipelineStateData
+) {
     m_pRootSignatureResource = rootSignatureData.pRootSignatureAtlas->Assign(
         rootSignatureData.rootSignatureFilename,
         pDevice,
@@ -27,8 +32,9 @@ void RenderObject::Render(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
     D3D12_VIEWPORT viewport,
     D3D12_RECT rect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-    D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView,
+    D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
+    size_t rtvsCount,
+    D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
     std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -41,7 +47,7 @@ void RenderObject::Render(
     pCommandListDirect->RSSetViewports(1, &viewport);
     pCommandListDirect->RSSetScissorRects(1, &rect);
 
-    pCommandListDirect->OMSetRenderTargets(1, &renderTargetView, FALSE, pDepthStencilView);
+    pCommandListDirect->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, pDSV);
 
     RenderJob(pCommandListDirect);
 

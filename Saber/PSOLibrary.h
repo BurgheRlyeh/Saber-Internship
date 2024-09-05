@@ -27,7 +27,24 @@ public:
 		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
 	);
 
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> Find(
+		LPCWSTR filename,
+		const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
+	);
+
 	bool Add(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		LPCWSTR filename,
+		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
+	);
+
+	bool Add(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		LPCWSTR filename,
+		const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> Assign(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		LPCWSTR filename,
 		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
@@ -36,6 +53,6 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Assign(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		LPCWSTR filename,
-		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
+		const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
 	);
 };

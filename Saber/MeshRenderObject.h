@@ -68,17 +68,14 @@ class TestRenderObject : protected MeshRenderObject {
 protected:
     static D3D12_GRAPHICS_PIPELINE_STATE_DESC CreatePipelineStateDesc(
         D3D12_INPUT_ELEMENT_DESC* inputLayout,
-        size_t inputLayoutSize
+        size_t inputLayoutSize,
+        const D3D12_RT_FORMAT_ARRAY& rtvFormats
     ) {
         CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc{ D3D12_DEFAULT };
         depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
         CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT };
         rasterizerDesc.FrontCounterClockwise = true;
-
-        D3D12_RT_FORMAT_ARRAY rtvFormats{};
-        rtvFormats.NumRenderTargets = 1;
-        rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
         CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
         pipelineStateStream.InputLayout = { inputLayout, static_cast<UINT>(inputLayoutSize) };
@@ -137,6 +134,9 @@ public:
 
         MeshRenderObject obj{ pDevice, pAllocator, modelMatrix };
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTriangle");
+
+        D3D12_RT_FORMAT_ARRAY rtvFormats{ .NumRenderTargets{ 1 } };
+        rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -151,7 +151,7 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout))
+                CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout), rtvFormats)
             )
         );
 
@@ -216,6 +216,9 @@ public:
 
         MeshRenderObject obj{ pDevice, pAllocator, modelMatrix };
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleCube");
+
+        D3D12_RT_FORMAT_ARRAY rtvFormats{ .NumRenderTargets{ 1 } };
+        rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -230,7 +233,7 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout))
+                CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout), rtvFormats)
             )
         );
 
@@ -358,7 +361,10 @@ public:
         MeshRenderObject obj{ pDevice, pAllocator, modelMatrix };
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
 
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
+        D3D12_RT_FORMAT_ARRAY rtvFormats{};
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -373,9 +379,11 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS))
+                CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS), rtvFormats)
             )
         );
+
+        LPCWSTR textures[]{ textureFilename, normalMapFilename };
         obj.BindTextures(Textures::LoadSRVsFromDDS(
             pDevice,
             pCommandQueueCopy,
@@ -428,7 +436,10 @@ public:
 
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, data, L"MeshGLTF");
 
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
+        D3D12_RT_FORMAT_ARRAY rtvFormats{};
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -443,9 +454,11 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA))
+                CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), rtvFormats)
             )
         );
+
+        LPCWSTR textures[]{ textureFilename, normalMapFilename };
         obj.BindTextures(Textures::LoadSRVsFromDDS(
             pDevice,
             pCommandQueueCopy,
