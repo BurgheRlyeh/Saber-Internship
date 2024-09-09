@@ -224,7 +224,6 @@ public:
         UINT height
     ) {
         D3D12_RESOURCE_DESC resDescs[3]{
-            //CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height),   // position
             CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // position
             CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // normals
             CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
@@ -239,7 +238,6 @@ public:
             pAllocator,
             resDescs,
             _countof(resDescs)
-            //, &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
         );
     }
 
@@ -254,8 +252,8 @@ public:
         }
 
         D3D12_RESOURCE_DESC resDescs[3]{
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32_FLOAT, width, height),   // position
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32_FLOAT, width, height),   // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // normals
             CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
         };
         for (auto& resDesc : resDescs) {
@@ -267,8 +265,7 @@ public:
             pDevice,
             pAllocator,
             resDescs,
-            _countof(resDescs),
-            &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_R8G8B8A8_UNORM, clearColor)
+            _countof(resDescs)
         );
     }
 
