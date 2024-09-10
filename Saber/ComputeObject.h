@@ -129,32 +129,16 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {
         CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[2]{};
-        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-        rangeDescs[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
+        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
+        rangeDescs[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 
         CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
         rootParameters[0].InitAsConstantBufferView(0);
         rootParameters[1].InitAsConstantBufferView(1);
         rootParameters[2].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs);
 
-        D3D12_STATIC_SAMPLER_DESC sampler{
-            .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },
-            .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .MipLODBias{},
-            .MaxAnisotropy{},
-            .ComparisonFunc{ D3D12_COMPARISON_FUNC_NEVER },
-            .BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
-            .MinLOD{},
-            .MaxLOD{ D3D12_FLOAT32_MAX },
-            .ShaderRegister{},
-            .RegisterSpace{},
-            .ShaderVisibility{ D3D12_SHADER_VISIBILITY_PIXEL }
-        };
-
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);
 
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
         if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {

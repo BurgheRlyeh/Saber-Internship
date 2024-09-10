@@ -38,7 +38,7 @@ void Renderer::Initialize(HWND hWnd) {
     m_pAllocator = CreateAllocator(m_pDevice, pAdapter);
 
     m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    //m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
     m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
@@ -87,7 +87,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_clientWidth,
             m_clientHeight
         );
-        m_pScenes[2]->SetPostProcessing(TemporaryPostProcessingForDeferredShading::Create(
+        m_pScenes[2]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
             m_pShaderAtlas,
@@ -169,7 +169,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_clientWidth,
             m_clientHeight
         );
-        m_pScenes[4]->SetPostProcessing(TemporaryPostProcessingForDeferredShading::Create(
+        m_pScenes[4]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
             m_pShaderAtlas,
@@ -343,9 +343,9 @@ void Renderer::PerformResize() {
     m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_clientWidth), static_cast<float>(m_clientHeight));
 
     // TODO update during switch
-    m_pScenes[m_currSceneId]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
 
     for (size_t i{ 1 }; i < m_pScenes.size(); ++i) {
+        m_pScenes[i]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
         m_pScenes.at(i)->ResizeGBuffer(
             m_pDevice,
             m_pAllocator,
@@ -491,8 +491,13 @@ void Renderer::Render() {
         commandListForStaticObjects->SetReadyForExection();
     });
 
+    uint64_t fenceValueBeforeDeferredShading{};
+    uint64_t fenceValueAfterDeferredShading{};
+
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2)
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2, [] {},
+            [&]() { fenceValueBeforeDeferredShading = m_pCommandQueueDirect->Signal(); }
+        )
     };
     m_pJobSystem->AddJob([&]() {
         scene->RenderDynamicObjects(
@@ -505,16 +510,47 @@ void Renderer::Render() {
         commandListForDynamicObjects->SetReadyForExection();
     });
 
+    std::shared_ptr<CommandList> commandListForDeferredShading{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3,
+            [&] {
+                m_pCommandQueueDirect->WaitForFenceValue(fenceValueBeforeDeferredShading);
+            },
+            [&] {
+                fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal();
+            }
+        )
+    };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3)
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 4,
+            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterDeferredShading); }
+        )
     };
     m_pJobSystem->AddJob([&]() { // Some small work doesn't need to be moved to jobs, just as example? but here will be postprocessing or vfx or whatever else? so it will fit as job
+        //scene->RenderPostProcessing(
+        //    commandListAfterFrame->m_pCommandList,
+        //    m_viewport,
+        //    m_scissorRect,
+        //    rtv
+        //);
+
+        scene->RunDeferredShading(
+            commandListForDeferredShading->m_pCommandList,
+            m_clientWidth,
+            m_clientHeight
+        );
+        commandListForDeferredShading->SetReadyForExection();
+
+        //scene->CopyRTV(
+        //    commandListAfterFrame->m_pCommandList,
+        //    backBuffer
+        //);
         scene->RenderPostProcessing(
             commandListAfterFrame->m_pCommandList,
             m_viewport,
             m_scissorRect,
             rtv
         );
+
         GPUResource::ResourceTransition(
             commandListAfterFrame->m_pCommandList,
             backBuffer,

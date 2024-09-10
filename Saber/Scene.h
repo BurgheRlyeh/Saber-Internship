@@ -137,16 +137,6 @@ public:
             return;
         }
 
-        //Texture::ClearRenderTarget(
-        //    commandListAfterFrame->m_pCommandList,
-        //    pGBuffer->GetTexture(0)->GetResource(),
-        //    pGBuffer->GetCpuRtvDescHandle(0),
-        //    nullptr
-        //);
-
-        //scene->RunDeferredShading(pCommandListCompute->m_pCommandList, m_clientWidth, m_clientHeight);
-        //pCommandListCompute->SetReadyForExection();
-
         GPUResource::ResourceTransition(
             pCommandListDirect,
             m_pGBuffer->GetTexture(0)->GetResource(),
@@ -160,18 +150,9 @@ public:
             &renderTargetView,
             1,
             [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
-                pCommandListDirect->SetGraphicsRootConstantBufferView(
-                    rootParamId++,
-                    m_sceneCBDynamicAllocation.gpuAddress
-                );
-                pCommandListDirect->SetGraphicsRootConstantBufferView(
-                    rootParamId++,
-                    m_pLightCB->GetResource()->GetGPUVirtualAddress()
-                );
-
                 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ m_pGBuffer->GetSrvUavDescHeap() };
                 pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
-                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+                pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(3));
             }
         );
     }
@@ -195,23 +176,27 @@ public:
         UINT width,
         UINT height
     ) {
+        if (!m_pDeferredShadingComputeObject) {
+            return;
+        }
+
         m_pDeferredShadingComputeObject->Dispatch(
             pCommandListCompute,
             width,
             height,
             1,
             [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
-                pCommandListCompute->SetGraphicsRootConstantBufferView(
+                pCommandListCompute->SetComputeRootConstantBufferView(
                     rootParamId++,
                     m_sceneCBDynamicAllocation.gpuAddress
                 );
-                pCommandListCompute->SetGraphicsRootConstantBufferView(
+                pCommandListCompute->SetComputeRootConstantBufferView(
                     rootParamId++,
                     m_pLightCB->GetResource()->GetGPUVirtualAddress()
                 );
                 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pGBuffer->GetSrvUavDescHeap() };
                 pCommandListCompute->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
-                pCommandListCompute->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+                pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
             }
         );
     }
@@ -223,15 +208,16 @@ public:
         UINT64 width,
         UINT height
     ) {
-        D3D12_RESOURCE_DESC resDescs[3]{
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // position
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // normals
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
+        D3D12_RESOURCE_DESC resDescs[4]{
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),    // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),    // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height),        // albedo
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)         // resulting ua
         };
-        for (auto& resDesc : resDescs) {
-            resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        for (size_t i{}; i < 4; ++i) {
+            resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         }
-        FLOAT clearColor[] = { .6f, .4f, .4f, 1.f };
+        resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
         m_pGBuffer = Textures::CreateTexturePack(
             pDevice,
@@ -251,15 +237,16 @@ public:
             return;
         }
 
-        D3D12_RESOURCE_DESC resDescs[3]{
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // position
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),   // normals
-            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)     // albedo
+        D3D12_RESOURCE_DESC resDescs[4]{
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),    // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, width, height),    // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height),        // albedo
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height)         // resulting ua
         };
-        for (auto& resDesc : resDescs) {
-            resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        for (size_t i{}; i < 4; ++i) {
+            resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         }
-        FLOAT clearColor[] = { .6f, .4f, .4f, 1.f };
+        resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
         m_pGBuffer->Resize(
             pDevice,
@@ -279,57 +266,18 @@ public:
                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                 D3D12_RESOURCE_STATE_RENDER_TARGET
             );
-            float clearColor[]{
-                .6f,
-                .4f,
-                .4f,
-                1.f
-            };
 
             Texture::ClearRenderTarget(
                 pCommandList,
                 m_pGBuffer->GetTexture(i)->GetResource(),
                 m_pGBuffer->GetCpuRtvDescHandle(i),
-                clearColor
+                nullptr
             );
         }
     }
 
     std::shared_ptr<Textures> GetGBuffer() {
         return m_pGBuffer;
-    }
-
-    void CopyRTV(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-        Microsoft::WRL::ComPtr<ID3D12Resource> pRenderTarget
-    ) {
-        Microsoft::WRL::ComPtr<ID3D12Resource> pTex{
-            m_pGBuffer->GetTexture(0)->GetResource()
-        };
-
-        pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            pTex.Get(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_COPY_SOURCE
-        ));
-        pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            pRenderTarget.Get(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_COPY_DEST
-        ));
-
-        pCommandList->CopyResource(pRenderTarget.Get(), pTex.Get());
-
-        pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            pTex.Get(),
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        ));
-        pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            pRenderTarget.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        ));
     }
 
     void UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue);

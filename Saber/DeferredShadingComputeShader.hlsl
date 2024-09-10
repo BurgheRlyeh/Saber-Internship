@@ -19,13 +19,11 @@ struct LightBuffer
 
 ConstantBuffer<LightBuffer> LightCB : register(b1);
 
-RWTexture2D<float4> output : register(u0);
-Texture2D<float3> position : register(t0);
-Texture2D<float3> normal : register(t1);
+Texture2D<float4> position : register(t0);
+Texture2D<float4> normal : register(t1);
 Texture2D<float4> albedo : register(t2);
 
-
-SamplerState s1 : register(s0);
+RWTexture2D<float4> output : register(u0);
 
 [numthreads(1, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
@@ -36,18 +34,17 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     {
         Lighting lighting = GetPointLight(
             LightCB.lights[i],
-            position[pixel],
-            position[pixel] - SceneCB.cameraPosition.xyz,
-            normal[pixel],
+            position.Load(DTid).xyz,
+            position.Load(DTid).xyz - SceneCB.cameraPosition.xyz,
+            normal.Load(DTid).xyz,
             10.f
         );
-
+        
         lightColor += lighting.diffuse;
         lightColor += lighting.specular;
     }
     
-    float3 finalColor = albedo[pixel].xyz * lightColor;
+    float3 finalColor = albedo.Load(DTid).xyz * lightColor;
     
-    //output[pixel] = float4(finalColor, 1.f);
-    output[pixel] = float4(1.f, 0.f, 0.f, 1.f);
+    output[pixel] = float4(finalColor, 1.f);
 }
