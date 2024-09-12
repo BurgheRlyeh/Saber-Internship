@@ -11,39 +11,6 @@ class Texture : public GPUResource {
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pTextureDescHeap{};
 
 public:
-	static void ClearRenderTarget(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-		Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer,
-		D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
-		const float* clearColor
-	) {
-		// Before the render target can be cleared, it must be transitioned to the RENDER_TARGET state
-		GPUResource::ResourceTransition(
-			pCommandList,
-			pBuffer,
-			D3D12_RESOURCE_STATE_PRESENT,
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		);
-
-		if (!clearColor) {
-			static float defaultColor[] = {
-				.4f,   // 
-				.6f,   // 
-				.9f,   // 
-				1.f
-			};
-
-			clearColor = defaultColor;
-		}
-
-		pCommandList->ClearRenderTargetView(
-			cpuDescHandle,
-			clearColor,
-			0,
-			nullptr
-		);
-	}
-
 	Texture() = delete;
 	using GPUResource::GPUResource;
 	Texture(
@@ -110,3 +77,30 @@ private:
 		DirectX::DDS_FLAGS flags = DirectX::DDS_FLAGS_NONE
 	);
 };
+
+static void ClearRenderTarget(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+	const float* clearColor = nullptr
+) {
+	assert(pBuffer->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+
+	if (!clearColor) {
+		static float defaultColor[] = {
+			.4f,
+			.6f,
+			.9f,
+			1.f
+		};
+
+		clearColor = defaultColor;
+	}
+
+	pCommandList->ClearRenderTargetView(
+		cpuDescHandle,
+		clearColor,
+		0,
+		nullptr
+	);
+}

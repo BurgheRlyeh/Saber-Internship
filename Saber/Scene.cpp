@@ -17,6 +17,14 @@ Scene::Scene(
     );
 }
 
+void Scene::SetSceneReadiness(bool value) {
+    m_isSceneReady.store(value);
+}
+
+bool Scene::IsSceneReady() {
+    return m_isSceneReady.load();
+}
+
 void Scene::AddStaticObject(const MeshRenderObject& object) {
     std::scoped_lock<std::mutex> lock(m_staticObjectsMutex);
     m_pStaticObjects.push_back(std::make_shared<MeshRenderObject>(object));
@@ -279,6 +287,91 @@ void Scene::RenderDynamicObjects(
             outerRootParametersSetter
         );
     }
+}
+
+void Scene::RenderPostProcessing(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, D3D12_VIEWPORT viewport, D3D12_RECT scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView) {
+    if (!m_pGBuffer) {
+        return;
+    }
+
+    GPUResource::ResourceTransition(
+        pCommandListDirect,
+        m_pGBuffer->GetTexture(0)->GetResource(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    );
+    m_pPostProcessing->Render(
+        pCommandListDirect,
+        viewport,
+        scissorRect,
+        &renderTargetView,
+        1,
+        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ m_pGBuffer->GetSrvUavDescHeap() };
+            pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(3));
+        }
+    );
+}
+
+void Scene::InitDeferredShadingComputeObject(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas, std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas, std::shared_ptr<PSOLibrary> pPSOLibrary) {
+    m_pDeferredShadingComputeObject = DeferredShading::CreateDefferedShadingComputeObject(
+        pDevice,
+        pShaderAtlas,
+        pRootSignatureAtlas,
+        pPSOLibrary
+    );
+}
+
+void Scene::RunDeferredShading(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT width, UINT height) {
+    if (!m_pDeferredShadingComputeObject) {
+        return;
+    }
+
+    m_pDeferredShadingComputeObject->Dispatch(
+        pCommandListCompute,
+        width,
+        height,
+        1,
+        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
+            pCommandListCompute->SetComputeRootConstantBufferView(
+                rootParamId++,
+                m_sceneCBDynamicAllocation.gpuAddress
+            );
+            pCommandListCompute->SetComputeRootConstantBufferView(
+                rootParamId++,
+                m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            );
+            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pGBuffer->GetSrvUavDescHeap() };
+            pCommandListCompute->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+        }
+    );
+}
+
+void Scene::SetGBuffer(std::shared_ptr<Textures> pGBuffer) {
+    m_pGBuffer = pGBuffer;
+}
+
+void Scene::ClearGBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
+    for (size_t i{}; i < m_pGBuffer->GetTexturesCount(); ++i) {
+        GPUResource::ResourceTransition(
+            pCommandList,
+            m_pGBuffer->GetTexture(i)->GetResource().Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+
+        ClearRenderTarget(
+            pCommandList,
+            m_pGBuffer->GetTexture(i)->GetResource(),
+            m_pGBuffer->GetCpuRtvDescHandle(i)
+        );
+    }
+}
+
+std::shared_ptr<Textures> Scene::GetGBuffer() {
+    return m_pGBuffer;
 }
 
 void Scene::UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {

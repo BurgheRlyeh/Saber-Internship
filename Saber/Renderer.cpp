@@ -59,6 +59,9 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_isInitialized = true;
 
+    m_pGBuffers.push_back(std::make_shared<Textures>(m_pDevice, 4));
+    ResizeGBuffers();
+
     // Create scenes
     {
         m_pScenes.resize(5);
@@ -80,13 +83,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         // 2
         m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        m_pScenes[2]->CreateGBuffer(
-            m_pDevice,
-            m_pAllocator,
-            m_numFrames,
-            m_clientWidth,
-            m_clientHeight
-        );
+        m_pScenes[2]->SetGBuffer(m_pGBuffers[0]);
         m_pScenes[2]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
@@ -162,13 +159,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 4
         m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
         std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-        m_pScenes[4]->CreateGBuffer(
-            m_pDevice,
-            m_pAllocator,
-            m_numFrames,
-            m_clientWidth,
-            m_clientHeight
-        );
+        m_pScenes[4]->SetGBuffer(m_pGBuffers[0]);
         m_pScenes[4]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
@@ -346,21 +337,13 @@ void Renderer::PerformResize() {
 
     for (size_t i{ 1 }; i < m_pScenes.size(); ++i) {
         m_pScenes[i]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
-        m_pScenes.at(i)->ResizeGBuffer(
-            m_pDevice,
-            m_pAllocator,
-            m_clientWidth,
-            m_clientHeight
-        );
     }
     
     ResizeDepthBuffer();
+    ResizeGBuffers();
 }
 
 void Renderer::ResizeDepthBuffer() {
-    // Flush any GPU commands that might be referencing the depth buffer.
-    Flush();
-
     // Resize screen dependent resources.
     // Create a depth buffer.
     D3D12_CLEAR_VALUE optimizedClearValue{
@@ -465,11 +448,10 @@ void Renderer::Render() {
             scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
         }
         else {
-            Texture::ClearRenderTarget(
+            ClearRenderTarget(
                 commandListBeforeFrame->m_pCommandList,
                 backBuffer,
-                rtv,
-                nullptr
+                rtv
             );
         }
 

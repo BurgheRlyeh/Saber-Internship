@@ -96,6 +96,8 @@ class Renderer {
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
 
+    std::vector<std::shared_ptr<Textures>> m_pGBuffers{};
+
     // Atlases
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
     std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
@@ -141,6 +143,27 @@ private:
     void RenderLoop();
 
     void ResizeDepthBuffer();
+    void ResizeGBuffers() {
+        D3D12_RESOURCE_DESC resDescs[4]{
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // position
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // normals
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight),        // albedo
+            CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight)         // resulting ua
+        };
+        for (size_t i{}; i < 4; ++i) {
+            resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
+        resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        for (auto& pGBuffer : m_pGBuffers) {
+            pGBuffer->Resize(
+                m_pDevice,
+                m_pAllocator,
+                resDescs,
+                _countof(resDescs)
+            );
+        }
+    }
 
     bool CheckTearingSupport();
 
