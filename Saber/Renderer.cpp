@@ -55,7 +55,26 @@ void Renderer::Initialize(HWND hWnd) {
 
     CreateDSVDescHeap();
 
-    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"psolibrary");
+    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");
+
+    m_pGpuResLibrary = std::make_shared<GPUResourceLibrary<>>(m_pDevice, L"GPUResourceLibrary");
+
+    D3D12_RESOURCE_DESC resDescs[4]{
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // position
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // normals
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight),        // albedo
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight)         // resulting ua
+    };
+    for (size_t i{}; i < 3; ++i) {
+        resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    }
+    resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    //m_pGpuResLibrary->AddRenderTarget(L"gbuffer_position", std::make_shared<Texture>(
+    //    m_pAllocator,
+    //    GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+    //    GPUResource::ResourceData{ resDescs[0], D3D12_RESOURCE_STATE_RENDER_TARGET }
+    //));
 
     m_isInitialized = true;
 
@@ -384,6 +403,28 @@ void Renderer::ResizeDepthBuffer() {
     );
 }
 
+void Renderer::ResizeGBuffers() {
+    D3D12_RESOURCE_DESC resDescs[4]{
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // position
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // normals
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight),        // albedo
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight)         // resulting ua
+    };
+    for (size_t i{}; i < 4; ++i) {
+        resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    }
+    resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    for (auto& pGBuffer : m_pGBuffers) {
+        pGBuffer->Resize(
+            m_pDevice,
+            m_pAllocator,
+            resDescs,
+            _countof(resDescs)
+        );
+    }
+}
+
 void Renderer::Update() {
     m_frameCounter++;
     auto t1 = m_clock.now();
@@ -438,7 +479,7 @@ void Renderer::Render() {
             nullptr
         );
 
-        GPUResource::ResourceTransition(
+        ResourceTransition(
             commandListBeforeFrame->m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_PRESENT,
@@ -533,7 +574,7 @@ void Renderer::Render() {
             rtv
         );
 
-        GPUResource::ResourceTransition(
+        ResourceTransition(
             commandListAfterFrame->m_pCommandList,
             backBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,

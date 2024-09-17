@@ -12,19 +12,29 @@ Textures::Textures(
 	CreateDescriptorHeaps(pDevice, texturesCount);
 }
 
-void Textures::LoadFromDDS(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<CommandQueue> pCommandQueueCopy, std::shared_ptr<CommandQueue> pCommandQueueDirect, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, const LPCWSTR* filenames, size_t texturesCount) {
+void Textures::LoadFromDDS(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<CommandQueue> pCommandQueueCopy,
+	std::shared_ptr<CommandQueue> pCommandQueueDirect,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	const LPCWSTR* filenames,
+	size_t texturesCount
+) {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuDescHandle{
 		GetSrvUavDescHeap()->GetCPUDescriptorHandleForHeapStart()
 	};
 	for (size_t i{}; i < GetTexturesCount(); ++i) {
-		m_pTextures[i] = std::make_shared<Texture>(
+		auto pTex = std::make_shared<DDSTexture>(
 			pDevice,
+			pAllocator,
 			pCommandQueueCopy,
 			pCommandQueueDirect,
-			pAllocator,
-			filenames[i],
-			&cpuDescHandle
+			filenames[i]
 		);
+		//pTex->CreateShaderResourceView(pDevice, cpuDescHandle);
+		pTex->CreateShaderResourceView(pDevice, cpuDescHandle, pTex->GetSrvDesc());
+
+		m_pTextures.push_back(pTex);
 
 		cpuDescHandle.Offset(1, m_srvUavHandleIncSize);
 	}
@@ -40,52 +50,65 @@ void Textures::Resize(
 	if (!m_pRTVDescHeap || !m_pSrvUavDescHeap) {
 		return;
 	}
+	m_pTextures.clear();
+	m_pTextures.reserve(texturesCount);
+
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle{ GetCpuRtvDescHandle() };
 	CD3DX12_CPU_DESCRIPTOR_HANDLE srvUavHandle{ GetCpuSrvUavDescHandle() };
 
+	//m_resourcesCounter = {};
 	for (size_t i{}; i < texturesCount; ++i) {
-		m_pTextures[i] = std::make_shared<Texture>(
+		m_pTextures.push_back(std::make_shared<Texture>(
 			pAllocator,
-			resourceDesc[i],
-			D3D12_HEAP_TYPE_DEFAULT,
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			pClearValue
-		);
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceData{ resourceDesc[i], D3D12_RESOURCE_STATE_RENDER_TARGET, pClearValue }
+		));
 
+		bool isRt{};
 		if (resourceDesc[i].Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
 			m_pTextures[i]->CreateRenderTargetView(
 				pDevice,
-				&rtvHandle
+				rtvHandle
 			);
+			isRt = true;
 		}
+		if (isRt) {
+			rtvHandle.Offset(1, m_rtvHandleIncSize);
+			//++m_resourcesCounter.rtvId;
+		}
+			
+		bool isSrvUav{};
 		if (!(resourceDesc[i].Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
-				.Format{ resourceDesc[i].Format },
-				.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
-				.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
-				.Texture2D{
-					.MipLevels{ 1 }
-				}
-			};
+			//D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+			//	.Format{ resourceDesc[i].Format },
+			//	.ViewDimension{ ResToSrvDim(resourceDesc[i].Dimension) },
+			//	.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
+			//	.Texture2D{
+			//		.MipLevels{ 1 }
+			//	}
+			//};
 			m_pTextures[i]->CreateShaderResourceView(
 				pDevice,
-				srvDesc,
-				&srvUavHandle
+				srvUavHandle
 			);
+			isSrvUav = true;
 		}
 		if (resourceDesc[i].Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
 				.Format{ resourceDesc[i].Format },
-				.ViewDimension{ D3D12_UAV_DIMENSION_TEXTURE2D }
+				.ViewDimension{ ResToUavDim(resourceDesc[i].Dimension) }
 			};
 			m_pTextures[i]->CreateUnorderedAccessView(
 				pDevice,
-				uavDesc,
-				&srvUavHandle
+				srvUavHandle,
+				&uavDesc
 			);
+			isSrvUav = true;
 		}
-		rtvHandle.Offset(1, m_rtvHandleIncSize);
-		srvUavHandle.Offset(1, m_srvUavHandleIncSize);
+		if (isSrvUav) {
+			srvUavHandle.Offset(1, m_srvUavHandleIncSize);
+			//++m_resourcesCounter.srvUavId;
+		}
 	}
 }
 
@@ -106,7 +129,7 @@ void Textures::CreateDescriptorHeaps(
 	);
 
 	m_pTextures.clear();
-	m_pTextures.resize(texturesCount);
+	m_pTextures.reserve(texturesCount);
 }
 
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Textures::CreateTextureDescHeap(

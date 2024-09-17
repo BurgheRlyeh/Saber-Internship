@@ -61,34 +61,41 @@ void RingBuffer::ReleaseCompletedFrames(uint64_t completedFenceValue) {
     }
 }
 
-GPURingBuffer::GPURingBuffer(Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, size_t capacity, bool isCPUAccessable) : RingBuffer(capacity)
-, m_cpuVirtualAddress(nullptr)
-, m_gpuVirtualAddress(0)
+GPURingBuffer::GPURingBuffer(
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    size_t capacity,
+    bool isCPUAccessable
+) : RingBuffer(capacity),
+    m_cpuVirtualAddress(nullptr),
+    m_gpuVirtualAddress(0)
 {
-    m_pBuffer = std::make_shared<GPUResource>();
 
     if (isCPUAccessable) {
-        m_pBuffer->CreateResource(
+        m_pBuffer = std::make_shared<GPUResource>(
             pAllocator,
-            CD3DX12_RESOURCE_DESC::Buffer(
-                GetCapacity(),
-                D3D12_RESOURCE_FLAG_NONE
-            ),
-            D3D12_HEAP_TYPE_UPLOAD,
-            D3D12_RESOURCE_STATE_GENERIC_READ
+            GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
+            GPUResource::ResourceData{
+                CD3DX12_RESOURCE_DESC::Buffer(
+                    GetCapacity(),
+                    D3D12_RESOURCE_FLAG_NONE
+                ),
+                D3D12_RESOURCE_STATE_GENERIC_READ
+            }
         );
 
         m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
     }
     else {
-        m_pBuffer->CreateResource(
+        m_pBuffer = std::make_shared<GPUResource>(
             pAllocator,
-            CD3DX12_RESOURCE_DESC::Buffer(
-                GetCapacity(),
-                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-            ),
-            D3D12_HEAP_TYPE_DEFAULT,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+            GPUResource::ResourceData{
+                CD3DX12_RESOURCE_DESC::Buffer(
+                    GetCapacity(),
+                    D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+                ),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            }
         );
     }
 

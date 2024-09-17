@@ -58,8 +58,27 @@ public:
         if (Find(filename)) {
             return false;
         }
-
+        
         m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, val));
+        return true;
+    }
+
+    // or m_map.insert_or_assign ???
+    bool Remove(const STRING_TYPE& filename) {
+        if (!Find(filename)) {
+            return false;
+        }
+
+        m_map.erase(filename);
+        return true;
+    }
+
+    bool Replace(const STRING_TYPE& filename, std::shared_ptr<T> val) {
+        if (!Find(filename)) {
+            return false;
+        }
+
+        m_map[filename] = std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, val);
         return true;
     }
 
@@ -126,12 +145,32 @@ public:
 
     bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
         size_t hash{ m_hasher(filename) };
-        std::shared_ptr<T> resource{ Find(hash) };
-        if (resource) {
+        if (Find(hash)) {
             return false;
         }
 
         m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, val));
+        return true;
+    }
+
+    // or m_map.insert_or_assign ???
+    bool Remove(const STRING_TYPE& filename) {
+        size_t hash{ m_hasher(filename) };
+        if (!Find(hash)) {
+            return false;
+        }
+
+        m_map.erase(hash);
+        return true;
+    }
+
+    bool Replace(const STRING_TYPE& filename, std::shared_ptr<T> val) {
+        size_t hash{ m_hasher(filename) };
+        if (!Find(hash)) {
+            return false;
+        }
+
+        m_map[hash] = std::pair<const STRING_TYPE, std::weak_ptr<T>>(hash, val);
         return true;
     }
 

@@ -11,9 +11,8 @@ Scene::Scene(
     );
 
     m_pLightCB = std::make_shared<ConstantBuffer>(
-        pDevice,
         pAllocator,
-        CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(LightBuffer), 0)
+        sizeof(LightBuffer)
     );
 }
 
@@ -294,7 +293,7 @@ void Scene::RenderPostProcessing(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
         return;
     }
 
-    GPUResource::ResourceTransition(
+    ResourceTransition(
         pCommandListDirect,
         m_pGBuffer->GetTexture(0)->GetResource(),
         D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -344,7 +343,7 @@ void Scene::RunDeferredShading(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2
             );
             Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pGBuffer->GetSrvUavDescHeap() };
             pCommandListCompute->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(0));
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle());
         }
     );
 }
@@ -355,7 +354,7 @@ void Scene::SetGBuffer(std::shared_ptr<Textures> pGBuffer) {
 
 void Scene::ClearGBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
     for (size_t i{}; i < m_pGBuffer->GetTexturesCount(); ++i) {
-        GPUResource::ResourceTransition(
+        ResourceTransition(
             pCommandList,
             m_pGBuffer->GetTexture(i)->GetResource().Get(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,

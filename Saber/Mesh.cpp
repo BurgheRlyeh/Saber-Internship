@@ -183,16 +183,17 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
 
     std::shared_ptr<GPUResource> pBuffer{ std::make_shared<GPUResource>(
         pAllocator,
-        CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_RESOURCE_STATE_COPY_DEST
+        GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+        GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(bufferSize), D3D12_RESOURCE_STATE_COPY_DEST }
     ) };
 
     GPUResource intermediateBuffer{
         pAllocator,
-        CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_RESOURCE_STATE_GENERIC_READ
+        GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
+        GPUResource::ResourceData{
+            CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ
+        }
     };
 
     D3D12_SUBRESOURCE_DATA subresourceData{

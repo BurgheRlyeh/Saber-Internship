@@ -6,9 +6,8 @@ MeshRenderObject::MeshRenderObject(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
         DirectX::XMMatrixInverse(nullptr, m_modelBuffer.modelMatrix)
     );
     m_pModelCB = std::make_shared<ConstantBuffer>(
-        pDevice,
         pAllocator,
-        CD3DX12_RESOURCE_ALLOCATION_INFO(sizeof(ModelBuffer), 0),
+        sizeof(ModelBuffer),
         static_cast<void*>(&m_modelBuffer)
     );
 }
