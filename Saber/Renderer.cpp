@@ -24,6 +24,9 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    m_pGBuffers.clear();
+    m_pMaterialManager.reset();
+    m_pResourceDescHeapManager.reset();
     m_pScenes.clear();
     Flush();
 }
@@ -32,17 +35,17 @@ void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers.resize(m_numFrames);
     m_frameFenceValues.resize(m_numFrames);
 
+    // device and allocator
     Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter{ GetAdapter(m_useWarp) };
-
     m_pDevice = CreateDevice(pAdapter);
     m_pAllocator = CreateAllocator(m_pDevice, pAdapter);
 
+    // command queues
     m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
     m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
-
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
     m_pRTVDescHeap = CreateDescriptorHeap(m_pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_numFrames);
@@ -57,29 +60,33 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");
 
-    m_pGpuResLibrary = std::make_shared<GPUResourceLibrary<>>(m_pDevice, L"GPUResourceLibrary");
+    m_pRtvDescHeapManager = std::make_shared<DescriptorHeapManager>(
+        L"DescHeapManagerRtv",
+        m_pDevice,
+        D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+        GBuffer::GetSize()
+    );
+    m_pResourceDescHeapManager = std::make_shared<DescriptorHeapManager>(
+        L"DescHeapManagerCbvSrvUav",
+        m_pDevice,
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        35,
+        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+    );
 
-    D3D12_RESOURCE_DESC resDescs[4]{
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // position
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // normals
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight),        // albedo
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight)         // resulting ua
-    };
-    for (size_t i{}; i < 3; ++i) {
-        resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    }
-    resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    m_pGBuffers.resize(1);
+    m_pGBuffers[0] = std::make_shared<GBuffer>(
+        m_pDevice,
+        m_pAllocator,
+        m_pRtvDescHeapManager,
+        m_pResourceDescHeapManager,
+        m_clientWidth,
+        m_clientHeight
+    );
 
-    //m_pGpuResLibrary->AddRenderTarget(L"gbuffer_position", std::make_shared<Texture>(
-    //    m_pAllocator,
-    //    GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-    //    GPUResource::ResourceData{ resDescs[0], D3D12_RESOURCE_STATE_RENDER_TARGET }
-    //));
+    m_pMaterialManager = std::make_shared<MaterialManager>(L"../../Resources/Textures/", m_pDevice, m_pResourceDescHeapManager, 10);
 
     m_isInitialized = true;
-
-    m_pGBuffers.push_back(std::make_shared<Textures>(m_pDevice, 4));
-    ResizeGBuffers();
 
     // Create scenes
     {
@@ -125,8 +132,8 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            L"../../Resources/Textures/Brick.dds",
-            L"../../Resources/Textures/BrickNM.dds",
+            m_pResourceDescHeapManager,
+            m_pMaterialManager,
             DirectX::XMMatrixIdentity()
         ));
 
@@ -202,22 +209,14 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
-            L"../../Resources/Textures/barbarian_diffuse.dds",
-            L"../../Resources/Textures/barb2_n.dds",
+            m_pResourceDescHeapManager,
+            m_pMaterialManager,
             DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
         ));
 
         // cameras for all scenes
         for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
             m_pJobSystem->AddJob([&, sceneId]() {
-                //m_pScenes.at(sceneId)->CreateGBuffer(
-                //    m_pDevice,
-                //    m_pAllocator,
-                //    m_numFrames,
-                //    m_clientWidth,
-                //    m_clientHeight
-                //);
-
                 // dynamic camera
                 m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
 
@@ -359,7 +358,9 @@ void Renderer::PerformResize() {
     }
     
     ResizeDepthBuffer();
-    ResizeGBuffers();
+    for (auto& pGBuffer : m_pGBuffers) {
+        pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
+    }
 }
 
 void Renderer::ResizeDepthBuffer() {
@@ -401,28 +402,6 @@ void Renderer::ResizeDepthBuffer() {
         &dsv,
         m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart()
     );
-}
-
-void Renderer::ResizeGBuffers() {
-    D3D12_RESOURCE_DESC resDescs[4]{
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // position
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, m_clientWidth, m_clientHeight),    // normals
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight),        // albedo
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_clientWidth, m_clientHeight)         // resulting ua
-    };
-    for (size_t i{}; i < 4; ++i) {
-        resDescs[i].Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    }
-    resDescs[3].Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    for (auto& pGBuffer : m_pGBuffers) {
-        pGBuffer->Resize(
-            m_pDevice,
-            m_pAllocator,
-            resDescs,
-            _countof(resDescs)
-        );
-    }
 }
 
 void Renderer::Update() {
@@ -558,6 +537,7 @@ void Renderer::Render() {
 
         scene->RunDeferredShading(
             commandListForDeferredShading->m_pCommandList,
+            m_pResourceDescHeapManager,
             m_clientWidth,
             m_clientHeight
         );
@@ -569,6 +549,7 @@ void Renderer::Render() {
         //);
         scene->RenderPostProcessing(
             commandListAfterFrame->m_pCommandList,
+            m_pResourceDescHeapManager,
             m_viewport,
             m_scissorRect,
             rtv

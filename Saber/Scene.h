@@ -10,6 +10,7 @@
 #include "ConstantBuffer.h"
 #include "ComputeObject.h"
 #include "DynamicUploadRingBuffer.h"
+#include "GBuffer.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "Texture.h"
@@ -55,7 +56,7 @@ class Scene {
     std::atomic<bool> m_isSceneReady{};
     std::atomic<bool> m_isUpdateCameraHeap{};
 
-    std::shared_ptr<Textures> m_pGBuffer{};
+    std::shared_ptr<GBuffer> m_pGBuffer{};
 
     std::shared_ptr<PostProcessing> m_pPostProcessing{};
 
@@ -124,6 +125,7 @@ public:
     );
     void RenderPostProcessing(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
@@ -138,17 +140,18 @@ public:
 
     void RunDeferredShading(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
         UINT width,
         UINT height
     );
 
-    void SetGBuffer(std::shared_ptr<Textures> pGBuffer);
+    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
 
     void ClearGBuffer(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
     );
 
-    std::shared_ptr<Textures> GetGBuffer();
+    std::shared_ptr<GBuffer> GetGBuffer();
 
     void UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
 

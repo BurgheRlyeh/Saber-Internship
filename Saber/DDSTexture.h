@@ -13,25 +13,25 @@ class DDSTexture : public Texture {
 
 public:
 	DDSTexture(
+		const std::wstring& filename,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect,
-		const LPCWSTR& filename
+		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	);
 
-	const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;
+	const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const override;
 
 	using GPUResource::GetResource;
 	using Texture::CreateShaderResourceView;
 
 private:
 	void LoadFromDDS(
+		const std::wstring& filename,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect,
-		const LPCWSTR& filename
+		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC CreateSrvDesc() const;

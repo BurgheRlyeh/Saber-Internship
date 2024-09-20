@@ -12,7 +12,7 @@ struct ModelBuffer
     matrix normalMatrix;
 };
 
-ConstantBuffer<ModelBuffer> ModelCB : register(b2);
+ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
 struct VSInput
 {

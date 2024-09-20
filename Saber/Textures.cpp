@@ -17,7 +17,7 @@ void Textures::LoadFromDDS(
 	std::shared_ptr<CommandQueue> pCommandQueueCopy,
 	std::shared_ptr<CommandQueue> pCommandQueueDirect,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	const LPCWSTR* filenames,
+	const std::wstring* filenames,
 	size_t texturesCount
 ) {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuDescHandle{
@@ -25,11 +25,11 @@ void Textures::LoadFromDDS(
 	};
 	for (size_t i{}; i < GetTexturesCount(); ++i) {
 		auto pTex = std::make_shared<DDSTexture>(
+			filenames[i],
 			pDevice,
 			pAllocator,
 			pCommandQueueCopy,
-			pCommandQueueDirect,
-			filenames[i]
+			pCommandQueueDirect
 		);
 		//pTex->CreateShaderResourceView(pDevice, cpuDescHandle);
 		pTex->CreateShaderResourceView(pDevice, cpuDescHandle, pTex->GetSrvDesc());

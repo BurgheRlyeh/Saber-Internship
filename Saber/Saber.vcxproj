@@ -163,8 +163,11 @@
     <ClInclude Include="ConstantBuffer.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="DDSTexture.h" />
+    <ClInclude Include="DescriptorHeapManager.h" />
+    <ClInclude Include="DescriptorHeapRange.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="GBuffer.h" />
     <ClInclude Include="GLTFLoader.h" />
     <ClInclude Include="GPUResource.h" />
     <ClInclude Include="Headers.h" />
@@ -184,7 +187,7 @@
     <ClInclude Include="Scene.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Texture.h" />
-    <ClInclude Include="GPUResourceLibrary.h" />
+    <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Textures.h" />
     <ClInclude Include="Vertices.h" />
   </ItemGroup>

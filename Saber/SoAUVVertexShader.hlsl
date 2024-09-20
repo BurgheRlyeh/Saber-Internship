@@ -10,9 +10,10 @@ struct ModelBuffer
 {
     matrix modelMatrix;
     matrix normalMatrix;
+    uint4 materialId;
 };
 
-ConstantBuffer<ModelBuffer> ModelCB : register(b2);
+ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
 struct VSOutput
 {

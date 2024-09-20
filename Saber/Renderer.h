@@ -23,12 +23,13 @@
 #include "Camera.h"
 #include "CommandQueue.h"
 #include "CommandList.h"
+#include "GBuffer.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Scene.h"
-#include "GPUResourceLibrary.h"
+#include "MaterialManager.h"
 #include "JobSystem.h"
 #include "DynamicUploadRingBuffer.h"
 
@@ -98,7 +99,10 @@ class Renderer {
     std::atomic<bool> m_isSwitchToNextCamera{};
 
     std::shared_ptr<Textures> m_pTextures{};
-    std::vector<std::shared_ptr<Textures>> m_pGBuffers{};
+    std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
+
+    std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
+    std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
 
     // Atlases
     std::shared_ptr<GPUResourceLibrary<>> m_pGpuResLibrary{};
@@ -106,6 +110,7 @@ class Renderer {
     std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
     std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
     std::shared_ptr<PSOLibrary> m_pPSOLibrary{};
+    std::shared_ptr<MaterialManager> m_pMaterialManager{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
@@ -146,7 +151,6 @@ private:
     void RenderLoop();
 
     void ResizeDepthBuffer();
-    void ResizeGBuffers();
 
     bool CheckTearingSupport();
 

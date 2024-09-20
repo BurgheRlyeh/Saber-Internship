@@ -105,7 +105,7 @@ public:
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		const LPCWSTR* filenames,
+		const std::wstring* filenames,
 		size_t texturesCount
 	) {
 		std::shared_ptr<Textures> pTexs{ std::make_shared<Textures>(
@@ -153,7 +153,7 @@ public:
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		const LPCWSTR* filenames,
+		const std::wstring* filenames,
 		size_t texturesCount
 	);
 

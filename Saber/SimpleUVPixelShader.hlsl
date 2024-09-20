@@ -1,7 +1,3 @@
-#include "BlinnPhongLighting.hlsli"
-
-#define LIGHTS_MAX_COUNT 10
-
 struct SceneBuffer
 {
     matrix vpMatrix;
@@ -10,22 +6,20 @@ struct SceneBuffer
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
 
-struct LightBuffer
-{
-    float4 ambientColorAndPower;
-    uint4 lightCount;
-    Light lights[LIGHTS_MAX_COUNT];
-};
-
-ConstantBuffer<LightBuffer> LightCB : register(b1);
-
 struct ModelBuffer
 {
     matrix modelMatrix;
     matrix normalMatrix;
+    uint4 materialId;
 };
 
-ConstantBuffer<ModelBuffer> ModelCB : register(b2);
+ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+
+struct MaterialBuffer
+{
+    uint4 albedoNormal;
+};
+ConstantBuffer<MaterialBuffer> MaterialCB[] : register(b2);
 
 //Texture2D t0 : register(t0);
 //Texture2D t1 : register(t1);
@@ -50,11 +44,10 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
     float3 t = normalize(input.tang);
     float3 n = normalize(input.norm);
     float3 binorm = (cross(n, t)) * input.tang.w; // no need to normalize
-    float3 nn = texs[1].Sample(s1, input.uv).xyz;
+    float3 nn = texs[MaterialCB[ModelCB.materialId.x].albedoNormal.y].Sample(s1, input.uv).xyz;
     float3 localNorm = normalize(2.f * nn - float3(1.f, 1.f, 1.f)); // normalize to avoid unnormalized texture
     float3 norm = localNorm.x * t + localNorm.y * binorm + localNorm.z * n;
 
@@ -72,7 +65,7 @@ PSOutput main(PSInput input)
     //    lightColor += lighting.specular;
     //}
     
-    float4 texColor = texs[0].Sample(s1, input.uv);
+    float4 texColor = texs[MaterialCB[ModelCB.materialId.x].albedoNormal.x].Sample(s1, input.uv);
     //float3 finalColor = texColor.xyz * lightColor;
     
     PSOutput output;

@@ -195,24 +195,18 @@ void Scene::RenderStaticObjects(
                 rootParamId++,
                 m_sceneCBDynamicAllocation.gpuAddress
             );
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_pLightCB->GetResource()->GetGPUVirtualAddress()
-            );
+            //pCommandListDirect->SetGraphicsRootConstantBufferView(
+            //    rootParamId++,
+            //    m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            //);
         };
 
-    size_t rtvsCount{ m_pGBuffer ? m_pGBuffer->GetTexturesCount() : 1 };
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{};
-    if (!m_pGBuffer) {
-        rtvsCount = 1;
-        rtvs.push_back(renderTargetView);
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+    if (m_pGBuffer) {
+        rtvs = m_pGBuffer->GetRtvs();
     }
     else {
-        rtvsCount = m_pGBuffer->GetTexturesCount();
-        rtvs.resize(rtvsCount);
-        for (size_t i{}; i < rtvsCount; ++i) {
-            rtvs[i] = m_pGBuffer->GetCpuRtvDescHandle(i);
-        }
+        rtvs.push_back(renderTargetView);
     }
 
     std::scoped_lock<std::mutex> staticObjectsLock(m_staticObjectsMutex);
@@ -224,7 +218,7 @@ void Scene::RenderStaticObjects(
             viewport,
             scissorRect,
             rtvs.data(),
-            rtvsCount,
+            rtvs.size(),
             &depthStencilView,
             outerRootParametersSetter
         );
@@ -252,24 +246,18 @@ void Scene::RenderDynamicObjects(
                 rootParamId++,
                 m_sceneCBDynamicAllocation.gpuAddress
             );
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_pLightCB->GetResource()->GetGPUVirtualAddress()
-            );
+            //pCommandListDirect->SetGraphicsRootConstantBufferView(
+            //    rootParamId++,
+            //    m_pLightCB->GetResource()->GetGPUVirtualAddress()
+            //);
         };
 
-    size_t rtvsCount{ m_pGBuffer ? m_pGBuffer->GetTexturesCount() : 1 };
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{};
-    if (!m_pGBuffer) {
-        rtvsCount = 1;
-        rtvs.push_back(renderTargetView);
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+    if (m_pGBuffer) {
+        rtvs = m_pGBuffer->GetRtvs();
     }
     else {
-        rtvsCount = m_pGBuffer->GetTexturesCount();
-        rtvs.resize(rtvsCount);
-        for (size_t i{}; i < rtvsCount; ++i) {
-            rtvs[i] = m_pGBuffer->GetCpuRtvDescHandle(i);
-        }
+        rtvs.push_back(renderTargetView);
     }
 
     std::scoped_lock<std::mutex> dynamicObjectsLock(m_dynamicObjectsMutex);
@@ -281,14 +269,20 @@ void Scene::RenderDynamicObjects(
             viewport,
             scissorRect,
             rtvs.data(),
-            rtvsCount,
+            rtvs.size(),
             &depthStencilView,
             outerRootParametersSetter
         );
     }
 }
 
-void Scene::RenderPostProcessing(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, D3D12_VIEWPORT viewport, D3D12_RECT scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView) {
+void Scene::RenderPostProcessing(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect,
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+) {
     if (!m_pGBuffer) {
         return;
     }
@@ -306,9 +300,8 @@ void Scene::RenderPostProcessing(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
         &renderTargetView,
         1,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
-            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap{ m_pGBuffer->GetSrvUavDescHeap() };
-            pCommandListDirect->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
-            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle(3));
+            pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle(3));
         }
     );
 }
@@ -322,7 +315,12 @@ void Scene::InitDeferredShadingComputeObject(Microsoft::WRL::ComPtr<ID3D12Device
     );
 }
 
-void Scene::RunDeferredShading(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT width, UINT height) {
+void Scene::RunDeferredShading(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    UINT width,
+    UINT height
+) {
     if (!m_pDeferredShadingComputeObject) {
         return;
     }
@@ -341,35 +339,22 @@ void Scene::RunDeferredShading(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2
                 rootParamId++,
                 m_pLightCB->GetResource()->GetGPUVirtualAddress()
             );
-            Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pGBuffer->GetSrvUavDescHeap() };
-            pCommandListCompute->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetGpuSrvUavDescHandle());
+            pCommandListCompute->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetUavDescHandle());
         }
     );
 }
 
-void Scene::SetGBuffer(std::shared_ptr<Textures> pGBuffer) {
+void Scene::SetGBuffer(std::shared_ptr<GBuffer> pGBuffer) {
     m_pGBuffer = pGBuffer;
 }
 
 void Scene::ClearGBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-    for (size_t i{}; i < m_pGBuffer->GetTexturesCount(); ++i) {
-        ResourceTransition(
-            pCommandList,
-            m_pGBuffer->GetTexture(i)->GetResource().Get(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-
-        ClearRenderTarget(
-            pCommandList,
-            m_pGBuffer->GetTexture(i)->GetResource(),
-            m_pGBuffer->GetCpuRtvDescHandle(i)
-        );
-    }
+    m_pGBuffer->Clear(pCommandList);
 }
 
-std::shared_ptr<Textures> Scene::GetGBuffer() {
+std::shared_ptr<GBuffer> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 

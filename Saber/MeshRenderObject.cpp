@@ -16,9 +16,9 @@ void MeshRenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, M
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshData);
 }
 
-void MeshRenderObject::BindTextures(std::shared_ptr<Textures> pTextures) {
-    m_pTextures = pTextures;
-}
+//void MeshRenderObject::BindTextures(std::shared_ptr<Textures> pTextures) {
+//    m_pTextures = pTextures;
+//}
 
 void MeshRenderObject::Update() {
 
@@ -37,10 +37,13 @@ void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
 
 void MeshRenderObject::InnerRootParametersSetter(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) const {
     pCommandListDirect->SetGraphicsRootConstantBufferView(rootParamId++, m_pModelCB->GetResource()->GetGPUVirtualAddress());
-    if (m_pTextures) {
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pTextures->GetSrvUavDescHeap() };
-        pCommandListDirect->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
-        pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pTexDescHeap->GetGPUDescriptorHandleForHeapStart());
+    if (m_pDescHeapManager) {
+        //Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pTextures->GetSrvUavDescHeap() };
+        //pCommandListDirect->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
+        //pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pTexDescHeap->GetGPUDescriptorHandleForHeapStart());
+        pCommandListDirect->SetDescriptorHeaps(1, m_pDescHeapManager->GetDescriptorHeap().GetAddressOf());
+        pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, cbvs);
+        pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, srvs);
     }
 }
 

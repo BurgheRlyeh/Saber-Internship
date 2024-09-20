@@ -4,7 +4,7 @@
 
 #include "GPUResource.h"
 
-class Texture : protected GPUResource {
+class Texture : public GPUResource {
 	D3D12_RESOURCE_FLAGS m_flags{};
 
 protected:
@@ -21,16 +21,27 @@ public:
 	{}
 	using GPUResource::GetResource;
 
+	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const {
+		return nullptr;
+	};
 	void CreateRenderTargetView(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
 	);
+
+	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const {
+		return nullptr;
+	};
 	void CreateShaderResourceView(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_SHADER_RESOURCE_VIEW_DESC* pSrvDesc = nullptr
 	);
+
+	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const {
+		return nullptr;
+	};
 	void CreateUnorderedAccessView(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,

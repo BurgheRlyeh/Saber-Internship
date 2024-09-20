@@ -10,6 +10,7 @@
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
+#include "MaterialManager.h"
 #include "Mesh.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
@@ -26,10 +27,15 @@ class MeshRenderObject : protected RenderObject {
         DirectX::XMMATRIX normalMatrix{ DirectX::XMMatrixTranspose(
                 DirectX::XMMatrixInverse(nullptr, DirectX::XMMatrixIdentity())
         ) };
+        DirectX::XMUINT4 materialId{};
     } m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCB{};
 
 public:
+    std::shared_ptr<DescriptorHeapManager> m_pDescHeapManager{};
+    D3D12_GPU_DESCRIPTOR_HANDLE srvs{};
+    D3D12_GPU_DESCRIPTOR_HANDLE cbvs{};
+
     using RenderObject::InitMaterial;
     using RenderObject::Render;
 
@@ -47,7 +53,11 @@ public:
         const Mesh::MeshData& meshData,
         const std::wstring& meshFilename
     );
-    void BindTextures(std::shared_ptr<Textures> pTextures);
+
+    virtual void SetMaterialId(size_t id) {
+        m_modelBuffer.materialId.x = id;
+        m_pModelCB->Update(&m_modelBuffer);
+    }
 
     virtual void Update();
 
@@ -260,10 +270,9 @@ private:
         };
 
         // A single 32-bit constant root parameter that is used by the vertex shader.
-        CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
         rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // light CB
-        rootParameters[2].InitAsConstantBufferView(2);  // model CB
+        rootParameters[1].InitAsConstantBufferView(1);  // model CB
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -305,8 +314,8 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename,
-        const LPCWSTR& normalMapFilename,
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+        std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         VertexPosNormTangUV vertices[24]{
@@ -383,15 +392,13 @@ public:
             )
         );
 
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
-        obj.BindTextures(Textures::LoadSRVsFromDDS(
-            pDevice,
-            pCommandQueueCopy,
-            pCommandQueueDirect,
-            pAllocator,
-            textures,
-            _countof(textures)
-        ));
+        size_t materialId{ pMaterialManager->AddMaterial(
+            pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"Brick.dds", L"BrickNM.dds"
+        ) };
+        obj.m_pDescHeapManager = pDescHeapManager;
+        obj.cbvs = pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle();
+        obj.srvs = pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle();
+        obj.SetMaterialId(materialId);
 
         return obj;
     }
@@ -406,8 +413,8 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& textureFilename,
-        const LPCWSTR& normalMapFilename,
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+        std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         MeshRenderObject obj{ pDevice, pAllocator, modelMatrix };
@@ -458,15 +465,13 @@ public:
             )
         );
 
-        LPCWSTR textures[]{ textureFilename, normalMapFilename };
-        obj.BindTextures(Textures::LoadSRVsFromDDS(
-            pDevice,
-            pCommandQueueCopy,
-            pCommandQueueDirect,
-            pAllocator,
-            textures,
-            _countof(textures)
-        ));
+        size_t materialId{ pMaterialManager->AddMaterial(
+            pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"barbarian_diffuse.dds", L"barb2_n.dds"
+        ) };
+        obj.m_pDescHeapManager = pDescHeapManager;
+        obj.cbvs = pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle();
+        obj.srvs = pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle();
+        obj.SetMaterialId(materialId);
 
         return obj;
     }
@@ -484,14 +489,19 @@ private:
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
         };
 
-        CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[1]{};
-        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
-
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
         rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // light CB
-        rootParameters[2].InitAsConstantBufferView(2);  // model CB
-        rootParameters[3].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[1].InitAsConstantBufferView(1);  // model CB
+
+        // constant buffers
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsCBV[1]{};
+        rangeDescsCBV[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, 2);
+        rootParameters[2].InitAsDescriptorTable(_countof(rangeDescsCBV), rangeDescsCBV, D3D12_SHADER_VISIBILITY_PIXEL);
+        
+        // textures
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsSRV[1]{};
+        rangeDescsSRV[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0);
+        rootParameters[3].InitAsDescriptorTable(_countof(rangeDescsSRV), rangeDescsSRV, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
             .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },

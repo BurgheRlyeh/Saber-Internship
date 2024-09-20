@@ -128,14 +128,18 @@ private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {
-        CD3DX12_DESCRIPTOR_RANGE1 rangeDescs[2]{};
-        rangeDescs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
-        rangeDescs[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+        size_t rp{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
+        rootParameters[rp++].InitAsConstantBufferView(0);
+        rootParameters[rp++].InitAsConstantBufferView(1);
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
-        rootParameters[0].InitAsConstantBufferView(0);
-        rootParameters[1].InitAsConstantBufferView(1);
-        rootParameters[2].InitAsDescriptorTable(_countof(rangeDescs), rangeDescs);
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsSrv[1]{};
+        rangeDescsSrv[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeDescsSrv), rangeDescsSrv);
+
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsUav[1]{};
+        rangeDescsUav[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeDescsUav), rangeDescsUav);
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);

@@ -37,4 +37,5 @@ void ConstantBuffer::Update(void* newData) {
 	void* pData{};
 	ThrowIfFailed(GetResource()->Map(0, &CD3DX12_RANGE(), &pData));
 	memcpy(pData, newData, m_CbvSize);
+	//GetResource()->Unmap(0, nullptr);
 }

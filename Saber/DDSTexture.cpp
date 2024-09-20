@@ -1,13 +1,13 @@
 #include "DDSTexture.h"
 
 DDSTexture::DDSTexture(
+	const std::wstring& filename,
 	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	std::shared_ptr<CommandQueue> pCommandQueueCopy,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect,
-	const LPCWSTR& filename
+	std::shared_ptr<CommandQueue> pCommandQueueDirect
 ) {
-	LoadFromDDS(pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, filename);
+	LoadFromDDS(filename, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect);
 	m_pSrvDesc = std::make_unique<D3D12_SHADER_RESOURCE_VIEW_DESC>(CreateSrvDesc());
 }
 
@@ -16,15 +16,15 @@ const D3D12_SHADER_RESOURCE_VIEW_DESC* DDSTexture::GetSrvDesc() const {
 }
 
 void DDSTexture::LoadFromDDS(
+	const std::wstring& filename,
 	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	std::shared_ptr<CommandQueue> pCommandQueueCopy,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect,
-	const LPCWSTR& filename
+	std::shared_ptr<CommandQueue> pCommandQueueDirect
 ) {
 	// load texture from dds
 	DirectX::ScratchImage image{};
-	ThrowIfFailed(DirectX::LoadFromDDSFile(filename, DirectX::DDS_FLAGS_NONE, &m_metadata, image));
+	ThrowIfFailed(DirectX::LoadFromDDSFile(filename.c_str(), DirectX::DDS_FLAGS_NONE, &m_metadata, image));
 
 	// create texture resource
 	CreateResource(
