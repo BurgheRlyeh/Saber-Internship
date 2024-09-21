@@ -25,26 +25,44 @@ Texture2D<float4> albedo : register(t2);
 
 RWTexture2D<float4> output : register(u0);
 
-[numthreads(1, 1, 1)]
-void main(uint3 DTid : SV_DispatchThreadID) {
-    uint2 pixel = DTid.xy;
+struct ComputeShaderInput
+{
+    uint3 GroupID : SV_GroupID; // 3D index of the thread group in the dispatch.
+    uint3 GroupThreadID : SV_GroupThreadID; // 3D index of local thread ID in a thread group.
+    uint3 DispatchThreadID : SV_DispatchThreadID; // 3D index of global thread ID in the dispatch.
+    uint GroupIndex : SV_GroupIndex; // Flattened local index of the thread within a thread group.
+};
+
+#define BLOCK_SIZE 8
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+void main(ComputeShaderInput IN)
+{
+    uint w = 0;
+    uint h = 0;
+    position.GetDimensions(w, h);
     
-    float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
-    for (uint i = 0; i < LightCB.lightCount.x; ++i)
+    if (IN.DispatchThreadID.x < w && IN.DispatchThreadID.y < h)
     {
-        Lighting lighting = GetPointLight(
+        
+        uint2 pixel = IN.DispatchThreadID.xy;
+    
+        float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
+        for (uint i = 0; i < LightCB.lightCount.x; ++i)
+        {
+            Lighting lighting = GetPointLight(
             LightCB.lights[i],
-            position.Load(DTid).xyz,
-            position.Load(DTid).xyz - SceneCB.cameraPosition.xyz,
-            normal.Load(DTid).xyz,
+            position.Load(IN.DispatchThreadID).xyz,
+            position.Load(IN.DispatchThreadID).xyz - SceneCB.cameraPosition.xyz,
+            normal.Load(IN.DispatchThreadID).xyz,
             10.f
         );
         
-        lightColor += lighting.diffuse;
-        lightColor += lighting.specular;
+            lightColor += lighting.diffuse;
+            lightColor += lighting.specular;
+        }
+    
+        float3 finalColor = albedo.Load(IN.DispatchThreadID).xyz * lightColor;
+    
+        output[pixel] = float4(finalColor, 1.f);
     }
-    
-    float3 finalColor = albedo.Load(DTid).xyz * lightColor;
-    
-    output[pixel] = float4(finalColor, 1.f);
 }
