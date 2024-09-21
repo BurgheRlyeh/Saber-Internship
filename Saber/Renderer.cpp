@@ -24,10 +24,10 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    m_pScenes.clear();
     m_pGBuffers.clear();
     m_pMaterialManager.reset();
     m_pResourceDescHeapManager.reset();
-    m_pScenes.clear();
     Flush();
 }
 
@@ -64,13 +64,13 @@ void Renderer::Initialize(HWND hWnd) {
         L"DescHeapManagerRtv",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        GBuffer::GetSize()
+        GBuffer::GetSize() - 1
     );
     m_pResourceDescHeapManager = std::make_shared<DescriptorHeapManager>(
         L"DescHeapManagerCbvSrvUav",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        35,
+        100,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     );
 
@@ -84,7 +84,11 @@ void Renderer::Initialize(HWND hWnd) {
         m_clientHeight
     );
 
-    m_pMaterialManager = std::make_shared<MaterialManager>(L"../../Resources/Textures/", m_pDevice, m_pResourceDescHeapManager, 10);
+    m_pMaterialManager = std::make_shared<MaterialManager>(
+        L"../../Resources/Textures/",
+        m_pDevice,
+        m_pAllocator,
+        m_pResourceDescHeapManager, 10);
 
     m_isInitialized = true;
 
@@ -132,6 +136,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
+            m_pGBuffers[0],
             m_pResourceDescHeapManager,
             m_pMaterialManager,
             DirectX::XMMatrixIdentity()
@@ -209,6 +214,7 @@ void Renderer::Initialize(HWND hWnd) {
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
+            m_pGBuffers[0],
             m_pResourceDescHeapManager,
             m_pMaterialManager,
             DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
@@ -468,10 +474,12 @@ void Renderer::Render() {
             scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
         }
         else {
+            float clearColor[]{ 0.6f, 0.4f, 0.4f, 1.0f };
             ClearRenderTarget(
                 commandListBeforeFrame->m_pCommandList,
                 backBuffer,
-                rtv
+                rtv,
+                clearColor
             );
         }
 
@@ -538,6 +546,7 @@ void Renderer::Render() {
         scene->RunDeferredShading(
             commandListForDeferredShading->m_pCommandList,
             m_pResourceDescHeapManager,
+            m_pMaterialManager,
             m_clientWidth,
             m_clientHeight
         );

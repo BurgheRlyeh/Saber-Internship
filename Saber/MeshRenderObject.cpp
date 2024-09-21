@@ -1,6 +1,10 @@
 #include "MeshRenderObject.h"
 
-MeshRenderObject::MeshRenderObject(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, const DirectX::XMMATRIX& modelMatrix) {
+MeshRenderObject::MeshRenderObject(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    const DirectX::XMMATRIX& modelMatrix
+) {
     m_modelBuffer.modelMatrix = modelMatrix;
     m_modelBuffer.normalMatrix = DirectX::XMMatrixTranspose(
         DirectX::XMMatrixInverse(nullptr, m_modelBuffer.modelMatrix)
@@ -12,13 +16,22 @@ MeshRenderObject::MeshRenderObject(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     );
 }
 
-void MeshRenderObject::InitMesh(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, std::shared_ptr<CommandQueue> const& pCommandQueueCopy, std::shared_ptr<Atlas<Mesh>> pMeshAtlas, const Mesh::MeshData& meshData, const std::wstring& meshFilename) {
+void MeshRenderObject::InitMesh(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+    const Mesh::MeshData& meshData,
+    const std::wstring& meshFilename
+) {
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshData);
 }
 
-//void MeshRenderObject::BindTextures(std::shared_ptr<Textures> pTextures) {
-//    m_pTextures = pTextures;
-//}
+void MeshRenderObject::SetMaterialId(std::shared_ptr<MaterialManager> pMaterialManager, size_t id) {
+    m_pMaterialManager = pMaterialManager;
+    m_modelBuffer.materialId.x = id;
+    m_pModelCB->Update(&m_modelBuffer);
+}
 
 void MeshRenderObject::Update() {
 
@@ -35,15 +48,21 @@ void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
     }
 }
 
-void MeshRenderObject::InnerRootParametersSetter(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) const {
+void MeshRenderObject::InnerRootParametersSetter(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    UINT& rootParamId
+) const {
     pCommandListDirect->SetGraphicsRootConstantBufferView(rootParamId++, m_pModelCB->GetResource()->GetGPUVirtualAddress());
-    if (m_pDescHeapManager) {
-        //Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pTexDescHeap{ m_pTextures->GetSrvUavDescHeap() };
-        //pCommandListDirect->SetDescriptorHeaps(1, pTexDescHeap.GetAddressOf());
-        //pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, pTexDescHeap->GetGPUDescriptorHandleForHeapStart());
-        pCommandListDirect->SetDescriptorHeaps(1, m_pDescHeapManager->GetDescriptorHeap().GetAddressOf());
-        pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, cbvs);
-        pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, srvs);
+    if (m_pMaterialManager) {
+        pCommandListDirect->SetDescriptorHeaps(1, m_pMaterialManager->GetDescHeap().GetAddressOf());
+        pCommandListDirect->SetGraphicsRootDescriptorTable(
+            rootParamId++,
+            m_pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle()
+        );
+        pCommandListDirect->SetGraphicsRootDescriptorTable(
+            rootParamId++,
+            m_pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle()
+        );
     }
 }
 

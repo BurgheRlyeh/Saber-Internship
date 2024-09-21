@@ -10,17 +10,16 @@
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
+#include "GBuffer.h"
 #include "MaterialManager.h"
 #include "Mesh.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Vertices.h"
-#include "Textures.h"
 
 class MeshRenderObject : protected RenderObject {
     std::shared_ptr<Mesh> m_pMesh{};
-    std::shared_ptr<Textures> m_pTextures{};
 
     struct ModelBuffer {
         DirectX::XMMATRIX modelMatrix{ DirectX::XMMatrixIdentity() };
@@ -31,11 +30,9 @@ class MeshRenderObject : protected RenderObject {
     } m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCB{};
 
-public:
-    std::shared_ptr<DescriptorHeapManager> m_pDescHeapManager{};
-    D3D12_GPU_DESCRIPTOR_HANDLE srvs{};
-    D3D12_GPU_DESCRIPTOR_HANDLE cbvs{};
+    std::shared_ptr<MaterialManager> m_pMaterialManager{};
 
+public:
     using RenderObject::InitMaterial;
     using RenderObject::Render;
 
@@ -54,10 +51,10 @@ public:
         const std::wstring& meshFilename
     );
 
-    virtual void SetMaterialId(size_t id) {
-        m_modelBuffer.materialId.x = id;
-        m_pModelCB->Update(&m_modelBuffer);
-    }
+    virtual void SetMaterialId(
+        std::shared_ptr<MaterialManager> pMaterialManager,
+        size_t id
+    );
 
     virtual void Update();
 
@@ -314,6 +311,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
+        std::shared_ptr<GBuffer> pGBuffer,
         std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
@@ -369,11 +367,6 @@ public:
 
         MeshRenderObject obj{ pDevice, pAllocator, modelMatrix };
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, meshData, L"SimpleTextureCube");
-
-        D3D12_RT_FORMAT_ARRAY rtvFormats{};
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -388,17 +381,12 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS), rtvFormats)
+                CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS), pGBuffer->GetRtFormatArray())
             )
         );
-
-        size_t materialId{ pMaterialManager->AddMaterial(
+        obj.SetMaterialId(pMaterialManager, pMaterialManager->AddMaterial(
             pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"Brick.dds", L"BrickNM.dds"
-        ) };
-        obj.m_pDescHeapManager = pDescHeapManager;
-        obj.cbvs = pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle();
-        obj.srvs = pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle();
-        obj.SetMaterialId(materialId);
+        ));
 
         return obj;
     }
@@ -413,6 +401,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
+        std::shared_ptr<GBuffer> pGBuffer,
         std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
@@ -442,11 +431,6 @@ public:
         };
 
         obj.InitMesh(pDevice, pAllocator, pCommandQueueCopy, pMeshAtlas, data, L"MeshGLTF");
-
-        D3D12_RT_FORMAT_ARRAY rtvFormats{};
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        rtvFormats.RTFormats[rtvFormats.NumRenderTargets++] = DXGI_FORMAT_R8G8B8A8_UNORM;
         obj.InitMaterial(
             pDevice,
             RootSignatureData(
@@ -461,17 +445,12 @@ public:
             ),
             PipelineStateData(
                 pPSOLibrary,
-                CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), rtvFormats)
+                CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
             )
         );
-
-        size_t materialId{ pMaterialManager->AddMaterial(
+        obj.SetMaterialId(pMaterialManager, pMaterialManager->AddMaterial(
             pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"barbarian_diffuse.dds", L"barb2_n.dds"
-        ) };
-        obj.m_pDescHeapManager = pDescHeapManager;
-        obj.cbvs = pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle();
-        obj.srvs = pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle();
-        obj.SetMaterialId(materialId);
+        ));
 
         return obj;
     }

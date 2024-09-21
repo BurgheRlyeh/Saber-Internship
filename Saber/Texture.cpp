@@ -5,14 +5,10 @@ void Texture::CreateRenderTargetView(
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc
 ) {
-	//assert(IsRtv());
-	//assert(!pRtvDesc || pRtvDesc->Format == m_format);
-	if (!IsRtv()) {
-		return;
-	}
+	assert(IsRtv());
 	pDevice->CreateRenderTargetView(
 		GetResource().Get(),
-		pRtvDesc,
+		pRtvDesc ? pRtvDesc : GetRtvDesc(),
 		cpuDescHandle
 	);
 }
@@ -22,14 +18,10 @@ void Texture::CreateShaderResourceView(
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_SHADER_RESOURCE_VIEW_DESC* pSrvDesc
 ) {
-	//assert(IsSrv());
-	//assert(!pSrvDesc || pSrvDesc->Format == m_format);
-	if (!IsSrv()) {
-		return;
-	}
+	assert(IsSrv());
 	pDevice->CreateShaderResourceView(
 		GetResource().Get(),
-		pSrvDesc,
+		pSrvDesc ? pSrvDesc : GetSrvDesc(),
 		cpuDescHandle
 	);
 }
@@ -40,15 +32,11 @@ void Texture::CreateUnorderedAccessView(
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc,
 	Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource
 ) {
-	//assert(IsUav());
-	//assert(!pUavDesc || pUavDesc->Format == m_format);
-	if (!IsUav()) {
-		return;
-	}
+	assert(IsUav());
 	pDevice->CreateUnorderedAccessView(
 		GetResource().Get(),
 		pCounterResource.Get(),
-		pUavDesc,
+		pUavDesc ? pUavDesc : GetUavDesc(),
 		cpuDescHandle
 	);
 }

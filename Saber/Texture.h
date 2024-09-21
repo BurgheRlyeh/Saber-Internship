@@ -61,20 +61,11 @@ static void ClearRenderTarget(
 	const float* clearColor = nullptr
 ) {
 	assert(pBuffer->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-	if (!clearColor) {
-		static float defaultColor[] = {
-			.4f,
-			.6f,
-			.9f,
-			1.f
-		};
 
-		clearColor = defaultColor;
-	}
-
+	static float defaultColor[] = { 0.f, 0.f, 0.f, 1.f };	// .4f, .6f, .9f, 1.f
 	pCommandList->ClearRenderTargetView(
 		cpuDescHandle,
-		clearColor,
+		clearColor ? clearColor : defaultColor,
 		0,
 		nullptr
 	);

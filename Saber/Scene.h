@@ -14,7 +14,6 @@
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "Texture.h"
-#include "Textures.h"
 
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
@@ -141,6 +140,7 @@ public:
     void RunDeferredShading(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        std::shared_ptr<MaterialManager> pMaterialManager,
         UINT width,
         UINT height
     );

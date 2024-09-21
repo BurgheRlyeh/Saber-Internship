@@ -40,6 +40,7 @@ struct PSOutput
     float4 position : SV_Target0;
     float4 normal : SV_Target1;
     float4 color : SV_Target2;
+    float4 uvMaterialId : SV_Target3;
 };
 
 PSOutput main(PSInput input)
@@ -50,7 +51,7 @@ PSOutput main(PSInput input)
     float3 nn = texs[MaterialCB[ModelCB.materialId.x].albedoNormal.y].Sample(s1, input.uv).xyz;
     float3 localNorm = normalize(2.f * nn - float3(1.f, 1.f, 1.f)); // normalize to avoid unnormalized texture
     float3 norm = localNorm.x * t + localNorm.y * binorm + localNorm.z * n;
-
+    
     //for (uint i = 0; i < LightCB.lightCount.x; ++i)
     //{
     //    Lighting lighting = GetPointLight(
@@ -72,6 +73,7 @@ PSOutput main(PSInput input)
     output.position = float4(input.worldPos, 1.f);
     output.normal = float4(norm, 0.f);
     output.color = texColor;
+    output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
     
     return output;
 }

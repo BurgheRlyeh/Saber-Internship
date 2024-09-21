@@ -195,10 +195,6 @@ void Scene::RenderStaticObjects(
                 rootParamId++,
                 m_sceneCBDynamicAllocation.gpuAddress
             );
-            //pCommandListDirect->SetGraphicsRootConstantBufferView(
-            //    rootParamId++,
-            //    m_pLightCB->GetResource()->GetGPUVirtualAddress()
-            //);
         };
 
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
@@ -246,10 +242,6 @@ void Scene::RenderDynamicObjects(
                 rootParamId++,
                 m_sceneCBDynamicAllocation.gpuAddress
             );
-            //pCommandListDirect->SetGraphicsRootConstantBufferView(
-            //    rootParamId++,
-            //    m_pLightCB->GetResource()->GetGPUVirtualAddress()
-            //);
         };
 
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
@@ -301,7 +293,7 @@ void Scene::RenderPostProcessing(
         1,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
             pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle(3));
+            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle(4));
         }
     );
 }
@@ -318,6 +310,7 @@ void Scene::InitDeferredShadingComputeObject(Microsoft::WRL::ComPtr<ID3D12Device
 void Scene::RunDeferredShading(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
     std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    std::shared_ptr<MaterialManager> pMaterialManager,
     UINT width,
     UINT height
 ) {
@@ -342,6 +335,9 @@ void Scene::RunDeferredShading(
             pCommandListCompute->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
             pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
             pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetUavDescHandle());
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+            //pCommandList
         }
     );
 }

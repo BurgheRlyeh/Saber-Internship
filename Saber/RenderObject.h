@@ -14,7 +14,6 @@
 #include "PSOLibrary.h"
 #include "Resources.h"
 #include "Vertices.h"
-#include "Textures.h"
 
 class RenderObject {
 protected:

@@ -58,7 +58,7 @@ public:
         if (Find(filename)) {
             return false;
         }
-
+        
         m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, val));
         return true;
     }

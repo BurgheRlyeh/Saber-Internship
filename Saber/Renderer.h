@@ -98,14 +98,12 @@ class Renderer {
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
 
-    std::shared_ptr<Textures> m_pTextures{};
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
     std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
 
     // Atlases
-    std::shared_ptr<GPUResourceLibrary<>> m_pGpuResLibrary{};
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
     std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
     std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
