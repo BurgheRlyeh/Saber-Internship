@@ -318,10 +318,12 @@ void Scene::RunDeferredShading(
         return;
     }
 
+    constexpr int block_size = 8;
+
     m_pDeferredShadingComputeObject->Dispatch(
         pCommandListCompute,
-        width,
-        height,
+        (width + block_size - 1) / block_size,
+        (height + block_size - 1) / block_size,
         1,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
             pCommandListCompute->SetComputeRootConstantBufferView(
