@@ -241,17 +241,17 @@ void Renderer::Initialize(HWND hWnd) {
                 );
 
                 // random lights
-                for (size_t i{}; i < 9; ++i) {
-                    std::random_device rd;
-                    std::mt19937 gen(rd());
-                    std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
-                    std::uniform_real_distribution<float> colorDist(0.f, 1.f);
-                    m_pScenes[sceneId]->AddLightSource(
-                        { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
-                        { colorDist(gen), colorDist(gen), colorDist(gen) },
-                        { colorDist(gen), colorDist(gen), colorDist(gen) }
-                    );
-                }
+                //for (size_t i{}; i < 9; ++i) {
+                //    std::random_device rd;
+                //    std::mt19937 gen(rd());
+                //    std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
+                //    std::uniform_real_distribution<float> colorDist(0.f, 1.f);
+                //    m_pScenes[sceneId]->AddLightSource(
+                //        { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
+                //        { colorDist(gen), colorDist(gen), colorDist(gen) },
+                //        { colorDist(gen), colorDist(gen), colorDist(gen) }
+                //    );
+                //}
 
                 m_pScenes[sceneId]->SetSceneReadiness(true);
             });

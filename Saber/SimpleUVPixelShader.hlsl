@@ -1,3 +1,5 @@
+#include "Math.hlsli"
+
 struct SceneBuffer
 {
     matrix vpMatrix;
@@ -38,41 +40,28 @@ struct PSInput
 struct PSOutput
 {
     float4 position : SV_Target0;
-    float4 normal : SV_Target1;
+    float4 tbn : SV_Target1;
     float4 color : SV_Target2;
     float4 uvMaterialId : SV_Target3;
 };
 
 PSOutput main(PSInput input)
 {
-    float3 t = normalize(input.tang);
+    float3 t = normalize(input.tang.xyz);
     float3 n = normalize(input.norm);
-    float3 binorm = (cross(n, t)) * input.tang.w; // no need to normalize
-    float3 nn = texs[MaterialCB[ModelCB.materialId.x].albedoNormal.y].Sample(s1, input.uv).xyz;
-    float3 localNorm = normalize(2.f * nn - float3(1.f, 1.f, 1.f)); // normalize to avoid unnormalized texture
-    float3 norm = localNorm.x * t + localNorm.y * binorm + localNorm.z * n;
+    float3 b = (cross(n, t)) * input.tang.w; // no need to normalize
     
-    //for (uint i = 0; i < LightCB.lightCount.x; ++i)
-    //{
-    //    Lighting lighting = GetPointLight(
-    //        LightCB.lights[i],
-    //        input.worldPos,
-    //        input.worldPos - SceneCB.cameraPosition.xyz,
-    //        norm,
-    //        10.f
-    //    );
-
-    //    lightColor += lighting.diffuse;
-    //    lightColor += lighting.specular;
-    //}
-    
-    float4 texColor = texs[MaterialCB[ModelCB.materialId.x].albedoNormal.x].Sample(s1, input.uv);
-    //float3 finalColor = texColor.xyz * lightColor;
+    matrix tbnMatrix = transpose(matrix(
+        float4(t, 0.f),
+        float4(b, 0.f),
+        float4(n, 0.f),
+        float4(0.f, 0.f, 0.f, 1.f)
+    ));
+    float4 tbnQuat = matrix_to_quaternion(tbnMatrix);
     
     PSOutput output;
     output.position = float4(input.worldPos, 1.f);
-    output.normal = float4(norm, 0.f);
-    output.color = texColor;
+    output.tbn = tbnQuat;
     output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
     
     return output;

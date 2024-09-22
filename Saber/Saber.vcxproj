@@ -315,6 +315,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BlinnPhongLighting.hlsli" />
+    <None Include="Math.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

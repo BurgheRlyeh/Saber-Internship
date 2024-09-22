@@ -1,4 +1,5 @@
 #include "BlinnPhongLighting.hlsli"
+#include "Math.hlsli"
 
 #define LIGHTS_MAX_COUNT 10
 
@@ -20,7 +21,7 @@ struct LightBuffer
 ConstantBuffer<LightBuffer> LightCB : register(b1);
 
 Texture2D<float4> position : register(t0); // position
-Texture2D<float4> normal : register(t1); // normal
+Texture2D<float4> tbn : register(t1); // normal
 Texture2D<float4> albedo : register(t2); // albedo
 Texture2D<float4> uvMaterialId : register(t3); // 
 
@@ -52,42 +53,46 @@ void main(ComputeShaderInput IN)
     uint h = 0;
     position.GetDimensions(w, h);
     
-    if (IN.DispatchThreadID.x < w && IN.DispatchThreadID.y < h)
+    if (!(IN.DispatchThreadID.x < w && IN.DispatchThreadID.y < h))
     {
-        
-        uint2 pixel = IN.DispatchThreadID.xy;
-    
-        float3 uvm = uvMaterialId.Load(IN.DispatchThreadID).xyz;
-    
-        uint materialId = uvm.z;
-        if (materialId == 0) {
-            output[pixel] = float4(.4f, .6f, .9f, 1.f);
-            return;
-        }
-    
-        MaterialBuffer material = MaterialCBs[uvm.z];
-        float3 albedoValue = MaterialsTextures[material.albedoNormal.x].Sample(s1, uvm.xy).xyz;
-        float3 normalValue = MaterialsTextures[material.albedoNormal.y].Sample(s1, uvm.xy).xyz;
-    
-        float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
-        for (uint i = 0; i < LightCB.lightCount.x; ++i)
-        {
-            Lighting lighting = GetPointLight(
-                LightCB.lights[i],
-                position.Load(IN.DispatchThreadID).xyz,
-                position.Load(IN.DispatchThreadID).xyz - SceneCB.cameraPosition.xyz,
-                normal.Load(IN.DispatchThreadID).xyz,
-                //normalize(normalValue),
-                1.f
-            );
-        
-            lightColor += lighting.diffuse;
-            lightColor += lighting.specular;
-        }
-    
-        //float3 finalColor = albedo.Load(DTid).xyz * lightColor;
-        float3 finalColor = albedoValue * lightColor;
-    
-        output[pixel] = float4(finalColor, 1.f);
+        return;
     }
+    
+    uint2 pixel = IN.DispatchThreadID.xy;
+    
+    float3 uvm = uvMaterialId.Load(IN.DispatchThreadID).xyz;
+    
+    uint materialId = uvm.z;
+    if (materialId == 0) {
+        output[pixel] = float4(.4f, .6f, .9f, 1.f);
+        return;
+    }
+    
+    MaterialBuffer material = MaterialCBs[uvm.z];
+    float3 albedo = MaterialsTextures[material.albedoNormal.x].Sample(s1, uvm.xy).xyz;
+    float3 nmValue = MaterialsTextures[material.albedoNormal.y].Sample(s1, uvm.xy).xyz;
+    
+    float3 localNorm = normalize(2.f * nmValue - float3(1.f, 1.f, 1.f)); // normalize to avoid unnormalized texture
+    float4 tbnQuat = tbn.Load(IN.DispatchThreadID);
+    matrix tbnMatrix = quaternion_to_matrix(tbnQuat);
+    float3 norm = mul(tbnMatrix, float4(localNorm, 0.f)).xyz;
+    
+    float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
+    for (uint i = 0; i < LightCB.lightCount.x; ++i)
+    {
+        Lighting lighting = GetPointLight(
+            LightCB.lights[i],
+            position.Load(IN.DispatchThreadID).xyz,
+            position.Load(IN.DispatchThreadID).xyz - SceneCB.cameraPosition.xyz,
+            norm,
+            1.f
+        );
+        
+        lightColor += lighting.diffuse;
+        lightColor += lighting.specular;
+    }
+    
+    float3 finalColor = albedo * lightColor;
+    
+    output[pixel] = float4(finalColor, 1.f);
 }

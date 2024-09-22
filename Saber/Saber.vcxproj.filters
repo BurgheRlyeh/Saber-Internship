@@ -16,6 +16,9 @@
     <Filter Include="Shaders">
       <UniqueIdentifier>{bf35d645-0b89-47ad-bb0d-362090a91e01}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders\Includes">
+      <UniqueIdentifier>{be022f20-3e2f-4812-8a9e-75f334da38d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -237,6 +240,9 @@
   <ItemGroup>
     <None Include="BlinnPhongLighting.hlsli">
       <Filter>Shaders</Filter>
+    </None>
+    <None Include="Math.hlsli">
+      <Filter>Shaders\Includes</Filter>
     </None>
   </ItemGroup>
 </Project>
