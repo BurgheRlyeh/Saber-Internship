@@ -57,7 +57,7 @@ void main(ComputeShaderInput IN)
         
         uint2 pixel = IN.DispatchThreadID.xy;
     
-        float3 uvm = uvMaterialId.Load(DTid).xyz;
+        float3 uvm = uvMaterialId.Load(IN.DispatchThreadID).xyz;
     
         uint materialId = uvm.z;
         if (materialId == 0) {
@@ -74,9 +74,9 @@ void main(ComputeShaderInput IN)
         {
             Lighting lighting = GetPointLight(
                 LightCB.lights[i],
-                position.Load(DTid).xyz,
-                position.Load(DTid).xyz - SceneCB.cameraPosition.xyz,
-                normal.Load(DTid).xyz,
+                position.Load(IN.DispatchThreadID).xyz,
+                position.Load(IN.DispatchThreadID).xyz - SceneCB.cameraPosition.xyz,
+                normal.Load(IN.DispatchThreadID).xyz,
                 //normalize(normalValue),
                 1.f
             );
