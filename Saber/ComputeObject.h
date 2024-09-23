@@ -129,17 +129,21 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {
         size_t rpId{};
-        CD3DX12_ROOT_PARAMETER1 rootParameters[6]{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[7]{};
         rootParameters[rpId++].InitAsConstantBufferView(0);
         rootParameters[rpId++].InitAsConstantBufferView(1); 
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsGbuffer[1]{};
-        rangeSrvsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
+        rangeSrvsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsGbuffer), rangeSrvsGbuffer);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeUavsGbuffer[1]{};
         rangeUavsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeUavsGbuffer), rangeUavsGbuffer);
+
+        CD3DX12_DESCRIPTOR_RANGE1 rangeDepthBuffer[1]{};
+        rangeDepthBuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+        rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeDepthBuffer), rangeDepthBuffer);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeCbvsMaterials[1]{};
         rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, 2);

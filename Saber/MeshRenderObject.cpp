@@ -27,8 +27,7 @@ void MeshRenderObject::InitMesh(
     m_pMesh = pMeshAtlas->Assign(meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshData);
 }
 
-void MeshRenderObject::SetMaterialId(std::shared_ptr<MaterialManager> pMaterialManager, size_t id) {
-    m_pMaterialManager = pMaterialManager;
+void MeshRenderObject::SetMaterialId(size_t id) {
     m_modelBuffer.materialId.x = id;
     m_pModelCB->Update(&m_modelBuffer);
 }
@@ -53,17 +52,6 @@ void MeshRenderObject::InnerRootParametersSetter(
     UINT& rootParamId
 ) const {
     pCommandListDirect->SetGraphicsRootConstantBufferView(rootParamId++, m_pModelCB->GetResource()->GetGPUVirtualAddress());
-    if (m_pMaterialManager) {
-        pCommandListDirect->SetDescriptorHeaps(1, m_pMaterialManager->GetDescHeap().GetAddressOf());
-        pCommandListDirect->SetGraphicsRootDescriptorTable(
-            rootParamId++,
-            m_pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle()
-        );
-        pCommandListDirect->SetGraphicsRootDescriptorTable(
-            rootParamId++,
-            m_pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle()
-        );
-    }
 }
 
 UINT MeshRenderObject::GetIndexCountPerInstance() const {

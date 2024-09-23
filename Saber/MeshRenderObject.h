@@ -30,8 +30,6 @@ class MeshRenderObject : protected RenderObject {
     } m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCB{};
 
-    std::shared_ptr<MaterialManager> m_pMaterialManager{};
-
 public:
     using RenderObject::InitMaterial;
     using RenderObject::Render;
@@ -51,10 +49,7 @@ public:
         const std::wstring& meshFilename
     );
 
-    virtual void SetMaterialId(
-        std::shared_ptr<MaterialManager> pMaterialManager,
-        size_t id
-    );
+    virtual void SetMaterialId(size_t id);
 
     virtual void Update();
 
@@ -383,7 +378,7 @@ public:
                 CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS), pGBuffer->GetRtFormatArray())
             )
         );
-        obj.SetMaterialId(pMaterialManager, pMaterialManager->AddMaterial(
+        obj.SetMaterialId(pMaterialManager->AddMaterial(
             pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"Brick.dds", L"BrickNM.dds"
         ));
 
@@ -446,7 +441,7 @@ public:
                 CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
             )
         );
-        obj.SetMaterialId(pMaterialManager, pMaterialManager->AddMaterial(
+        obj.SetMaterialId(pMaterialManager->AddMaterial(
             pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"barbarian_diffuse.dds", L"barb2_n.dds"
         ));
 
@@ -466,19 +461,9 @@ private:
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
         };
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
         rootParameters[0].InitAsConstantBufferView(0);  // scene CB
         rootParameters[1].InitAsConstantBufferView(1);  // model CB
-
-        // constant buffers
-        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsCBV[1]{};
-        rangeDescsCBV[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, 2);
-        rootParameters[2].InitAsDescriptorTable(_countof(rangeDescsCBV), rangeDescsCBV, D3D12_SHADER_VISIBILITY_PIXEL);
-        
-        // textures
-        CD3DX12_DESCRIPTOR_RANGE1 rangeDescsSRV[1]{};
-        rangeDescsSRV[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0);
-        rootParameters[3].InitAsDescriptorTable(_countof(rangeDescsSRV), rangeDescsSRV, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
             .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },

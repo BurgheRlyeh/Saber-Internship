@@ -5,13 +5,12 @@
 #include <limits>
 
 class Camera {
-protected:
+public:
 	float m_near{ 0.1f };
 	float m_far{ 100.0f };
 	float m_fov{ 60.0f };
 	float m_aspectRatio{ 16.0f / 9.0f };
 
-public:
 	void SetAspectRatio(float newAspectRatio);
 
 	virtual DirectX::XMFLOAT3 GetPosition() const = 0;

@@ -110,10 +110,10 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes.resize(5);
 
         // 0
-        m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
 
         // 1
-        m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
         m_pScenes[1]->AddStaticObject(TestColorRenderObject::CreateTriangle(
             m_pDevice,
             m_pAllocator,
@@ -125,8 +125,7 @@ void Renderer::Initialize(HWND hWnd) {
         ));
 
         // 2
-        m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
-        m_pScenes[2]->SetGBuffer(m_pGBuffers[0]);
+        m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
         m_pScenes[2]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
@@ -134,12 +133,12 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary
         ));
-        m_pScenes[2]->InitDeferredShadingComputeObject(
+        m_pScenes[2]->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
             m_pDevice,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary
-        );
+        ));
         m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
             m_pDevice,
             m_pAllocator,
@@ -155,7 +154,7 @@ void Renderer::Initialize(HWND hWnd) {
         ));
 
         // 3
-        m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
         for (size_t i{}; i < 15; ++i) {
             // add static triangle at random position
             m_pJobSystem->AddJob([&]() {
@@ -200,9 +199,8 @@ void Renderer::Initialize(HWND hWnd) {
         }
 
         // 4
-        m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator);
+        m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
         std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-        m_pScenes[4]->SetGBuffer(m_pGBuffers[0]);
         m_pScenes[4]->SetPostProcessing(CopyPostProcessing::Create(
             m_pDevice,
             m_pMeshAtlas,
@@ -210,12 +208,12 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary
         ));
-        m_pScenes[4]->InitDeferredShadingComputeObject(
+        m_pScenes[4]->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
             m_pDevice,
             m_pShaderAtlas,
             m_pRootSignatureAtlas,
             m_pPSOLibrary
-        );
+        ));
         m_pScenes[4]->AddStaticObject(TestTextureRenderObject::CreateModelFromGLTF(
             m_pDevice,
             m_pAllocator,
@@ -252,17 +250,17 @@ void Renderer::Initialize(HWND hWnd) {
                 );
 
                 // random lights
-                //for (size_t i{}; i < 9; ++i) {
-                //    std::random_device rd;
-                //    std::mt19937 gen(rd());
-                //    std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
-                //    std::uniform_real_distribution<float> colorDist(0.f, 1.f);
-                //    m_pScenes[sceneId]->AddLightSource(
-                //        { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
-                //        { colorDist(gen), colorDist(gen), colorDist(gen) },
-                //        { colorDist(gen), colorDist(gen), colorDist(gen) }
-                //    );
-                //}
+                for (size_t i{}; i < 9; ++i) {
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
+                    std::uniform_real_distribution<float> colorDist(0.f, 1.f);
+                    m_pScenes[sceneId]->AddLightSource(
+                        { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
+                        { colorDist(gen), colorDist(gen), colorDist(gen) },
+                        { colorDist(gen), colorDist(gen), colorDist(gen) }
+                    );
+                }
 
                 m_pScenes[sceneId]->SetSceneReadiness(true);
             });
@@ -407,18 +405,15 @@ void Renderer::Render() {
         return;
 
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
     };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
-    auto dsv = m_pDepthBuffers[0]->GetDsvCpuDescHandle();
-    
-    //m_pJobSystem->AddJob([&]()  // Some small work doesn't need to be moved to jobs, just as example
+    // Some small work doesn't need to be moved to jobs, just as example
     {
-        //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
-        m_pDepthBuffers[0]->Clear(commandListBeforeFrame->m_pCommandList);
+        scene->BeforeFrameJob(commandListBeforeFrame->m_pCommandList);
 
         ResourceTransition(
             commandListBeforeFrame->m_pCommandList,
@@ -426,10 +421,7 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
-        if (scene->GetGBuffer()) {
-            scene->ClearGBuffer(commandListBeforeFrame->m_pCommandList);
-        }
-        else {
+        if (!scene->GetGBuffer()) {
             float clearColor[]{ 0.6f, 0.4f, 0.4f, 1.0f };
             ClearRenderTarget(
                 commandListBeforeFrame->m_pCommandList,
@@ -440,7 +432,7 @@ void Renderer::Render() {
         }
 
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
-    }//);
+    }
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{
@@ -451,8 +443,7 @@ void Renderer::Render() {
             commandListForStaticObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
-            rtv,
-            dsv
+            rtv
         );
         commandListForStaticObjects->SetReadyForExection();
     });
@@ -470,8 +461,7 @@ void Renderer::Render() {
             commandListForDynamicObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
-            rtv,
-            dsv
+            rtv
         );
         commandListForDynamicObjects->SetReadyForExection();
     });
@@ -491,14 +481,7 @@ void Renderer::Render() {
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterDeferredShading); }
         )
     };
-    m_pJobSystem->AddJob([&]() { // Some small work doesn't need to be moved to jobs, just as example? but here will be postprocessing or vfx or whatever else? so it will fit as job
-        //scene->RenderPostProcessing(
-        //    commandListAfterFrame->m_pCommandList,
-        //    m_viewport,
-        //    m_scissorRect,
-        //    rtv
-        //);
-
+    m_pJobSystem->AddJob([&]() {
         scene->RunDeferredShading(
             commandListForDeferredShading->m_pCommandList,
             m_pResourceDescHeapManager,
@@ -508,10 +491,6 @@ void Renderer::Render() {
         );
         commandListForDeferredShading->SetReadyForExection();
 
-        //scene->CopyRTV(
-        //    commandListAfterFrame->m_pCommandList,
-        //    backBuffer
-        //);
         scene->RenderPostProcessing(
             commandListAfterFrame->m_pCommandList,
             m_pResourceDescHeapManager,
@@ -555,7 +534,7 @@ void Renderer::Render() {
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
-    scene->UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
+    scene->AfterFrameJob(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {

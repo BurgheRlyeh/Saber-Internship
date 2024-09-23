@@ -1,7 +1,11 @@
 struct SceneBuffer
 {
     matrix vpMatrix;
+    matrix invViewProjMatrix;
+    matrix invViewMatrix;
+    matrix invProjMatrix;
     float4 cameraPosition;
+    float4 nearFar;
 };
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);

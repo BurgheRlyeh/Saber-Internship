@@ -3,7 +3,11 @@
 struct SceneBuffer
 {
     matrix vpMatrix;
+    matrix invViewProjMatrix;
+    matrix invViewMatrix;
+    matrix invProjMatrix;
     float4 cameraPosition;
+    float4 nearFar;
 };
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
@@ -17,16 +21,6 @@ struct ModelBuffer
 
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
-struct MaterialBuffer
-{
-    uint4 albedoNormal;
-};
-ConstantBuffer<MaterialBuffer> MaterialCB[] : register(b2);
-
-//Texture2D t0 : register(t0);
-//Texture2D t1 : register(t1);
-Texture2D texs[] : register(t0);
-
 SamplerState s1 : register(s0);
 
 struct PSInput
@@ -39,10 +33,8 @@ struct PSInput
 
 struct PSOutput
 {
-    float4 position : SV_Target0;
+    float4 uvMaterialId : SV_Target0;
     float4 tbn : SV_Target1;
-    //float4 color : SV_Target2;
-    float4 uvMaterialId : SV_Target2;
 };
 
 PSOutput main(PSInput input)
@@ -60,9 +52,8 @@ PSOutput main(PSInput input)
     float4 tbnQuat = matrix_to_quaternion(tbnMatrix);
     
     PSOutput output;
-    output.position = float4(input.worldPos, 1.f);
-    output.tbn = tbnQuat;
     output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
+    output.tbn = tbnQuat;
     
     return output;
 }

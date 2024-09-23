@@ -9,6 +9,7 @@
 #include "CommandList.h"
 #include "ConstantBuffer.h"
 #include "ComputeObject.h"
+#include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
 #include "GBuffer.h"
 #include "MeshRenderObject.h"
@@ -20,7 +21,11 @@ class Scene {
 
     struct SceneBuffer {
         DirectX::XMMATRIX viewProjMatrix{};
+        DirectX::XMMATRIX invViewProjMatrix{};
+        DirectX::XMMATRIX invViewMatrix{};
+        DirectX::XMMATRIX invProjMatrix{};
         DirectX::XMFLOAT4 cameraPosition{};
+        DirectX::XMFLOAT4 nearFar{};
     } m_sceneBuffer;
     std::mutex m_sceneBufferMutex{};
     std::shared_ptr<DynamicUploadHeap> m_pCameraHeap{};
@@ -55,6 +60,7 @@ class Scene {
     std::atomic<bool> m_isSceneReady{};
     std::atomic<bool> m_isUpdateCameraHeap{};
 
+    std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
 
     std::shared_ptr<PostProcessing> m_pPostProcessing{};
@@ -65,23 +71,44 @@ public:
     Scene() = delete;
     Scene(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DepthBuffer> m_pDepthBuffer = nullptr,
+        std::shared_ptr<GBuffer> m_pGBuffer = nullptr
     );
 
     void SetSceneReadiness(bool value);
-
     bool IsSceneReady();
 
-    void AddStaticObject(const MeshRenderObject& object);
-    void AddDynamicObject(const MeshRenderObject& object);
+    void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
+    std::shared_ptr<DepthBuffer> GetDepthBuffer();
+
+    std::shared_ptr<GBuffer> GetGBuffer();
+    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
+
+    void Update(float deltaTime);
+    void BeforeFrameJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
+        if (m_pDepthBuffer) {
+            m_pDepthBuffer->Clear(pCommandList);
+        }
+        if (m_pGBuffer) {
+            m_pGBuffer->Clear(pCommandList);
+        }
+    }
+    void AfterFrameJob(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
+        UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
+    }
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
+    void UpdateCamerasAspectRatio(float aspectRatio);
+    bool TryMoveCamera(float forwardCoef, float rightCoef);
+    bool TryRotateCamera(float deltaX, float deltaY);
+    bool SetCurrentCamera(size_t cameraId);
+    void NextCamera();
 
     void SetAmbientLight(
         const DirectX::XMFLOAT3& color,
         const float& power = 1.f
     );
-
     bool AddLightSource(
         const DirectX::XMFLOAT4& position,
         const DirectX::XMFLOAT3& diffuseColor,
@@ -90,53 +117,22 @@ public:
         const float& specularPower = 1.f
     );
 
-    void UpdateCamerasAspectRatio(float aspectRatio);
-
-    void Update(float deltaTime);
-
-    bool SetCurrentCamera(size_t cameraId);
-
-    void NextCamera();
-
-    bool TryMoveCamera(float forwardCoef, float rightCoef);
-
-    bool TryRotateCamera(float deltaX, float deltaY);
-
-    bool TryUpdateCamera(float deltaTime);
-
-    void SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing);
-
-    DirectX::XMMATRIX GetViewProjectionMatrix();
-
+    void AddStaticObject(const MeshRenderObject& object);
+    void AddDynamicObject(const MeshRenderObject& object);
     void RenderStaticObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
     void RenderDynamicObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        D3D12_CPU_DESCRIPTOR_HANDLE depthStencilView
-    );
-    void RenderPostProcessing(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
 
-    void InitDeferredShadingComputeObject(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
-    );
-
+    void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
@@ -145,17 +141,20 @@ public:
         UINT height
     );
 
-    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
-
-    void ClearGBuffer(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+    void SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing);
+    void RenderPostProcessing(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
-
-    std::shared_ptr<GBuffer> GetGBuffer();
 
     void UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
 
 private:
+    bool TryUpdateCamera(float deltaTime);
+
     void UpdateSceneBuffer();
     void UpdateLightBuffer();
 };
