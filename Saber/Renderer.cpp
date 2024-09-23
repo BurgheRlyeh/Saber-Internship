@@ -24,8 +24,10 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
+    m_pDepthBuffers.clear();
     m_pMaterialManager.reset();
     m_pResourceDescHeapManager.reset();
     Flush();
@@ -48,30 +50,41 @@ void Renderer::Initialize(HWND hWnd) {
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    m_pRTVDescHeap = CreateDescriptorHeap(m_pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_numFrames);
-
-    // Get the size of the handle increment for the given type of descriptor heap.
-    // This value is typically used to increment a handle into a descriptor array by the correct amount.
-    m_RTVDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescHeap);
-
-    CreateDSVDescHeap();
-
-    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");
-
     m_pRtvDescHeapManager = std::make_shared<DescriptorHeapManager>(
         L"DescHeapManagerRtv",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        GBuffer::GetSize() - 1
+        m_numFrames + GBuffer::GetSize() - 1
     );
+    m_pBackBuffersDescHeapRange = m_pRtvDescHeapManager->AllocateRange(L"BackBuffersRange", m_numFrames);
+
+    m_pBackBuffers = CreateBackBuffers(m_pDevice, m_pSwapChain, m_pBackBuffersDescHeapRange);
+
+    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");
+
+    m_pDsvDescHeapManager = std::make_shared<DescriptorHeapManager>(
+        L"DescHeapManagerDsv",
+        m_pDevice,
+        D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+        1
+    );
+
     m_pResourceDescHeapManager = std::make_shared<DescriptorHeapManager>(
         L"DescHeapManagerCbvSrvUav",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         100,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+    );
+
+    m_pDepthBuffers.resize(1);
+    m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
+        m_pDevice,
+        m_pAllocator,
+        m_pDsvDescHeapManager,
+        m_pResourceDescHeapManager,
+        m_clientWidth,
+        m_clientHeight
     );
 
     m_pGBuffers.resize(1);
@@ -137,7 +150,6 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
             m_pGBuffers[0],
-            m_pResourceDescHeapManager,
             m_pMaterialManager,
             DirectX::XMMatrixIdentity()
         ));
@@ -215,7 +227,6 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary,
             m_pGBuffers[0],
-            m_pResourceDescHeapManager,
             m_pMaterialManager,
             DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
         ));
@@ -353,61 +364,20 @@ void Renderer::PerformResize() {
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    CreateRenderTargetViews(m_pDevice, m_pSwapChain, m_pRTVDescHeap);
+    m_pBackBuffers = CreateBackBuffers(m_pDevice, m_pSwapChain, m_pBackBuffersDescHeapRange);
 
     m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_clientWidth), static_cast<float>(m_clientHeight));
 
     // TODO update during switch
-
-    for (size_t i{ 1 }; i < m_pScenes.size(); ++i) {
-        m_pScenes[i]->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+    for (auto& pScene : m_pScenes) {
+        pScene->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
     }
-    
-    ResizeDepthBuffer();
+    for (auto& pDepthBuffer : m_pDepthBuffers) {
+        pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
+    }
     for (auto& pGBuffer : m_pGBuffers) {
         pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
-}
-
-void Renderer::ResizeDepthBuffer() {
-    // Resize screen dependent resources.
-    // Create a depth buffer.
-    D3D12_CLEAR_VALUE optimizedClearValue{
-        .Format{ DXGI_FORMAT_D32_FLOAT },
-        .DepthStencil{ 0.0f, 0 }
-    };
-
-    ThrowIfFailed(m_pDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Tex2D(
-            DXGI_FORMAT_D32_FLOAT,
-            m_clientWidth,
-            m_clientHeight,
-            1,
-            0,
-            1,
-            0,
-            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-        ),
-        D3D12_RESOURCE_STATE_DEPTH_WRITE,
-        &optimizedClearValue,
-        IID_PPV_ARGS(&m_pDepthStencilBuffer)
-    ));
-
-    // Update the depth-stencil view.
-    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{
-        .Format{ DXGI_FORMAT_D32_FLOAT },
-        .ViewDimension{ D3D12_DSV_DIMENSION_TEXTURE2D },
-        .Flags{ D3D12_DSV_FLAG_NONE },
-        .Texture2D{ .MipSlice{} }
-    };
-
-    m_pDevice->CreateDepthStencilView(
-        m_pDepthStencilBuffer.Get(),
-        &dsv,
-        m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart()
-    );
 }
 
 void Renderer::Update() {
@@ -438,31 +408,17 @@ void Renderer::Render() {
 
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
 
-
     std::shared_ptr<CommandList> commandListBeforeFrame{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
     };
 
-    // CPU descriptor handle to a RTV
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-        m_pRTVDescHeap->GetCPUDescriptorHandleForHeapStart(),   // RTV desc heap start
-        m_currBackBufferId,                                     // current index (offset) from start
-        m_RTVDescriptorSize                                     // RTV desc size
-    );
-    auto dsv = m_pDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
+    auto dsv = m_pDepthBuffers[0]->GetDsvCpuDescHandle();
     
     //m_pJobSystem->AddJob([&]()  // Some small work doesn't need to be moved to jobs, just as example
     {
         //RenderTarget::ClearRenderTarget(commandListBeforeFrame->m_pCommandList, backBuffer, rtv, nullptr); // no need to clear, we redraw it or copy there
-
-        commandListBeforeFrame->m_pCommandList->ClearDepthStencilView(
-            dsv,
-            D3D12_CLEAR_FLAG_DEPTH,
-            0.f,
-            0,
-            0,
-            nullptr
-        );
+        m_pDepthBuffers[0]->Clear(commandListBeforeFrame->m_pCommandList);
 
         ResourceTransition(
             commandListBeforeFrame->m_pCommandList,
@@ -695,12 +651,12 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     return pDXGIAdapter4;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter) {
+Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter) {
     // Represents a virtual adapter
-    Microsoft::WRL::ComPtr<ID3D12Device2> pD3D12Device2;
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice;
     // D3D12CreateDevice
     // Creates a device that represents the display adapter
-    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pD3D12Device2)));
+    ThrowIfFailed(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
 
     // Enable debug messages in debug mode.
 #if defined(_DEBUG)
@@ -708,7 +664,7 @@ Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::Com
     // An information-queue interface stores, retrieves, and filters debug messages
     // The queue consists of a message queue, an optional storage filter stack, and a optional retrieval filter stack
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
-    if (SUCCEEDED(pD3D12Device2.As(&pInfoQueue))) {
+    if (SUCCEEDED(pDevice.As(&pInfoQueue))) {
         // SetBreakOnSeverity
         // Set a message severity level to break on when a message with that severity level passes through the storage filter
         pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -745,7 +701,7 @@ Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::Com
     }
 #endif
 
-    return pD3D12Device2;
+    return pDevice;
 }
 
 Microsoft::WRL::ComPtr<D3D12MA::Allocator> Renderer::CreateAllocator(
@@ -767,24 +723,13 @@ Microsoft::WRL::ComPtr<D3D12MA::Allocator> Renderer::CreateAllocator(
     return pAllocator;
 }
 
-Microsoft::WRL::ComPtr<ID3D12CommandQueue> Renderer::CreateCommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type) {
-    // ID3D12CommandQueue Provides methods for submitting command lists, synchronizing command list execution,
-    // instrumenting the command queue, and updating resource tile mappings.
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> pD3D12CommandQueue;
-
-    D3D12_COMMAND_QUEUE_DESC desc{
-        .Type{ type },
-        .Priority{ D3D12_COMMAND_QUEUE_PRIORITY_NORMAL },
-        .Flags{ D3D12_COMMAND_QUEUE_FLAG_NONE },
-        .NodeMask{}
-    };
-
-    ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&pD3D12CommandQueue)));
-
-    return pD3D12CommandQueue;
-}
-
-Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue, uint32_t width, uint32_t height, uint32_t bufferCount) {
+Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
+    HWND hWnd,
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> pCommandQueue,
+    uint32_t width,
+    uint32_t height,
+    uint32_t bufferCount
+) {
     // An IDXGISwapChain interface implements one or more surfaces
     // for storing rendered data before presenting it to an output
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pDXGISwapChain4;
@@ -809,13 +754,13 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Mic
         .SwapEffect{ DXGI_SWAP_EFFECT_FLIP_DISCARD },       // Presentation model
         .AlphaMode{ DXGI_ALPHA_MODE_UNSPECIFIED },          // Transparency behavior
         // It is recommended to always allow tearing if tearing support is available.
-        .Flags{ CheckTearingSupport() ? UINT(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0 },
+        .Flags{ m_isTearingSupported ? UINT(DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) : 0 },
     };
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> pSwapChain1;
     // Creates a swap chain that is associated with an HWND handle to the output window for the swap chain
     ThrowIfFailed(pDXGIFactory4->CreateSwapChainForHwnd(
-        commandQueue.Get(),
+        pCommandQueue.Get(),
         hWnd,
         &swapChainDesc,
         nullptr,        // description of a full-screen swap chain
@@ -831,45 +776,29 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(HWND hWnd, Mic
     return pDXGISwapChain4;
 }
 
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Renderer::CreateDescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors) {
-    // ID3D12DescriptorHeap (array of resource views)
-    // A descriptor heap is a collection of contiguous allocations of descriptors, one
-    // allocation for every descriptor. Descriptor heaps contain many object types that are
-    // not part of a Pipeline State Object (PSO), such as Shader Resource Views (SRVs),
-    // Unordered Access Views (UAVs), Constant Buffer Views (CBVs), and Samplers
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescriptorHeap;
+std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> Renderer::CreateBackBuffers(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
+    std::shared_ptr<DescHeapRange> pDescHeapRange
+) {
+    DXGI_SWAP_CHAIN_DESC desc{};
+    ThrowIfFailed(pSwapChain->GetDesc(&desc));
+    ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
-    D3D12_DESCRIPTOR_HEAP_DESC desc{
-        .Type{ type },
-        .NumDescriptors{ numDescriptors }
-    };
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> backBuffers{ desc.BufferCount };
 
-    ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pDescriptorHeap)));
+    pDescHeapRange->Clear();
+    for (size_t i{}; i < desc.BufferCount; ++i) {
+        ThrowIfFailed(pSwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffers[i])));
 
-    return pDescriptorHeap;
-}
-
-void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> device, Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap) {
-    UINT rtvDescriptorSize{ device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV) };
-
-    // Get the CPU descriptor handle that represents the start of the heap
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
-    for (int i{}; i < m_numFrames; ++i) {
-        Microsoft::WRL::ComPtr<ID3D12Resource> pBackBufferResource;
-        ThrowIfFailed(swapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBufferResource)));
-
-        device->CreateRenderTargetView(
-            pBackBufferResource.Get(),   // ID3D12Resource that represents a render target
-            nullptr,            // RTV desc
-            rtvHandle           // new RTV dest
+        pDevice->CreateRenderTargetView(
+            backBuffers[i].Get(),               // ID3D12Resource that represents a render target
+            nullptr,                            // RTV desc
+            pDescHeapRange->GetNextCpuHandle()  // new RTV dest
         );
-
-        m_pBackBuffers[i] = pBackBufferResource;
-
-        // increment to the next handle in the descriptor heap
-        rtvHandle.Offset(rtvDescriptorSize);
     }
+
+    return backBuffers;
 }
 
 // Ensure that any commands previously executed on the GPU have finished executing 
@@ -877,15 +806,4 @@ void Renderer::CreateRenderTargetViews(Microsoft::WRL::ComPtr<ID3D12Device2> dev
 void Renderer::Flush() {
     m_pCommandQueueDirect->Flush();
     m_pCommandQueueCopy->Flush();
-}
-
-void Renderer::CreateDSVDescHeap() {
-    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc{
-        .Type{ D3D12_DESCRIPTOR_HEAP_TYPE_DSV },
-        .NumDescriptors{ 1 },
-        .Flags{ D3D12_DESCRIPTOR_HEAP_FLAG_NONE }
-    };
-    ThrowIfFailed(m_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_pDSVDescHeap)));
-
-    ResizeDepthBuffer();
 }

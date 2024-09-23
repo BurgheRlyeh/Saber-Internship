@@ -41,8 +41,8 @@ struct PSOutput
 {
     float4 position : SV_Target0;
     float4 tbn : SV_Target1;
-    float4 color : SV_Target2;
-    float4 uvMaterialId : SV_Target3;
+    //float4 color : SV_Target2;
+    float4 uvMaterialId : SV_Target2;
 };
 
 PSOutput main(PSInput input)

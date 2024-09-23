@@ -23,6 +23,7 @@
 #include "Camera.h"
 #include "CommandQueue.h"
 #include "CommandList.h"
+#include "DepthBuffer.h"
 #include "GBuffer.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
@@ -49,15 +50,14 @@ class Renderer {
 
     // DirectX 12 Objects
     Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{ m_numFrames };
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pRTVDescHeap{};
-    UINT m_RTVDescriptorSize{};
-    UINT m_currBackBufferId{};
 
     // Memory Allocator
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
-	
+
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{};
+    std::shared_ptr<DescHeapRange> m_pBackBuffersDescHeapRange{};
+    UINT m_currBackBufferId{};
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
 
 	// By default, enable V-Sync.
@@ -85,9 +85,7 @@ class Renderer {
     std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
 
     // Depth buffer.
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_pDepthStencilBuffer{};
-    // Descriptor heap for depth buffer.
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDSVDescHeap{};
+    std::vector<std::shared_ptr<DepthBuffer>> m_pDepthBuffers{};
 
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
@@ -100,6 +98,7 @@ class Renderer {
 
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
+    std::shared_ptr<DescriptorHeapManager> m_pDsvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
 
@@ -148,21 +147,16 @@ public:
 private:
     void RenderLoop();
 
-    void ResizeDepthBuffer();
-
     bool CheckTearingSupport();
 
     void EnableDebugLayer();
 
     Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+
     Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> CreateAllocator(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
-    );
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(
-        Microsoft::WRL::ComPtr<ID3D12Device2> device,
-        D3D12_COMMAND_LIST_TYPE type
     );
     Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain(
         HWND hWnd,
@@ -171,35 +165,13 @@ private:
         uint32_t height,
         uint32_t bufferCount
     );
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
-        Microsoft::WRL::ComPtr<ID3D12Device2> device,
-        D3D12_DESCRIPTOR_HEAP_TYPE type,
-        uint32_t numDescriptors
-    );
-    void CreateRenderTargetViews(
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> CreateBackBuffers(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap
+        std::shared_ptr<DescHeapRange> pDescHeapRange
     );
-
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateSceneBufferDescriptorHeap(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap{};
-
-        D3D12_DESCRIPTOR_HEAP_DESC desc{
-            .Type{ D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV },
-            .NumDescriptors{ 1 },
-            .Flags{ D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE }
-        };
-        ThrowIfFailed(pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pDescHeap)));
-
-        return pDescHeap;
-    }
 
     // Ensure that any commands previously executed on the GPU have finished executing 
     // before the CPU thread is allowed to continue processing
     void Flush();
-
-    void CreateDSVDescHeap();
 };

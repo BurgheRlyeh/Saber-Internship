@@ -28,6 +28,15 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
+	); 
+	
+	virtual const D3D12_DEPTH_STENCIL_VIEW_DESC* GetDsvDesc() const {
+		return nullptr;
+	};
+	void CreateDepthStencilView(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_DEPTH_STENCIL_VIEW_DESC* pDsvDesc = nullptr
 	);
 
 	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const {
@@ -49,6 +58,7 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
 	);
 
+	bool IsDsv() const;
 	bool IsRtv() const;
 	bool IsSrv() const;
 	bool IsUav() const;

@@ -312,7 +312,6 @@ public:
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
         std::shared_ptr<GBuffer> pGBuffer,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -402,7 +401,6 @@ public:
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
         std::shared_ptr<GBuffer> pGBuffer,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {

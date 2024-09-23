@@ -163,6 +163,7 @@
     <ClInclude Include="ConstantBuffer.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="DDSTexture.h" />
+    <ClInclude Include="DepthBuffer.h" />
     <ClInclude Include="DescriptorHeapManager.h" />
     <ClInclude Include="DescriptorHeapRange.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
@@ -197,6 +198,7 @@
     <ClCompile Include="ConstantBuffer.cpp" />
     <ClCompile Include="D3D12MemAlloc.cpp" />
     <ClCompile Include="DDSTexture.cpp" />
+    <ClCompile Include="DepthBuffer.cpp" />
     <ClCompile Include="DescriptorHeapManager.cpp" />
     <ClCompile Include="DescriptorHeapRange.cpp" />
     <ClCompile Include="DynamicUploadRingBuffer.cpp" />

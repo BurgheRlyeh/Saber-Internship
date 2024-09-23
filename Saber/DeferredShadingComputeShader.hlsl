@@ -20,10 +20,9 @@ struct LightBuffer
 
 ConstantBuffer<LightBuffer> LightCB : register(b1);
 
-Texture2D<float4> position : register(t0); // position
-Texture2D<float4> tbn : register(t1); // normal
-Texture2D<float4> albedo : register(t2); // albedo
-Texture2D<float4> uvMaterialId : register(t3); // 
+Texture2D<float4> position : register(t0);
+Texture2D<float4> tbn : register(t1);
+Texture2D<float4> uvMaterialId : register(t2); // 
 
 RWTexture2D<float4> output : register(u0);
 
@@ -32,7 +31,7 @@ struct MaterialBuffer
     uint4 albedoNormal;
 };
 ConstantBuffer<MaterialBuffer> MaterialCBs[] : register(b2);
-Texture2D<float4> MaterialsTextures[] : register(t4);
+Texture2D<float4> MaterialsTextures[] : register(t3);
 
 SamplerState s1 : register(s0);
 

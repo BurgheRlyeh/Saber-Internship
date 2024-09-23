@@ -134,7 +134,7 @@ private:
         rootParameters[rpId++].InitAsConstantBufferView(1); 
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsGbuffer[1]{};
-        rangeSrvsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0);
+        rangeSrvsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsGbuffer), rangeSrvsGbuffer);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeUavsGbuffer[1]{};
@@ -146,7 +146,7 @@ private:
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials);
          
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
-        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 4);
+        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 3);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
