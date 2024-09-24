@@ -250,7 +250,7 @@ void Renderer::Initialize(HWND hWnd) {
                 );
 
                 // random lights
-                for (size_t i{}; i < 9; ++i) {
+                for (size_t i{}; i < 1; ++i) {
                     std::random_device rd;
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);

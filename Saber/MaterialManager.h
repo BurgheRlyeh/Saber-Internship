@@ -8,23 +8,19 @@
 #include "DescriptorHeapManager.h"
 #include "Texture.h"
 
+#include "MaterialCB.h"
+
 class MaterialManager {
-	struct MaterialCB {
-		DirectX::XMUINT4 texsId{};
-
-		MaterialCB(size_t albedoId = 0, size_t normalId = 0) : texsId{
-			static_cast<UINT>(albedoId), static_cast<UINT>(normalId), 0, 0
-		} {}
-	};
-
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
-	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
 	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
+	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
+
+	MaterialCB m_materialCB{};
+	std::shared_ptr<ConstantBuffer> m_pMaterialCB{};
 
 	struct RenderMaterial {
 		std::shared_ptr<Texture> pAlbedo{};
 		std::shared_ptr<Texture> pNormal{};
-		std::shared_ptr<ConstantBuffer> pCB{};
 	};
 	std::vector<std::shared_ptr<RenderMaterial>> m_pMaterials{};
 
@@ -57,5 +53,4 @@ public:
 
 private:
 	size_t AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Texture> pTex);
-	size_t AddConstantBuffer(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<ConstantBuffer> pBuf);
 };

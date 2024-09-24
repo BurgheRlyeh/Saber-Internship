@@ -363,8 +363,6 @@ void Scene::UpdateSceneBuffer() {
 
         m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
         m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-        m_sceneBuffer.invViewMatrix = DirectX::XMMatrixInverse(nullptr, pCamera->GetViewMatrix());
-        m_sceneBuffer.invProjMatrix = DirectX::XMMatrixInverse(nullptr, pCamera->GetProjectionMatrix());
         
 
         DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };

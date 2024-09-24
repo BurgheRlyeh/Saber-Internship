@@ -8,28 +8,26 @@ MaterialManager::MaterialManager(
 	const size_t& capacity
 ) {
 	m_pTextureAtlas = std::make_shared<Atlas<DDSTexture>>(resourceFolder);
-	
 	m_pDescHeap = pDescHeapManager->GetDescriptorHeap();
+
+	m_pCBVsRange = pDescHeapManager->AllocateRange(
+		L"Materials/CBV",
+		1,
+		D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+	);
 	m_pSRVsRange = pDescHeapManager->AllocateRange(
 		L"Materials/SRVs",
 		2 * capacity,	// (albedo + normal) * count
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 	);
-	m_pCBVsRange = pDescHeapManager->AllocateRange(
-		L"Materials/CBVs",
-		1 + capacity,	// emptyMaterial + count
-		D3D12_DESCRIPTOR_RANGE_TYPE_CBV
-	);
+
+	m_pMaterialCB = std::make_shared<ConstantBuffer>(pAllocator, sizeof(MaterialCB), &m_materialCB);
+	m_pMaterialCB->CreateConstantBufferView(pDevice, m_pCBVsRange->GetNextCpuHandle());
 
 	m_pMaterials.reserve(capacity);
 
-	// create empty material
-	MaterialCB emptyMaterial{};
-	std::shared_ptr<ConstantBuffer> pEmptyMaterial{
-		std::make_shared<ConstantBuffer>(pAllocator, sizeof(emptyMaterial), &emptyMaterial)
-	};
-	m_pMaterials.push_back(std::make_shared<RenderMaterial>(nullptr, nullptr, pEmptyMaterial));
-	AddConstantBuffer(pDevice, pEmptyMaterial);
+	// empty material
+	m_pMaterials.push_back(std::make_shared<RenderMaterial>(nullptr, nullptr));
 }
 
 MaterialManager::~MaterialManager() {
@@ -51,13 +49,18 @@ size_t MaterialManager::AddMaterial(Microsoft::WRL::ComPtr<ID3D12Device2> pDevic
 	std::shared_ptr<DDSTexture> pNormal{
 		m_pTextureAtlas->Assign(normalFilepath, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect)
 	};
-	MaterialCB materialCB{ AddTexture(pDevice, pAlbedo), AddTexture(pDevice, pNormal) };
-	std::shared_ptr<ConstantBuffer> pCB{
-		std::make_shared<ConstantBuffer>(pAllocator, sizeof(materialCB), &materialCB)
-	};
-	m_pMaterials.push_back(std::make_shared<RenderMaterial>(pAlbedo, pNormal, pCB));
+	m_pMaterials.push_back(std::make_shared<RenderMaterial>(pAlbedo, pNormal));
 
-	return AddConstantBuffer(pDevice, pCB);
+	size_t materialId{ m_pMaterials.size() };
+	m_materialCB.materials[materialId] = {
+		static_cast<UINT>(AddTexture(pDevice, pAlbedo)),
+		static_cast<UINT>(AddTexture(pDevice, pNormal)),
+		0,
+		0
+	};
+	m_pMaterialCB->Update(&m_materialCB);
+
+	return materialId;
 }
 
 size_t MaterialManager::AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Texture> pTex) {
@@ -66,11 +69,5 @@ size_t MaterialManager::AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
 	auto handle = m_pSRVsRange->GetCpuHandle(id);
 	pTex->CreateShaderResourceView(pDevice, handle);
 
-	return id;
-}
-
-size_t MaterialManager::AddConstantBuffer(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<ConstantBuffer> pBuf) {
-	size_t id{ m_pCBVsRange->GetNextId() };
-	pBuf->CreateConstantBufferView(pDevice, m_pCBVsRange->GetCpuHandle(id));
 	return id;
 }

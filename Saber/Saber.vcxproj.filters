@@ -19,6 +19,9 @@
     <Filter Include="Shaders\Includes">
       <UniqueIdentifier>{be022f20-3e2f-4812-8a9e-75f334da38d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Common Files">
+      <UniqueIdentifier>{67099d74-4999-4475-b019-998faf034db6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -125,6 +128,12 @@
     </ClInclude>
     <ClInclude Include="DepthBuffer.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MaterialCB.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HlslCppTypesRedefine.h">
+      <Filter>Common Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

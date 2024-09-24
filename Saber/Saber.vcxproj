@@ -172,8 +172,10 @@
     <ClInclude Include="GLTFLoader.h" />
     <ClInclude Include="GPUResource.h" />
     <ClInclude Include="Headers.h" />
+    <ClInclude Include="HlslCppTypesRedefine.h" />
     <ClInclude Include="JobSystem.h" />
     <ClInclude Include="LockFreeQueue.h" />
+    <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshRenderObject.h" />

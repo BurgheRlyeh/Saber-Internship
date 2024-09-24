@@ -146,7 +146,7 @@ private:
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeDepthBuffer), rangeDepthBuffer);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeCbvsMaterials[1]{};
-        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, 2);
+        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials);
          
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};

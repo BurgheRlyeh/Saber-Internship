@@ -67,14 +67,14 @@ void GBuffer::Clear(
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 			D3D12_RESOURCE_STATE_RENDER_TARGET
 		);
-
-		ClearRenderTarget(
-			pCommandList,
-			m_pTextures[i]->GetResource(),
-			m_pRtvsRange->GetCpuHandle(i),
-			pClearValue
-		);
 	}
+
+	ClearRenderTarget(
+		pCommandList,
+		m_pTextures[0]->GetResource(),
+		m_pRtvsRange->GetCpuHandle(0),
+		pClearValue
+	);
 }
 
 std::shared_ptr<Texture> GBuffer::GetTexture(size_t id) const {

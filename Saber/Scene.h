@@ -22,8 +22,6 @@ class Scene {
     struct SceneBuffer {
         DirectX::XMMATRIX viewProjMatrix{};
         DirectX::XMMATRIX invViewProjMatrix{};
-        DirectX::XMMATRIX invViewMatrix{};
-        DirectX::XMMATRIX invProjMatrix{};
         DirectX::XMFLOAT4 cameraPosition{};
         DirectX::XMFLOAT4 nearFar{};
     } m_sceneBuffer;
