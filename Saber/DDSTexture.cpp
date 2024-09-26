@@ -34,7 +34,9 @@ void DDSTexture::LoadFromDDS(
 			CD3DX12_RESOURCE_DESC::Tex2D(
 				m_metadata.format,
 				m_metadata.width,
-				m_metadata.height
+				m_metadata.height,
+				static_cast<UINT16>(m_metadata.arraySize),
+				static_cast<UINT16>(m_metadata.mipLevels)
 			),
 			D3D12_RESOURCE_STATE_COPY_DEST
 		}
@@ -53,11 +55,13 @@ void DDSTexture::LoadFromDDS(
 		}
 	};
 
-	D3D12_SUBRESOURCE_DATA textureData{
-		.pData{ image.GetImages()->pixels },
-		.RowPitch{ static_cast<LONG_PTR>(image.GetImages()->rowPitch) },
-		.SlicePitch{ static_cast<LONG_PTR>(image.GetImages()->slicePitch) }
-	};
+	std::vector<D3D12_SUBRESOURCE_DATA> subresources{};
+	subresources.reserve(m_metadata.mipLevels);
+	for (size_t i{}; i < m_metadata.mipLevels; ++i) {
+		if (const DirectX::Image* pMip{ image.GetImage(i, 0, 0) }; pMip) {
+			subresources.emplace_back(pMip->pixels, pMip->rowPitch, pMip->slicePitch);
+		}
+	}
 
 	std::shared_ptr<CommandList> pCommandListCopy{
 		pCommandQueueCopy->GetCommandList(pDevice)
@@ -68,8 +72,8 @@ void DDSTexture::LoadFromDDS(
 		uploadBuffer.GetResource().Get(),
 		0,
 		0,
-		1,
-		&textureData
+		static_cast<UINT>(subresources.size()),
+		subresources.data()
 	);
 	pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
@@ -91,26 +95,28 @@ D3D12_SHADER_RESOURCE_VIEW_DESC DDSTexture::CreateSrvDesc() const {
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING }
 	};
 
+	UINT mipLevels{ static_cast<UINT>(m_metadata.mipLevels) };
+
 	switch (m_metadata.dimension) {
 	case DirectX::TEX_DIMENSION_TEXTURE1D:
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
-		srvDesc.Texture1D = { .MipLevels{ 1 } };	// static_cast<UINT>(m_metadata.mipLevels)
+		srvDesc.Texture1D = { .MipLevels{ mipLevels } };
 		break;
 
 	case DirectX::TEX_DIMENSION_TEXTURE2D:
 		if (m_metadata.IsCubemap()) {
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-			srvDesc.TextureCube = { .MipLevels{ 1 } };
+			srvDesc.TextureCube = { .MipLevels{ mipLevels } };
 		}
 		else {
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D = { .MipLevels{ 1 } };
+			srvDesc.Texture2D = { .MipLevels{ mipLevels } };
 		}
 		break;
 
 	case DirectX::TEX_DIMENSION_TEXTURE3D:
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-		srvDesc.Texture3D = { .MipLevels{ 1 } };
+		srvDesc.Texture3D = { .MipLevels{ mipLevels } };
 		break;
 	}
 

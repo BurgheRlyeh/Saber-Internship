@@ -50,6 +50,9 @@ class Scene {
     std::vector<std::shared_ptr<MeshRenderObject>> m_pDynamicObjects{};
     std::mutex m_dynamicObjectsMutex{};
 
+    std::vector<std::shared_ptr<MeshRenderObject>> m_pAlphaObjects{};
+    std::mutex m_alphaObjectsMutex{};
+
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
     std::atomic<bool> m_isUpdateCamera{};
@@ -117,6 +120,7 @@ public:
 
     void AddStaticObject(const MeshRenderObject& object);
     void AddDynamicObject(const MeshRenderObject& object);
+    void AddAlphaObject(const MeshRenderObject& object);
     void RenderStaticObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
@@ -128,6 +132,14 @@ public:
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+    );
+    void RenderAlphaObjects(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        std::shared_ptr<MaterialManager> pMaterialManager
     );
 
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);

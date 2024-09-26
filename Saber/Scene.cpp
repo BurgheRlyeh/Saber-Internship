@@ -164,6 +164,10 @@ void Scene::AddDynamicObject(const MeshRenderObject& object) {
     std::scoped_lock<std::mutex> lock(m_dynamicObjectsMutex);
     m_pDynamicObjects.push_back(std::make_shared<MeshRenderObject>(object));
 }
+void Scene::AddAlphaObject(const MeshRenderObject& object) {
+    std::scoped_lock<std::mutex> lock(m_alphaObjectsMutex);
+    m_pAlphaObjects.push_back(std::make_shared<MeshRenderObject>(object));
+}
 
 void Scene::RenderStaticObjects(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
@@ -257,6 +261,57 @@ void Scene::RenderDynamicObjects(
     }
 }
 
+void Scene::RenderAlphaObjects(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect,
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    std::shared_ptr<MaterialManager> pMaterialManager
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    UpdateSceneBuffer();
+    UpdateLightBuffer();
+
+    auto outerRootParametersSetter = [&](
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        UINT& rootParamId
+        ) {
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_sceneCBDynamicAllocation.gpuAddress
+            );
+            pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+            pCommandListDirect->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+            pCommandListDirect->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        };
+
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+    if (m_pGBuffer) {
+        rtvs = m_pGBuffer->GetRtvs();
+    }
+    else {
+        rtvs.push_back(renderTargetView);
+    }
+
+    std::scoped_lock<std::mutex> alphaObjectsLock(m_alphaObjectsMutex);
+    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
+    for (const auto& obj : m_pAlphaObjects) {
+        obj->Render(
+            pCommandListDirect,
+            viewport,
+            scissorRect,
+            rtvs.data(),
+            rtvs.size(),
+            &m_pDepthBuffer->GetDsvCpuDescHandle(),
+            outerRootParametersSetter
+        );
+    }
+}
+
 void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO) {
     m_pDeferredShadingComputeObject = pDeferredShadingCO;
 }
@@ -294,7 +349,6 @@ void Scene::RunDeferredShading(
             pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
             pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
             pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
-            //pCommandList
         }
     );
 }
