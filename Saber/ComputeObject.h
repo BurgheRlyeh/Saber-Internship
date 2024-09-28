@@ -154,13 +154,13 @@ private:
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
-            .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },
-            .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
-            .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+            .Filter{ D3D12_FILTER_ANISOTROPIC },
+            .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_WRAP },
+            .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_WRAP },
+            .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_WRAP },
             .MipLODBias{},
-            .MaxAnisotropy{},
-            .ComparisonFunc{ D3D12_COMPARISON_FUNC_NEVER },
+            .MaxAnisotropy{ 16 },
+            .ComparisonFunc{ D3D12_COMPARISON_FUNC_ALWAYS },
             .BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
             .MinLOD{},
             .MaxLOD{ D3D12_FLOAT32_MAX },

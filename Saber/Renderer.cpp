@@ -226,26 +226,10 @@ void Renderer::Initialize(HWND hWnd) {
             m_pPSOLibrary,
             m_pGBuffers[0],
             m_pMaterialManager,
-            DirectX::XMMatrixScaling(2.f, 2.f, 2.f)* DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+            DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
         ));
-
-        // 5
-        m_pScenes[5] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
         std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-        m_pScenes[5]->SetPostProcessing(CopyPostProcessing::Create(
-            m_pDevice,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[5]->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-            m_pDevice,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[5]->AddAlphaObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+        m_pScenes[4]->AddAlphaObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,
@@ -257,11 +241,11 @@ void Renderer::Initialize(HWND hWnd) {
             m_pPSOLibrary,
             m_pGBuffers[0],
             m_pMaterialManager,
-            DirectX::XMMatrixScaling(.05f, .05f, .05f) * DirectX::XMMatrixTranslation(-2.f, -1.f, -2.f)
+            DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
         ));
 
         // cameras for all scenes
-        for (size_t sceneId{ 1 }; sceneId < 6; ++sceneId) {
+        for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
             m_pJobSystem->AddJob([&, sceneId]() {
                 // dynamic camera
                 m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
@@ -479,13 +463,8 @@ void Renderer::Render() {
         commandListForStaticObjects->SetReadyForExection();
     });
 
-    uint64_t fenceValueBeforeDeferredShading{};
-    uint64_t fenceValueAfterDeferredShading{};
-
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2, [] {},
-            [&]() { fenceValueBeforeDeferredShading = m_pCommandQueueDirect->Signal(); }
-        )
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
     };
     m_pJobSystem->AddJob([&]() {
         scene->RenderAlphaObjects(
@@ -497,7 +476,10 @@ void Renderer::Render() {
             m_pMaterialManager
         );
         commandListForAlphaObjects->SetReadyForExection();
-    });
+        });
+
+    uint64_t fenceValueBeforeDeferredShading{};
+    uint64_t fenceValueAfterDeferredShading{};
 
     std::shared_ptr<CommandList> commandListForDynamicObjects{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2, [] {},

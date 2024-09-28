@@ -96,7 +96,7 @@ D3D12_SHADER_RESOURCE_VIEW_DESC DDSTexture::CreateSrvDesc() const {
 	};
 
 	UINT mipLevels{ static_cast<UINT>(m_metadata.mipLevels) };
-
+	
 	switch (m_metadata.dimension) {
 	case DirectX::TEX_DIMENSION_TEXTURE1D:
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
