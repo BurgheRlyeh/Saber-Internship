@@ -38,6 +38,6 @@ inline void ThrowIfFailed(HRESULT hr) {
         OutputDebugString(err.ErrorMessage());
         OutputDebugString(L"\n");
 
-        throw std::exception();
+       throw std::exception();
     }
 }

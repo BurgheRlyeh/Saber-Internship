@@ -14,7 +14,12 @@ DepthBuffer::DepthBuffer(
 	Resize(pDevice, pAllocator, width, height);
 }
 
-void DepthBuffer::Resize(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
+void DepthBuffer::Resize(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	UINT64 width,
+	UINT height
+) {
 	m_pDsvsRange->Clear();
 	m_pSrvsRange->Clear();
 
@@ -42,11 +47,14 @@ void DepthBuffer::Resize(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsof
 	);
 	ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
+	UINT mipLevels{ static_cast<UINT>(
+		std::log2f(std::max<float>(width, height)) + 1
+	) };
 	D3D12_SHADER_RESOURCE_VIEW_DESC srv{
 		.Format{ DXGI_FORMAT_R32_FLOAT },
 		.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
-		.Texture2D{ .MipLevels{ 1 } }
+		.Texture2D{ .MipLevels{ mipLevels } }
 	};
 	m_pDepthBuffer->CreateShaderResourceView(
 		pDevice, m_pSrvsRange->GetNextCpuHandle(), &srv

@@ -35,14 +35,6 @@ Texture2D<float4> MaterialsTextures[] : register(t3);
 
 SamplerState s1 : register(s0);
 
-struct ComputeShaderInput
-{
-    uint3 GroupID : SV_GroupID; // 3D index of the thread group in the dispatch.
-    uint3 GroupThreadID : SV_GroupThreadID; // 3D index of local thread ID in a thread group.
-    uint3 DispatchThreadID : SV_DispatchThreadID; // 3D index of global thread ID in the dispatch.
-    uint GroupIndex : SV_GroupIndex; // Flattened local index of the thread within a thread group.
-};
-
 float3 WorldPositionFromDepth(float2 uv, float depth)
 {
     uv = float2(2.f, -2.f) * uv - float2(1.f, -1.f);
@@ -50,86 +42,116 @@ float3 WorldPositionFromDepth(float2 uv, float depth)
     return worldPos.xyz / worldPos.w;
 }
 
-#define DDX_DDY_PIXEL_CHECK_CNT 4
+#define DDX_DDY_PIXEL_CHECK_CNT 4   // 2 / 4
 float2 BestUVDerivative(
-    float4 uvmi,
     int3 pixel,
+    float4 pixelUVMI,
+    float pixelDepth,
     int3 pixelDeltas[DDX_DDY_PIXEL_CHECK_CNT]
 )
 {
     float2 uvBest = float2(1.f, 1.f);
     
+    const float allowedDeltaDepth = 0.0025f;
     for (int i = 0; i < DDX_DDY_PIXEL_CHECK_CNT; ++i)
     {
-        float4 uvmiDelta = NonUniformResourceIndex(uvMaterialId.Load(pixel + pixelDeltas[i])) - uvmi;
+        float deltaDepth = NonUniformResourceIndex(depthBuffer.Load(pixel + pixelDeltas[i])) - pixelDepth;
+        if (abs(deltaDepth) > allowedDeltaDepth)
+            continue;
+        
+        float4 uvmiDelta = NonUniformResourceIndex(uvMaterialId.Load(pixel + pixelDeltas[i])) - pixelUVMI;
         if (uvmiDelta.z == 0.f && uvmiDelta.w == 0.f && length(uvmiDelta.xy) < length(uvBest))
             uvBest = uvmiDelta.xy;
     }
-
+    
     return uvBest == float2(1.f, 1.f) ? float2(0.f, 0.f) : uvBest;
 }
 
+// Source: https://github.com/GPUOpen-Effects/FidelityFX-Denoiser/blob/master/ffx-shadows-dnsr/ffx_denoiser_shadows_util.h
+//  LANE TO 8x8 MAPPING
+//  ===================
+//  00 01 08 09 10 11 18 19 
+//  02 03 0a 0b 12 13 1a 1b
+//  04 05 0c 0d 14 15 1c 1d
+//  06 07 0e 0f 16 17 1e 1f 
+//  20 21 28 29 30 31 38 39 
+//  22 23 2a 2b 32 33 3a 3b
+//  24 25 2c 2d 34 35 3c 3d
+//  26 27 2e 2f 36 37 3e 3f 
+uint bitfield_extract(uint src, uint off, uint bits)
+{
+    uint mask = (1u << bits) - 1;
+    return (src >> off) & mask;
+} // ABfe
+uint bitfield_insert(uint src, uint ins, uint bits)
+{
+    uint mask = (1u << bits) - 1;
+    return (ins & mask) | (src & (~mask));
+} // ABfiM
+
+uint2 remap_lane_8x8(uint lane)
+{
+    return uint2(
+        bitfield_insert(bitfield_extract(lane, 2u, 3u), lane, 1u),
+        bitfield_insert(bitfield_extract(lane, 3u, 3u), bitfield_extract(lane, 1u, 2u), 2u)
+    );
+}
+
+struct ComputeShaderInput
+{
+    uint3 GroupID : SV_GroupID; // 3D index of the thread group in the dispatch.
+    uint3 GroupThreadID : SV_GroupThreadID; // 3D index of local thread ID in a thread group.
+    uint3 DispatchThreadID : SV_DispatchThreadID; // 3D index of global thread ID in the dispatch.
+    uint GroupIndex : SV_GroupIndex; // Flattened local index of the thread within a thread group.
+};
 #define BLOCK_SIZE 8
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(ComputeShaderInput IN)
 {
+    uint2 GTid = remap_lane_8x8(IN.GroupIndex);
+    uint3 pixel = uint3(IN.GroupID.xy * 8 + GTid.xy, 0);
+    
     uint w = 0;
     uint h = 0;
     uvMaterialId.GetDimensions(w, h);
     
-    if (!(IN.DispatchThreadID.x < w && IN.DispatchThreadID.y < h))
+    if (!(GTid.x < w && GTid.y < h))
     {
         return;
     }
     
-    uint2 pixel = IN.DispatchThreadID.xy;;
-    
-    float4 uvmi = NonUniformResourceIndex(uvMaterialId.Load(IN.DispatchThreadID));
+    float4 uvmi = NonUniformResourceIndex(uvMaterialId.Load(pixel));
     float2 uv = uvmi.xy;
     uint materialId = uvmi.z;
     
     if (materialId == 0) {
-        output[pixel] = float4(.4f, .6f, .9f, 1.f);
+        output[pixel.xy] = float4(.4f, .6f, .9f, 1.f);
         return;
     }
     
     uint4 material = Materials.materials[materialId];
+    float depth = depthBuffer.Load(pixel);
     
 #if DDX_DDY_PIXEL_CHECK_CNT == 2
     int3 pixelDeltasX[DDX_DDY_PIXEL_CHECK_CNT] = { int3(-1, 0, 0), int3(1, 0, 0) };
     int3 pixelDeltasY[DDX_DDY_PIXEL_CHECK_CNT] = { int3(0, -1, 0), int3(0, 1, 0) };
 #elif DDX_DDY_PIXEL_CHECK_CNT == 4
-    int3 pixelDeltasX[DDX_DDY_PIXEL_CHECK_CNT] = { int3(-1, -1, 0), int3(-1, 1, 0), int3(1, -1, 0), int3(1, 1, 0) };
-    int3 pixelDeltasY[DDX_DDY_PIXEL_CHECK_CNT] = { int3(-1, -1, 0), int3(-1, 1, 0), int3(1, -1, 0), int3(1, 1, 0) };
-#elif DDX_DDY_PIXEL_CHECK_CNT == 6
-    int3 pixelDeltasX[DDX_DDY_PIXEL_CHECK_CNT] = { 
-        int3(-1, -1, 0), int3(-1, 1, 0), int3(-1, 0, 0), int3(1, 0, 0), int3(1, -1, 0), int3(1, 1, 0)
-    };
-    int3 pixelDeltasY[DDX_DDY_PIXEL_CHECK_CNT] = {
-        int3(-1, -1, 0), int3(-1, 1, 0), int3(0, -1, 0), int3(0, 1, 0), int3(1, -1, 0), int3(1, 1, 0)
-    };
-#elif DDX_DDY_PIXEL_CHECK_CNT == 8
-    int3 pixelDeltasX[DDX_DDY_PIXEL_CHECK_CNT] = { 
-        int3(-1, -1, 0), int3(-1, 0, 0), int3(-1, 1, 0), int3(0, -1, 0), int3(0, 1, 0), int3(1, 0, 0), int3(1, -1, 0), int3(1, 1, 0)
-    };
-    int3 pixelDeltasY[DDX_DDY_PIXEL_CHECK_CNT] = {
-        int3(-1, -1, 0), int3(-1, 0, 0), int3(-1, 1, 0), int3(0, -1, 0), int3(0, 1, 0), int3(1, 0, 0), int3(1, -1, 0), int3(1, 1, 0)
-    };
+    int3 pixelDeltasX[DDX_DDY_PIXEL_CHECK_CNT] = { int3(-1, 0, 0), int3(0, -1, 0), int3(1, 0, 0), int3(0, 1, 0) };
+    int3 pixelDeltasY[DDX_DDY_PIXEL_CHECK_CNT] = { int3(-1, 0, 0), int3(0, -1, 0), int3(1, 0, 0), int3(0, 1, 0) };
 #endif
-        
-    float2 uvDdx = BestUVDerivative(uvmi, IN.DispatchThreadID, pixelDeltasX);
-    float2 uvDdy = BestUVDerivative(uvmi, IN.DispatchThreadID, pixelDeltasY);
+    
+    float2 uvDdx = BestUVDerivative(pixel, uvmi, depth, pixelDeltasX);
+    float2 uvDdy = BestUVDerivative(pixel, uvmi, depth, pixelDeltasY);
     
     // normal
-    float3 nmValue = MaterialsTextures[material.y].SampleGrad(s1, uv, uvDdx, uvDdy).xyz;
+    float3 nmValue = MaterialsTextures[NonUniformResourceIndex(material.y)].SampleGrad(s1, uv, uvDdx, uvDdy).xyz;
     float3 localNorm = normalize(2.f * nmValue - 1.f); // normalize to avoid unnormalized texture
-    float4 tbnQuat = tbn.Load(IN.DispatchThreadID);
+    float4 tbnQuat = tbn.Load(pixel);
     matrix tbnMatrix = quaternion_to_matrix(tbnQuat);
     float3 norm = mul(tbnMatrix, float4(localNorm, 0.f)).xyz;
     
     // world position
-    float2 uvGlobal = float2(pixel) / float2(w, h);
-    float depth = depthBuffer.Load(IN.DispatchThreadID);
+    float2 uvGlobal = float2(pixel.xy) / float2(w, h);
     float3 worldPos = WorldPositionFromDepth(uvGlobal, depth);
     
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
@@ -147,9 +169,9 @@ void main(ComputeShaderInput IN)
         lightColor += lighting.specular;
     }
     
-    float3 albedo = MaterialsTextures[material.x].SampleGrad(s1, uv, uvDdx, uvDdy);
+    float3 albedo = MaterialsTextures[NonUniformResourceIndex(material.x)].SampleGrad(s1, uv, uvDdx, uvDdy);
     
     float3 finalColor = albedo * lightColor;
     
-    output[pixel] = float4(finalColor, 1.f);
+    output[pixel.xy] = float4(finalColor, 1.f);
 }

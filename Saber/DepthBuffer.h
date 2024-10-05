@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include <cmath>
+
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "Texture.h"

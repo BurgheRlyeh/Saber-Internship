@@ -107,7 +107,7 @@ void Renderer::Initialize(HWND hWnd) {
 
     // Create scenes
     {
-        m_pScenes.resize(6);
+        m_pScenes.resize(5);
 
         // 0
         m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
