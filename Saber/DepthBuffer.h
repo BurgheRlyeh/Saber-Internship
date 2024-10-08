@@ -18,9 +18,14 @@ class DepthBuffer {
 	};
 
 	std::shared_ptr<Texture> m_pDepthBuffer{};
+	std::shared_ptr<Texture> m_pHZBuffer{};
 
 	std::shared_ptr<DescHeapRange> m_pDsvsRange{};
 	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
+	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+
+	const size_t m_hzbSize{ 12 };
+	const size_t m_hzbMidMipId{ 5 };
 
 public:
 	DepthBuffer(
@@ -44,8 +49,9 @@ public:
 	std::shared_ptr<Texture> GetTexture() const;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCpuDescHandle() const;
-
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandle() const;
+	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandle() const;
+	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMidMip() const;
 
 	D3D12_DESCRIPTOR_RANGE1 GetSrvD3d12DescRange1(
 		UINT baseShaderRegister,

@@ -76,7 +76,7 @@ public:
         )> outerRootParametersSetter = [](
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
             UINT& rootParamId
-            ) {}
+        ) {}
     ) {
         pCommandListCompute->SetPipelineState(m_pPipelineState.Get());
         pCommandListCompute->SetComputeRootSignature(m_pRootSignatureResource->pRootSignature.Get());

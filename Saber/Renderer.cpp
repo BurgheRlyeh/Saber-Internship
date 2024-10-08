@@ -24,6 +24,7 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    m_pSinglePassDownsampler.reset();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
@@ -101,7 +102,19 @@ void Renderer::Initialize(HWND hWnd) {
         L"../../Resources/Textures/",
         m_pDevice,
         m_pAllocator,
-        m_pResourceDescHeapManager, 10);
+        m_pResourceDescHeapManager, 10
+    );
+
+    m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(
+        m_pDevice,
+        m_pAllocator,
+        m_pShaderAtlas,
+        m_pRootSignatureAtlas,
+        m_pPSOLibrary,
+        m_pResourceDescHeapManager,
+        m_clientWidth,
+        m_clientHeight
+    );
 
     m_isInitialized = true;
 
@@ -388,6 +401,7 @@ void Renderer::PerformResize() {
     for (auto& pDepthBuffer : m_pDepthBuffers) {
         pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
+    m_pSinglePassDownsampler->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     for (auto& pGBuffer : m_pGBuffers) {
         pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
@@ -478,12 +492,10 @@ void Renderer::Render() {
         commandListForAlphaObjects->SetReadyForExection();
         });
 
-    uint64_t fenceValueBeforeDeferredShading{};
-    uint64_t fenceValueAfterDeferredShading{};
-
+    uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2, [] {},
-            [&]() { fenceValueBeforeDeferredShading = m_pCommandQueueDirect->Signal(); }
+            [&]() { fenceValueAfterRender = m_pCommandQueueDirect->Signal(); }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -496,14 +508,20 @@ void Renderer::Render() {
         commandListForDynamicObjects->SetReadyForExection();
     });
 
+    
+    uint64_t fenceValueAfterHZB{};
+    std::shared_ptr<CommandList> commandListForHZB{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3,
+            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterRender); },
+            [&] { fenceValueAfterHZB = m_pCommandQueueDirect->Signal(); }
+        )
+    };
+
+    uint64_t fenceValueAfterDeferredShading{};
     std::shared_ptr<CommandList> commandListForDeferredShading{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3,
-            [&] {
-                m_pCommandQueueDirect->WaitForFenceValue(fenceValueBeforeDeferredShading);
-            },
-            [&] {
-                fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal();
-            }
+            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterHZB); },
+            [&] { fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal(); }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
@@ -512,6 +530,15 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
+        m_pSinglePassDownsampler->Dispatch(
+            commandListForHZB->m_pCommandList,
+            m_pResourceDescHeapManager->GetDescriptorHeap(),
+            scene->GetDepthBuffer()->GetSrvGpuDescHandle(),
+            scene->GetDepthBuffer()->GetUavGpuDescHandleForMidMip(),
+            scene->GetDepthBuffer()->GetUavGpuDescHandle()
+        );
+        commandListForHZB->SetReadyForExection();
+
         scene->RunDeferredShading(
             commandListForDeferredShading->m_pCommandList,
             m_pResourceDescHeapManager,
@@ -634,6 +661,7 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
         return pDXGIAdapter4;
     }
 
+    SIZE_T maxDedicatedVideoMemory{};
     for (UINT adapterIndex{};
         pDXGIFactory->EnumAdapterByGpuPreference(
             adapterIndex,
@@ -645,6 +673,10 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
         DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
         ThrowIfFailed(pDXGIAdapter1->GetDesc1(&dxgiAdapterDesc1));
 
+        if (dxgiAdapterDesc1.DedicatedVideoMemory <= maxDedicatedVideoMemory) {
+            continue;
+        }
+
         if (!(dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             // Creates a device that represents the display adapter
             && SUCCEEDED(D3D12CreateDevice(
@@ -654,6 +686,7 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
                 nullptr                 // A pointer to a memory block that receives a pointer to the device
             ))) {
             ThrowIfFailed(pDXGIAdapter1.As(&pDXGIAdapter4));
+            maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
         }
     }
 

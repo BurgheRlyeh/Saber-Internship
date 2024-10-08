@@ -30,6 +30,7 @@
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Scene.h"
+#include "SinglePassDownSampler.h"
 #include "MaterialManager.h"
 #include "JobSystem.h"
 #include "DynamicUploadRingBuffer.h"
@@ -86,6 +87,7 @@ class Renderer {
 
     // Depth buffer.
     std::vector<std::shared_ptr<DepthBuffer>> m_pDepthBuffers{};
+    std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
 
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
