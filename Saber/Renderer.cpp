@@ -2,10 +2,11 @@
 
 #include <cassert>
 #include <random>
-
 #include <string>  
 #include <iostream> 
 #include <sstream>
+
+#include "pix3.h"
 
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
@@ -442,6 +443,11 @@ void Renderer::Render() {
 
     // Some small work doesn't need to be moved to jobs, just as example
     {
+        PIXScopedEvent(
+            commandListBeforeFrame->m_pCommandList.Get(),
+            PIX_COLOR(0, 0, 0),
+            L"Before frame part"
+        );
         scene->BeforeFrameJob(commandListBeforeFrame->m_pCommandList);
 
         ResourceTransition(
@@ -468,6 +474,11 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
     };
     m_pJobSystem->AddJob([&]() {
+        PIXScopedEvent(
+            commandListForStaticObjects->m_pCommandList.Get(),
+            PIX_COLOR(0, 0, 0),
+            L"Static Objects rendering"
+        );
         scene->RenderStaticObjects(
             commandListForStaticObjects->m_pCommandList,
             m_viewport,
@@ -481,6 +492,11 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
     };
     m_pJobSystem->AddJob([&]() {
+        PIXScopedEvent(
+            commandListForAlphaObjects->m_pCommandList.Get(),
+            PIX_COLOR(0, 0, 0),
+            L"Alpha Objects rendering"
+        );
         scene->RenderAlphaObjects(
             commandListForAlphaObjects->m_pCommandList,
             m_viewport,
@@ -499,6 +515,11 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
+        PIXScopedEvent(
+            commandListForDynamicObjects->m_pCommandList.Get(),
+            PIX_COLOR(0, 0, 0),
+            L"Dynamic Objects rendering"
+        );
         scene->RenderDynamicObjects(
             commandListForDynamicObjects->m_pCommandList,
             m_viewport,
@@ -530,42 +551,61 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        m_pSinglePassDownsampler->Dispatch(
-            commandListForHZB->m_pCommandList,
-            m_pResourceDescHeapManager->GetDescriptorHeap(),
-            scene->GetDepthBuffer()->GetSrvGpuDescHandle(),
-            scene->GetDepthBuffer()->GetUavGpuDescHandleForMidMip(),
-            scene->GetDepthBuffer()->GetUavGpuDescHandle()
-        );
-        commandListForHZB->SetReadyForExection();
+        {
+            PIXScopedEvent(
+                commandListForHZB->m_pCommandList.Get(),
+                PIX_COLOR(0, 0, 0),
+                L"Building HZB"
+            );
+            m_pSinglePassDownsampler->Dispatch(
+                commandListForHZB->m_pCommandList,
+                m_pResourceDescHeapManager->GetDescriptorHeap(),
+                scene->GetDepthBuffer()->GetSrvGpuDescHandle(),
+                scene->GetDepthBuffer()->GetUavGpuDescHandleForMidMip(),
+                scene->GetDepthBuffer()->GetUavGpuDescHandle()
+            );
+            commandListForHZB->SetReadyForExection();
+        }
 
-        scene->RunDeferredShading(
-            commandListForDeferredShading->m_pCommandList,
-            m_pResourceDescHeapManager,
-            m_pMaterialManager,
-            m_clientWidth,
-            m_clientHeight
-        );
-        commandListForDeferredShading->SetReadyForExection();
+        {
+            PIXScopedEvent(
+                commandListForDeferredShading->m_pCommandList.Get(),
+                PIX_COLOR(0, 0, 0),
+                L"Deferred shading"
+            );
+            scene->RunDeferredShading(
+                commandListForDeferredShading->m_pCommandList,
+                m_pResourceDescHeapManager,
+                m_pMaterialManager,
+                m_clientWidth,
+                m_clientHeight
+            );
+            commandListForDeferredShading->SetReadyForExection();
+        }
 
-        scene->RenderPostProcessing(
-            commandListAfterFrame->m_pCommandList,
-            m_pResourceDescHeapManager,
-            m_viewport,
-            m_scissorRect,
-            rtv
-        );
+        {
+            PIXScopedEvent(
+                commandListAfterFrame->m_pCommandList.Get(),
+                PIX_COLOR(0, 0, 0),
+                L"Post Processing"
+            );
+            scene->RenderPostProcessing(
+                commandListAfterFrame->m_pCommandList,
+                m_pResourceDescHeapManager,
+                m_viewport,
+                m_scissorRect,
+                rtv
+            );
+            ResourceTransition(
+                commandListAfterFrame->m_pCommandList,
+                backBuffer,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT
+            );
 
-        ResourceTransition(
-            commandListAfterFrame->m_pCommandList,
-            backBuffer,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-
-        commandListAfterFrame->SetReadyForExection();
+            commandListAfterFrame->SetReadyForExection();
+        }
     });
-
 
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
