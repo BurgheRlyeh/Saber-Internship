@@ -102,9 +102,9 @@ void SinglePassDownsampler::Dispatch(
         1,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
             pCommandListCompute->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(0, srvHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(2, midMipUavHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(3, mipsUavsHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(1, srvHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(3, midMipUavHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(4, mipsUavsHandle);
         }
     );
 }
@@ -113,81 +113,6 @@ void SinglePassDownsampler::InnerRootParametersSetter(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
     UINT& rootParamId
 ) const {
-    pCommandListDirect->SetComputeRootDescriptorTable(1, m_pSpdCounterBufferRange->GetGpuHandle());
-    pCommandListDirect->SetComputeRootDescriptorTable(4, m_pSpdConstantBufferRange->GetGpuHandle());
-}
-
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-) {
-    size_t rp{};
-    CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
-
-    // input texture
-    CD3DX12_DESCRIPTOR_RANGE1 rangeSrvInput[1]{};
-    rangeSrvInput[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvInput), rangeSrvInput);
-
-    // global atomic counter
-    CD3DX12_DESCRIPTOR_RANGE1 rangeUavCounter[1]{};
-    rangeUavCounter[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavCounter), rangeUavCounter);
-
-    // mid mipmap
-    CD3DX12_DESCRIPTOR_RANGE1 rangeUavMidMipmap[1]{};
-    rangeUavMidMipmap[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavMidMipmap), rangeUavMidMipmap);
-
-    // mips
-    CD3DX12_DESCRIPTOR_RANGE1 rangeUavMips[1]{};
-    rangeUavMips[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavMips), rangeUavMips);
-
-    // SPD ConstantBuffer
-    CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
-    rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
-
-    D3D12_STATIC_SAMPLER_DESC sampler{
-        .Filter{ D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT },
-        .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_CLAMP },
-        .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_CLAMP },
-        .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_CLAMP },
-        .MipLODBias{},
-        .MaxAnisotropy{ 1 },
-        .ComparisonFunc{ D3D12_COMPARISON_FUNC_NEVER },
-        .BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
-        .MinLOD{},
-        .MaxLOD{ D3D12_FLOAT32_MAX },
-        .ShaderRegister{},
-        .RegisterSpace{},
-        .ShaderVisibility{ D3D12_SHADER_VISIBILITY_ALL }
-    };
-
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
-
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-    if (FAILED(pDevice->CheckFeatureSupport(
-        D3D12_FEATURE_ROOT_SIGNATURE,
-        &featureData,
-        sizeof(featureData)
-    ))) {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    // Serialize the root signature.
-    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-    HRESULT hr{ D3DX12SerializeVersionedRootSignature(
-        &rootSignatureDescription,
-        featureData.HighestVersion,
-        &rootSignatureBlob,
-        &errorBlob
-    ) };
-    if (FAILED(hr) && errorBlob) {
-        OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
-    }
-    ThrowIfFailed(hr);
-
-    return rootSignatureBlob;
+    pCommandListDirect->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
+    pCommandListDirect->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }

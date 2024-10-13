@@ -24,7 +24,6 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
-    m_pSinglePassDownsampler.reset();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
@@ -85,7 +84,17 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDsvDescHeapManager,
         m_pResourceDescHeapManager,
         m_clientWidth,
-        m_clientHeight
+        m_clientHeight,
+        std::make_shared<SinglePassDownsampler>(
+            m_pDevice,
+            m_pAllocator,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary,
+            m_pResourceDescHeapManager,
+            m_clientWidth,
+            m_clientHeight
+        )
     );
 
     m_pGBuffers.resize(1);
@@ -103,17 +112,6 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDevice,
         m_pAllocator,
         m_pResourceDescHeapManager, 10
-    );
-
-    m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(
-        m_pDevice,
-        m_pAllocator,
-        m_pShaderAtlas,
-        m_pRootSignatureAtlas,
-        m_pPSOLibrary,
-        m_pResourceDescHeapManager,
-        m_clientWidth,
-        m_clientHeight
     );
 
     m_isInitialized = true;
@@ -364,8 +362,8 @@ void Renderer::PerformResize() {
         return;
 
     // Don't allow 0 size swap chain back buffers.
-    m_clientWidth = std::max(1u, width);
-    m_clientHeight = std::max(1u, height);
+    m_clientWidth  = std::min<uint32_t>(std::max(1u, width), 4096);
+    m_clientHeight = std::min<uint32_t>(std::max(1u, height), 4096);
 
     // Flush the GPU queue to make sure the swap chain's back buffers
     // are not being referenced by an in-flight command list.
@@ -401,7 +399,6 @@ void Renderer::PerformResize() {
     for (auto& pDepthBuffer : m_pDepthBuffers) {
         pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
-    m_pSinglePassDownsampler->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     for (auto& pGBuffer : m_pGBuffers) {
         pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
@@ -530,12 +527,9 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        m_pSinglePassDownsampler->Dispatch(
+        scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
             commandListForHZB->m_pCommandList,
-            m_pResourceDescHeapManager->GetDescriptorHeap(),
-            scene->GetDepthBuffer()->GetSrvGpuDescHandle(),
-            scene->GetDepthBuffer()->GetUavGpuDescHandleForMidMip(),
-            scene->GetDepthBuffer()->GetUavGpuDescHandle()
+            m_pResourceDescHeapManager->GetDescriptorHeap()
         );
         commandListForHZB->SetReadyForExection();
 

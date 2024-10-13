@@ -1,14 +1,3 @@
-Texture2D<float> InputTexture : register(t0);
-
-struct SpdGlobalAtomicBuffer
-{
-    uint counter[6];
-};
-RWStructuredBuffer<SpdGlobalAtomicBuffer> SpdGlobalAtomicCounterBuffer : register(u0);
-
-globallycoherent RWTexture2D<float> InputTextureMip6 : register(u1);
-RWTexture2D<float> InputTextureMips[] : register(u2);
-
 cbuffer SpdCB : register(b0)
 {
     uint mips;
@@ -18,10 +7,20 @@ cbuffer SpdCB : register(b0)
     float2 padding;
 }
 
+Texture2D<float> InputTexture : register(t0);
+
+struct SpdGlobalAtomicBuffer
+{
+    uint counter[6];
+};
+RWStructuredBuffer<SpdGlobalAtomicBuffer> SpdGlobalAtomicCounterBuffer : register(u0);
+
+globallycoherent RWTexture2D<float> TextureMip6 : register(u1);
+RWTexture2D<float> TextureMips[] : register(u2);
+
 SamplerState s_LinearClamp : register(s0);
 
 groupshared uint spdCounter;
-
 groupshared float4 spdIntermediate[16][16];
 
 // Either samples or loads from the input texture for a given UV and slice.
@@ -34,7 +33,7 @@ float4 SpdLoadSourceImage(float2 uv, uint slice)
 // for a given UV and slice. This function is only used by the last active thread group.
 float4 SpdLoad(int2 uv, uint slice)
 {
-    return float4(InputTextureMip6.Load(int3(uv, slice)), 0, 0, 0);
+    return float4(TextureMip6.Load(int3(uv, slice)), 0, 0, 0);
 }
 
 // Stores the output to the MIP levels. If mip value is 5, the output needs to be
@@ -42,8 +41,8 @@ float4 SpdLoad(int2 uv, uint slice)
 void SpdStore(int2 uv, float4 value, uint mip, uint slice)
 {
     if (mip == 5)
-        InputTextureMip6[uv] = value.x;
-    InputTextureMips[mip][uv] = value.x;
+        TextureMip6[uv] = value.x;
+    TextureMips[mip][uv] = value.x;
 }
 
 // Increments the global atomic counter. We have one counter per slice.
@@ -86,6 +85,41 @@ void SpdStoreIntermediate(uint x, uint y, float4 value)
 {
     spdIntermediate[x][y] = value;
 }
+
+// copy texture
+//void CopyInputTexturePixel(int2 uv, uint slice)
+//{
+//    TextureCopy[uv] = SpdLoadSourceImage(uv, slice).x;
+//}
+
+//void CopyInputTextureQuad(uint2 base, uint slice)
+//{
+//    CopyInputTexturePixel(base + uint2(0, 0), 0);
+//    CopyInputTexturePixel(base + uint2(0, 1), 0);
+//    CopyInputTexturePixel(base + uint2(1, 0), 0);
+//    CopyInputTexturePixel(base + uint2(1, 1), 0);
+//}
+
+//void CopyInputTexture(
+//    uint2 workGroupID,
+//    uint localInvocationIndex,
+//    uint mips,
+//    uint numWorkGroups,
+//    uint slice,
+//    uint2 workGroupOffset
+//) {
+//    workGroupID += workGroupOffset;
+    
+//    uint2 sub_xy = ffxRemapForWaveReduction(localInvocationIndex % 64);
+//    uint x = 2 * (sub_xy.x + 8 * ((localInvocationIndex >> 6) % 2));
+//    uint y = 2 * (sub_xy.y + 8 * ((localInvocationIndex >> 7)));
+    
+//    uint2 tex = uint2(workGroupID.xy * 64) + uint2(x, y);
+//    CopyInputTextureQuad(tex + uint2( 0,  0), slice);
+//    CopyInputTextureQuad(tex + uint2(32,  0), slice);
+//    CopyInputTextureQuad(tex + uint2( 0, 32), slice);
+//    CopyInputTextureQuad(tex + uint2(32, 32), slice);
+//}
 
 #define FFX_GPU
 #define FFX_HLSL
