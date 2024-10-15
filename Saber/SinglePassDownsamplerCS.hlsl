@@ -86,41 +86,6 @@ void SpdStoreIntermediate(uint x, uint y, float4 value)
     spdIntermediate[x][y] = value;
 }
 
-// copy texture
-//void CopyInputTexturePixel(int2 uv, uint slice)
-//{
-//    TextureCopy[uv] = SpdLoadSourceImage(uv, slice).x;
-//}
-
-//void CopyInputTextureQuad(uint2 base, uint slice)
-//{
-//    CopyInputTexturePixel(base + uint2(0, 0), 0);
-//    CopyInputTexturePixel(base + uint2(0, 1), 0);
-//    CopyInputTexturePixel(base + uint2(1, 0), 0);
-//    CopyInputTexturePixel(base + uint2(1, 1), 0);
-//}
-
-//void CopyInputTexture(
-//    uint2 workGroupID,
-//    uint localInvocationIndex,
-//    uint mips,
-//    uint numWorkGroups,
-//    uint slice,
-//    uint2 workGroupOffset
-//) {
-//    workGroupID += workGroupOffset;
-    
-//    uint2 sub_xy = ffxRemapForWaveReduction(localInvocationIndex % 64);
-//    uint x = 2 * (sub_xy.x + 8 * ((localInvocationIndex >> 6) % 2));
-//    uint y = 2 * (sub_xy.y + 8 * ((localInvocationIndex >> 7)));
-    
-//    uint2 tex = uint2(workGroupID.xy * 64) + uint2(x, y);
-//    CopyInputTextureQuad(tex + uint2( 0,  0), slice);
-//    CopyInputTextureQuad(tex + uint2(32,  0), slice);
-//    CopyInputTextureQuad(tex + uint2( 0, 32), slice);
-//    CopyInputTextureQuad(tex + uint2(32, 32), slice);
-//}
-
 #define FFX_GPU
 #define FFX_HLSL
 #include "ffx_core.h"

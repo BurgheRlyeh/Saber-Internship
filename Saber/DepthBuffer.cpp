@@ -61,22 +61,31 @@ void DepthBuffer::Resize(
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ 1 } }
 	};
+	m_depthSrvId = m_pSrvsRange->GetNextId();
 	m_pDepthBuffer->CreateShaderResourceView(
-		pDevice, m_pSrvsRange->GetNextCpuHandle(), &srvDesc
+		pDevice, m_pSrvsRange->GetCpuHandle(m_depthSrvId), &srvDesc
 	);
 
 	ResizeHZB(pDevice, pAllocator, width, height);
 }
 
-void DepthBuffer::ResizeHZB(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
+bool DepthBuffer::ResizeHZB(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	UINT64 width,
+	UINT height
+) {
 	if (!m_pSinglePassDownsampler) {
-		return;
+		return false;
 	}
 
-	UINT mipLevels{ 1u + static_cast<UINT>(
-		std::log2f(std::max<float>(width, height))
-		) };
 	// TODO: splitting when resolution > 4096
+	float resMax{ std::max<float>(width, height) };
+	if (resMax > 4096) {
+		return false;
+	}
+
+	UINT mipLevels{ 1u + static_cast<UINT>(std::log2f(resMax)) };
 	D3D12_RESOURCE_DESC resDesc{ m_depthBufferDesc };
 	resDesc.Width = width;
 	resDesc.Height = height;
@@ -98,7 +107,8 @@ void DepthBuffer::ResizeHZB(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Micro
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ mipLevels } }
 	};
-	m_pHZBuffer->CreateShaderResourceView(pDevice, m_pSrvsRange->GetNextCpuHandle(), &srvDesc);
+	m_hzbSrvId = m_pSrvsRange->GetNextId();
+	m_pHZBuffer->CreateShaderResourceView(pDevice, m_pSrvsRange->GetCpuHandle(m_hzbSrvId), &srvDesc);
 
 	for (size_t i{ 1 }; i < mipLevels; ++i) {
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
@@ -110,6 +120,7 @@ void DepthBuffer::ResizeHZB(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Micro
 	}
 
 	m_pSinglePassDownsampler->Resize(pDevice, pAllocator, width, height);
+	return true;
 }
 
 void DepthBuffer::Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
@@ -126,6 +137,32 @@ void DepthBuffer::Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pComm
 void DepthBuffer::SetSinglePassDownsampler(std::shared_ptr<SinglePassDownsampler> pSPD, Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
 	m_pSinglePassDownsampler = pSPD;
 	ResizeHZB(pDevice, pAllocator, width, height);
+}
+
+void DepthBuffer::CreateHierarchicalDepthBuffer(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
+) {
+	if (!m_pSinglePassDownsampler) {
+		return;
+	}
+
+	// copy original depth-buffer as mip 0
+	pCommandList->CopyTextureRegion(
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
+		0, 0, 0,
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
+		&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
+	);
+
+	// run single pass downsampler
+	m_pSinglePassDownsampler->Dispatch(
+		pCommandList,
+		pDescHeap,
+		GetSrvGpuDescHandle(),
+		GetUavGpuDescHandleForMidMip(),
+		GetUavGpuDescHandleForMips()
+	);
 }
 
 std::shared_ptr<Texture> DepthBuffer::GetTexture() const {

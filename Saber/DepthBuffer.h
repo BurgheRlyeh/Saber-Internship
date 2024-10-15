@@ -23,6 +23,8 @@ class DepthBuffer {
 
 	std::shared_ptr<DescHeapRange> m_pDsvsRange{};
 	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
+	size_t m_depthSrvId{};
+	size_t m_hzbSrvId{};
 	std::shared_ptr<DescHeapRange> m_pUavsRange{};
 
 	std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
@@ -50,7 +52,7 @@ public:
 		UINT64 width,
 		UINT height
 	);
-	void ResizeHZB(
+	bool ResizeHZB(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		UINT64 width,
@@ -70,78 +72,7 @@ public:
 	void CreateHierarchicalDepthBuffer(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
-	) {
-		if (!m_pSinglePassDownsampler) {
-			return;
-		}
-		//ResourceTransition(pCommandList, m_pDepthBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		//	D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-		//);
-		//ResourceTransition(pCommandList, m_pHZBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-		//	D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-		//);
-		//ResourceTransition(pCommandList, m_pDepthBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		//	D3D12_RESOURCE_STATE_COPY_SOURCE
-		//);
-		//ResourceTransition(pCommandList, m_pHZBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-		//	D3D12_RESOURCE_STATE_COPY_DEST
-		//);
-		//pCommandList->CopyResource(
-		//	m_pHZBuffer->GetResource().Get(),
-		//	m_pDepthBuffer->GetResource().Get()
-		//);
-		//ResourceTransition(pCommandList, m_pDepthBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_COPY_SOURCE,
-		//	D3D12_RESOURCE_STATE_DEPTH_READ
-		//);
-		//ResourceTransition(pCommandList, m_pHZBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_COPY_DEST,
-		//	D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-		//);
-		//pCommandList->CopyTextureRegion(
-		//	&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
-		//	0, 0, 0,
-		//	&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
-		//	&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
-		//);
-		
-		pCommandList->CopyTextureRegion(
-			&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
-			0, 0, 0,
-			&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
-			&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
-		);
-
-		m_pSinglePassDownsampler->Dispatch(
-			pCommandList,
-			pDescHeap,
-			GetSrvGpuDescHandle(),
-			GetUavGpuDescHandleForMidMip(),
-			GetUavGpuDescHandleForMips()
-		);
-
-		//ResourceTransition(pCommandList, m_pDepthBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-		//	D3D12_RESOURCE_STATE_COPY_SOURCE
-		//);
-		//ResourceTransition(pCommandList, m_pHZBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-		//	D3D12_RESOURCE_STATE_COPY_DEST
-		//);
-		//pCommandList->CopyResource(m_pHZBuffer->GetResource().Get(), m_pDepthBuffer->GetResource().Get());
-		//ResourceTransition(pCommandList, m_pDepthBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_COPY_SOURCE,
-		//	D3D12_RESOURCE_STATE_DEPTH_WRITE
-		//);
-		//ResourceTransition(pCommandList, m_pHZBuffer->GetResource(),
-		//	D3D12_RESOURCE_STATE_COPY_DEST,
-		//	D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-		//);
-	}
+	);
 
 	std::shared_ptr<Texture> GetTexture() const;
 
