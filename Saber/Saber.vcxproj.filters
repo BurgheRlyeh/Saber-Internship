@@ -277,5 +277,6 @@
     <None Include="Math.hlsli">
       <Filter>Shaders\Includes</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>
