@@ -102,9 +102,9 @@ void SinglePassDownsampler::Dispatch(
         1,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
             pCommandListCompute->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(0, srvHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(2, midMipUavHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(3, mipsUavsHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(1, srvHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(3, midMipUavHandle);
+            pCommandListCompute->SetComputeRootDescriptorTable(4, mipsUavsHandle);
         }
     );
 }
@@ -113,15 +113,18 @@ void SinglePassDownsampler::InnerRootParametersSetter(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
     UINT& rootParamId
 ) const {
-    pCommandListDirect->SetComputeRootDescriptorTable(1, m_pSpdCounterBufferRange->GetGpuHandle());
-    pCommandListDirect->SetComputeRootDescriptorTable(4, m_pSpdConstantBufferRange->GetGpuHandle());
+    pCommandListDirect->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
+    pCommandListDirect->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-) {
+Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
     size_t rp{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
+
+    // SPD ConstantBuffer
+    CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
+    rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
 
     // input texture
     CD3DX12_DESCRIPTOR_RANGE1 rangeSrvInput[1]{};
@@ -140,13 +143,8 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
 
     // mips
     CD3DX12_DESCRIPTOR_RANGE1 rangeUavMips[1]{};
-    rangeUavMips[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2);
+    rangeUavMips[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, -1, 2);
     rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavMips), rangeUavMips);
-
-    // SPD ConstantBuffer
-    CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
-    rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
 
     D3D12_STATIC_SAMPLER_DESC sampler{
         .Filter{ D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT },

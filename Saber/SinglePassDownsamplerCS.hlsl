@@ -1,14 +1,3 @@
-Texture2D<float> InputTexture : register(t0);
-
-struct SpdGlobalAtomicBuffer
-{
-    uint counter[6];
-};
-RWStructuredBuffer<SpdGlobalAtomicBuffer> SpdGlobalAtomicCounterBuffer : register(u0);
-
-globallycoherent RWTexture2D<float> InputTextureMip6 : register(u1);
-RWTexture2D<float> InputTextureMips[] : register(u2);
-
 cbuffer SpdCB : register(b0)
 {
     uint mips;
@@ -18,10 +7,20 @@ cbuffer SpdCB : register(b0)
     float2 padding;
 }
 
+Texture2D<float> InputTexture : register(t0);
+
+struct SpdGlobalAtomicBuffer
+{
+    uint counter[6];
+};
+RWStructuredBuffer<SpdGlobalAtomicBuffer> SpdGlobalAtomicCounterBuffer : register(u0);
+
+globallycoherent RWTexture2D<float> TextureMip6 : register(u1);
+RWTexture2D<float> TextureMips[] : register(u2);
+
 SamplerState s_LinearClamp : register(s0);
 
 groupshared uint spdCounter;
-
 groupshared float4 spdIntermediate[16][16];
 
 // Either samples or loads from the input texture for a given UV and slice.
@@ -34,7 +33,7 @@ float4 SpdLoadSourceImage(float2 uv, uint slice)
 // for a given UV and slice. This function is only used by the last active thread group.
 float4 SpdLoad(int2 uv, uint slice)
 {
-    return float4(InputTextureMip6.Load(int3(uv, slice)), 0, 0, 0);
+    return float4(TextureMip6.Load(int3(uv, slice)), 0, 0, 0);
 }
 
 // Stores the output to the MIP levels. If mip value is 5, the output needs to be
@@ -42,8 +41,8 @@ float4 SpdLoad(int2 uv, uint slice)
 void SpdStore(int2 uv, float4 value, uint mip, uint slice)
 {
     if (mip == 5)
-        InputTextureMip6[uv] = value.x;
-    InputTextureMips[mip][uv] = value.x;
+        TextureMip6[uv] = value.x;
+    TextureMips[mip][uv] = value.x;
 }
 
 // Increments the global atomic counter. We have one counter per slice.

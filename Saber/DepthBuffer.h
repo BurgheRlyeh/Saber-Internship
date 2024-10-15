@@ -6,6 +6,7 @@
 
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
+#include "SinglePassDownsampler.h"
 #include "Texture.h"
 
 class DepthBuffer {
@@ -22,10 +23,17 @@ class DepthBuffer {
 
 	std::shared_ptr<DescHeapRange> m_pDsvsRange{};
 	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
+	size_t m_depthSrvId{};
+	size_t m_hzbSrvId{};
 	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+
+	std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
 
 	const size_t m_hzbSize{ 12 };
 	const size_t m_hzbMidMipId{ 5 };
+
+	size_t m_width{};
+	size_t m_height{};
 
 public:
 	DepthBuffer(
@@ -34,7 +42,8 @@ public:
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerDsv,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		UINT64 width,
-		UINT height
+		UINT height,
+		std::shared_ptr<SinglePassDownsampler> pSPD = nullptr
 	);
 
 	void Resize(
@@ -43,15 +52,38 @@ public:
 		UINT64 width,
 		UINT height
 	);
+	bool ResizeHZB(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		UINT64 width,
+		UINT height
+	);
 
 	void Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
+
+	void SetSinglePassDownsampler(
+		std::shared_ptr<SinglePassDownsampler> pSPD,
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		UINT64 width,
+		UINT height
+	);
+
+	void CreateHierarchicalDepthBuffer(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
+	);
 
 	std::shared_ptr<Texture> GetTexture() const;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCpuDescHandle() const;
+
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandle() const;
+	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandleWithMips() const;
+
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandle() const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMidMip() const;
+	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMips() const;
 
 	D3D12_DESCRIPTOR_RANGE1 GetSrvD3d12DescRange1(
 		UINT baseShaderRegister,
