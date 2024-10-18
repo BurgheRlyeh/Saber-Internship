@@ -44,13 +44,13 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pStaticObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_pStaticObjects{};
     std::mutex m_staticObjectsMutex{};
 
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pDynamicObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_pDynamicObjects{};
     std::mutex m_dynamicObjectsMutex{};
 
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pAlphaObjects{};
+    std::vector<std::shared_ptr<RenderObject>> m_pAlphaObjects{};
     std::mutex m_alphaObjectsMutex{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
@@ -118,9 +118,9 @@ public:
         const float& specularPower = 1.f
     );
 
-    void AddStaticObject(const MeshRenderObject& object);
-    void AddDynamicObject(const MeshRenderObject& object);
-    void AddAlphaObject(const MeshRenderObject& object);
+    void AddStaticObject(std::shared_ptr<RenderObject> pObject);
+    void AddDynamicObject(std::shared_ptr<RenderObject> pObject);
+    void AddAlphaObject(std::shared_ptr<RenderObject> pObject);
     void RenderStaticObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,

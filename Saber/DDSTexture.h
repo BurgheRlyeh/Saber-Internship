@@ -22,9 +22,6 @@ public:
 
 	const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const override;
 
-	using GPUResource::GetResource;
-	using Texture::CreateShaderResourceView;
-
 private:
 	void LoadFromDDS(
 		const std::wstring& filename,

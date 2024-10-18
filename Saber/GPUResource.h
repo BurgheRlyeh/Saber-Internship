@@ -6,7 +6,9 @@
 
 class GPUResource {
 protected:
+	D3D12_RESOURCE_FLAGS m_flags{};
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
+
 	GPUResource() = default;
 
 public:
@@ -27,6 +29,31 @@ public:
 	);
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
+
+	bool IsSrv() const;
+	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;;
+	void CreateShaderResourceView(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_SHADER_RESOURCE_VIEW_DESC* pSrvDesc = nullptr
+	);
+
+	bool IsUav() const;
+	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const;;
+	void CreateUnorderedAccessView(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc = nullptr,
+		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
+	);
+
+	bool IsRtv() const;
+	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const;;
+	void CreateRenderTargetView(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
+	);
 
 protected:
 	void CreateResource(

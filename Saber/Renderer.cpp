@@ -170,11 +170,11 @@ void Renderer::Initialize(HWND hWnd) {
         // 3
         m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
         for (size_t i{}; i < 15; ++i) {
-            // add static triangle at random position
             m_pJobSystem->AddJob([&]() {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+                // add static triangle at random position
                 m_pScenes[3]->AddStaticObject(TestColorRenderObject::CreateTriangle(
                     m_pDevice,
                     m_pAllocator,
@@ -189,12 +189,7 @@ void Renderer::Initialize(HWND hWnd) {
                         posDist(gen)
                     )
                 ));
-                });
-            // add dynamic cube at random position
-            m_pJobSystem->AddJob([&]() {
-                std::random_device rd;
-                std::mt19937 gen(rd());
-                std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+                // add dynamic cube at random position
                 m_pScenes[3]->AddDynamicObject(TestColorRenderObject::CreateCube(
                     m_pDevice,
                     m_pAllocator,

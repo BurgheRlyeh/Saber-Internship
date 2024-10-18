@@ -4,7 +4,7 @@
 
 #include "GPUResource.h"
 
-class ConstantBuffer : GPUResource {
+class ConstantBuffer : public GPUResource {
 	size_t m_CbvSize{};
 
 public:
@@ -15,8 +15,6 @@ public:
 		const HeapData& heapData = HeapData{ D3D12_HEAP_TYPE_UPLOAD },
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
 	);
-
-	using GPUResource::GetResource;
 
 	void CreateConstantBufferView(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,

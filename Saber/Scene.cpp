@@ -156,17 +156,17 @@ bool Scene::AddLightSource(
     return true;
 }
 
-void Scene::AddStaticObject(const MeshRenderObject& object) {
+void Scene::AddStaticObject(std::shared_ptr<RenderObject> pObject) {
     std::scoped_lock<std::mutex> lock(m_staticObjectsMutex);
-    m_pStaticObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pStaticObjects.push_back(pObject);
 }
-void Scene::AddDynamicObject(const MeshRenderObject& object) {
+void Scene::AddDynamicObject(std::shared_ptr<RenderObject> pObject) {
     std::scoped_lock<std::mutex> lock(m_dynamicObjectsMutex);
-    m_pDynamicObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pDynamicObjects.push_back(pObject);
 }
-void Scene::AddAlphaObject(const MeshRenderObject& object) {
+void Scene::AddAlphaObject(std::shared_ptr<RenderObject> pObject) {
     std::scoped_lock<std::mutex> lock(m_alphaObjectsMutex);
-    m_pAlphaObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pAlphaObjects.push_back(pObject);
 }
 
 void Scene::RenderStaticObjects(
