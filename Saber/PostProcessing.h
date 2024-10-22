@@ -9,27 +9,11 @@
 #include "RenderObject.h"
 #include "Resources.h"
 
-class PostProcessing : protected RenderObject {
-public:
-    using RenderObject::InitMaterial;
-    
-    virtual void Render(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT rect,
-        D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-        size_t rtvsCount,
-        std::function<
-            void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)
-        > outerRootParametersSetter = [](
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-            UINT& rootParamId
-        ) {}
-    );
-
+class PostProcessing : public RenderObject {
 protected:
-    UINT GetIndexCountPerInstance() const override;
-    UINT GetInstanceCount() const override;
+    virtual void DrawCall(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+    ) const override;
 };
 
 class CopyPostProcessing : public PostProcessing {

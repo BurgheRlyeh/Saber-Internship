@@ -52,13 +52,13 @@ public:
 struct DynamicAllocation {
     DynamicAllocation() = default;
     DynamicAllocation(
-        Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer,
+        std::shared_ptr<GPUResource> pBuffer,
         size_t offset,
         size_t size
     ) : pBuffer(pBuffer), offset(offset), size(size)
     {}
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer{};   // The D3D buffer associated with this memory.
+    std::shared_ptr<GPUResource> pBuffer{};   // The D3D buffer associated with this memory.
     size_t offset{};                                    // Offset from start of buffer resource
     size_t size{};			                            // Reserved size of this allocation
     void* cpuAddress{};			                        // The CPU-writeable address

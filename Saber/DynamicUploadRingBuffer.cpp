@@ -112,7 +112,7 @@ DynamicAllocation GPURingBuffer::Allocate(size_t size) {
         return DynamicAllocation(nullptr, 0, 0);
     }
 
-    DynamicAllocation DynAlloc(m_pBuffer->GetResource().Get(), offset, size);
+    DynamicAllocation DynAlloc(m_pBuffer, offset, size);
     DynAlloc.gpuAddress = m_gpuVirtualAddress + offset;
     if (DynAlloc.cpuAddress = m_cpuVirtualAddress) {
         DynAlloc.cpuAddress = reinterpret_cast<char*>(DynAlloc.cpuAddress) + offset;

@@ -4,9 +4,10 @@
 
 #include "D3D12MemAlloc.h"
 
+#include "CommandQueue.h"
+
 class GPUResource {
 protected:
-	D3D12_RESOURCE_FLAGS m_flags{};
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 
 	GPUResource() = default;
@@ -29,6 +30,28 @@ public:
 	);
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
+
+	std::shared_ptr<GPUResource> CreateIntermediate(
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		UINT firstSubresource,
+		UINT numSubresources
+	);
+
+	std::shared_ptr<GPUResource> UpdateSubresource(
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandList> pCommandList,
+		UINT firstSubresource,
+		UINT numSubresources,
+		const D3D12_SUBRESOURCE_DATA* pSrcData
+	);
+	std::shared_ptr<GPUResource> UpdateSubresource(
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandList> pCommandList,
+		UINT firstSubresource,
+		UINT numSubresources,
+		void* pResourceData,
+		const D3D12_SUBRESOURCE_INFO* pSrcData
+	);
 
 	bool IsSrv() const;
 	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;;

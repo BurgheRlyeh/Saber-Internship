@@ -12,6 +12,7 @@
 #include "ConstantBuffer.h"
 #include "GBuffer.h"
 #include "MaterialManager.h"
+#include "ModelBuffers.h"
 #include "Mesh.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
@@ -23,51 +24,47 @@ class MeshRenderObject : public RenderObject {
 protected:
     std::shared_ptr<Mesh> m_pMesh{};
 
-    std::shared_ptr<ModelBuffer> m_pModelBuffer{};
+    ModelBuffer m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCB{};
 
 public:
     MeshRenderObject(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<ModelBuffer> pModelBuffer = nullptr
+        const ModelBuffer* pModelBuffer = nullptr
     ) {
+        if (pModelBuffer) {
+            m_modelBuffer = *pModelBuffer;
+        }
         m_pModelCB = std::make_shared<ConstantBuffer>(
             pAllocator,
             sizeof(ModelBuffer),
-            nullptr
+            &m_modelBuffer
         );
-        m_pModelBuffer = pModelBuffer ? pModelBuffer : std::make_shared<ModelBuffer>();
-        UpdateModelBuffer();
     }
 
-    struct MeshData {
+    struct MeshInitData {
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas{};
         Mesh::MeshData meshData{};
         std::wstring meshFilename{};
-
-        MeshData(
-            std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-            const Mesh::MeshData& meshData,
-            const std::wstring& meshFilename
-        ) : pMeshAtlas(pMeshAtlas),
-            meshData(meshData),
-            meshFilename(meshFilename)
-        {}
     };
     void InitMesh(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const MeshData& meshData
+        const MeshInitData& meshInitData
     ) {
-        m_pMesh = meshData.pMeshAtlas->Assign(meshData.meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshData.meshData);
+        m_pMesh = meshInitData.pMeshAtlas->Assign(meshInitData.meshFilename, pDevice, pAllocator, pCommandQueueCopy, meshInitData.meshData);
     }
 
-    std::shared_ptr<ModelBuffer> GetModelBuffer() const {
-        return m_pModelBuffer;
+    ModelBuffer& GetModelBuffer() {
+        return m_modelBuffer;
+    }
+    void SetModelBuffer(const ModelBuffer& modelBuffer) {
+        m_modelBuffer = modelBuffer;
+        UpdateModelBuffer();
     }
     void UpdateModelBuffer() {
-        m_pModelCB->Update(m_pModelBuffer.get());
+        m_pModelCB->Update(&m_modelBuffer);
     }
 
 protected:
@@ -92,33 +89,14 @@ protected:
         );
     }
 
-    UINT GetIndexCountPerInstance() const override {
-        return static_cast<UINT>(m_pMesh->GetIndicesCount());
-    }
-
-    UINT GetInstanceCount() const override {
-        return 1;
-    }
-};
-
-struct ModelBuffer {
-    DirectX::XMMATRIX m_modelMatrix{ DirectX::XMMatrixIdentity() };
-    DirectX::XMMATRIX m_normalMatrix{ DirectX::XMMatrixIdentity() };
-    DirectX::XMUINT4 m_materialId{};
-
-    ModelBuffer() = default;
-    ModelBuffer(const DirectX::XMMATRIX& modelMatrix, size_t materialId = 0) {
-        UpdateMatrices(modelMatrix);
-        SetMaterial(materialId);
-    }
-
-    void UpdateMatrices(const DirectX::XMMATRIX& modelMatrix) {
-        m_modelMatrix = modelMatrix;
-        m_normalMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, m_modelMatrix));
-    }
-
-    void SetMaterial(size_t materialId) {
-        m_materialId.x = materialId;
+    virtual void DrawCall(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+    ) const override {
+        pCommandList->DrawIndexedInstanced(
+            static_cast<UINT>(m_pMesh->GetIndicesCount()),
+            1,
+            0, 0, 0
+        );
     }
 };
 
@@ -190,14 +168,15 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
+        ModelBuffer modelBuffer{ modelMatrix };
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, std::make_shared<ModelBuffer>(modelMatrix))
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, &modelBuffer)
         };
         pObj->InitMesh(
             pDevice,
             pAllocator,
             pCommandQueueCopy,
-            MeshData(pMeshAtlas, meshData, L"SimpleTriangle")
+            MeshInitData(pMeshAtlas, meshData, L"SimpleTriangle")
         );
 
         D3D12_RT_FORMAT_ARRAY rtvFormats{ .NumRenderTargets{ 1 } };
@@ -279,10 +258,11 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
+        ModelBuffer modelBuffer{ modelMatrix };
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, std::make_shared<ModelBuffer>(modelMatrix))
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, &modelBuffer)
         };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshData(pMeshAtlas, meshData, L"SimpleCube"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleCube"));
 
         D3D12_RT_FORMAT_ARRAY rtvFormats{ .NumRenderTargets{ 1 } };
         rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -425,7 +405,7 @@ public:
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
             std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshData(pMeshAtlas, meshData, L"SimpleTextureCube"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
         pObj->InitMaterial(
             pDevice,
             RootSignatureData(
@@ -444,12 +424,17 @@ public:
             )
         );
 
-        std::shared_ptr<ModelBuffer> pModelBuffer{ pObj->GetModelBuffer() };
-        pModelBuffer->UpdateMatrices(modelMatrix);
-        pModelBuffer->SetMaterial(pMaterialManager->AddMaterial(
-            pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"Brick.dds", L"BrickNM.dds"
-        ));
-        pObj->UpdateModelBuffer();
+        pObj->SetModelBuffer(ModelBuffer{
+            modelMatrix,
+            pMaterialManager->AddMaterial(
+                pDevice,
+                pAllocator,
+                pCommandQueueCopy,
+                pCommandQueueDirect,
+                L"Brick.dds",
+                L"BrickNM.dds"
+            )
+        });
 
         return pObj;
     }
@@ -493,7 +478,7 @@ public:
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
             std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshData(pMeshAtlas, data, L"MeshGLTF"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
         pObj->InitMaterial(
             pDevice,
             RootSignatureData(
@@ -512,12 +497,17 @@ public:
             )
         );
 
-        std::shared_ptr<ModelBuffer> pModelBuffer{ pObj->GetModelBuffer() };
-        pModelBuffer->UpdateMatrices(modelMatrix);
-        pModelBuffer->SetMaterial(pMaterialManager->AddMaterial(
-            pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"barbarian_diffuse.dds", L"barb2_n.dds"
-        ));
-        pObj->UpdateModelBuffer();
+        pObj->SetModelBuffer(ModelBuffer{
+            modelMatrix,
+            pMaterialManager->AddMaterial(
+                pDevice,
+                pAllocator,
+                pCommandQueueCopy,
+                pCommandQueueDirect,
+                L"barbarian_diffuse.dds",
+                L"barb2_n.dds"
+            )
+        });
 
         return pObj;
     }
@@ -605,11 +595,11 @@ public:
             }
         };
 
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> obj{
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
             std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        obj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshData(pMeshAtlas, data, L"AlphaGrassGLTF"));
-        obj->InitMaterial(
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
+        pObj->InitMaterial(
             pDevice,
             RootSignatureData(
                 pRootSignatureAtlas,
@@ -627,14 +617,19 @@ public:
             )
         );
 
-        std::shared_ptr<ModelBuffer> pModelBuffer{ obj->GetModelBuffer() };
-        pModelBuffer->UpdateMatrices(modelMatrix);
-        pModelBuffer->SetMaterial(pMaterialManager->AddMaterial(
-            pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect, L"grassAlbedo.dds", L"grassNormal.dds"
-        ));
-        obj->UpdateModelBuffer();
+        pObj->SetModelBuffer(ModelBuffer{
+            modelMatrix,
+            pMaterialManager->AddMaterial(
+                pDevice,
+                pAllocator,
+                pCommandQueueCopy,
+                pCommandQueueDirect,
+                L"grassAlbedo.dds",
+                L"grassNormal.dds"
+            )
+        });
 
-        return obj;
+        return pObj;
     }
 
 private:

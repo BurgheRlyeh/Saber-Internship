@@ -54,22 +54,11 @@ void RenderObject::Render(
     UINT rootParameterIndex{};
     outerRootParametersSetter(pCommandListDirect, rootParameterIndex);
     InnerRootParametersSetter(pCommandListDirect, rootParameterIndex);
-
-    pCommandListDirect->DrawIndexedInstanced(
-        GetIndexCountPerInstance(),
-        GetInstanceCount(),
-        0, 0, 0
-    );
+    
+    DrawCall(pCommandListDirect);
 }
 
 void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}
 
 void RenderObject::InnerRootParametersSetter(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) const {}
 
-UINT RenderObject::GetIndexCountPerInstance() const {
-    return 0;
-}
-
-UINT RenderObject::GetInstanceCount() const {
-    return 0;
-}

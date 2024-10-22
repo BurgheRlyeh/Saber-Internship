@@ -25,6 +25,7 @@
 #include "CommandList.h"
 #include "DepthBuffer.h"
 #include "GBuffer.h"
+#include "IndirectMeshRenderObject.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"

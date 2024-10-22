@@ -374,6 +374,7 @@ void Scene::RenderPostProcessing(
         scissorRect,
         &renderTargetView,
         1,
+        nullptr,
         [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
             pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
             pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle(m_pGBuffer->GetSize() - 1));

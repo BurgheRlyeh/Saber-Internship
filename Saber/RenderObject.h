@@ -27,40 +27,15 @@ public:
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
-
-        RootSignatureData(
-            std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-            Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
-            std::wstring rootSignatureFilename
-        ) : pRootSignatureAtlas(pRootSignatureAtlas),
-            pRootSignatureBlob(pRootSignatureBlob),
-            rootSignatureFilename(rootSignatureFilename)
-        {}
     };
     struct ShaderData {
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas{};
         LPCWSTR vertexShaderFilepath{};
         LPCWSTR pixelShaderFilepath{};
-
-        ShaderData(
-            std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-            LPCWSTR vertexShaderFilepath,
-            LPCWSTR pixelShaderFilepath
-        ) : pShaderAtlas(pShaderAtlas),
-            vertexShaderFilepath(vertexShaderFilepath),
-            pixelShaderFilepath(pixelShaderFilepath)
-        {}
     };
     struct PipelineStateData {
         std::shared_ptr<PSOLibrary> pPSOLibrary{};
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
-        
-        PipelineStateData(
-            std::shared_ptr<PSOLibrary> pPSOLibrary,
-            D3D12_GRAPHICS_PIPELINE_STATE_DESC desc
-        ) : pPSOLibrary(pPSOLibrary),
-            desc(desc)
-        {}
     };
     void InitMaterial(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -85,12 +60,16 @@ public:
     ) const;
 
 protected:
-    virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
+    virtual void RenderJob(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
+    ) const;
+
     virtual void InnerRootParametersSetter(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         UINT& rootParamId
     ) const;
 
-    virtual UINT GetIndexCountPerInstance() const;
-    virtual UINT GetInstanceCount() const;
+    virtual void DrawCall(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+    ) const = 0;
 };

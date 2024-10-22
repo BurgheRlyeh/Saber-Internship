@@ -43,18 +43,6 @@ void DDSTexture::LoadFromDDS(
 	);
 
 	// upload texture
-	UINT imagesCount{ static_cast<UINT>(image.GetImageCount()) };
-	GPUResource uploadBuffer{
-		pAllocator,
-		HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-		ResourceData{
-			CD3DX12_RESOURCE_DESC::Buffer(
-				GetRequiredIntermediateSize(GetResource().Get(), 0, imagesCount)
-			),
-			D3D12_RESOURCE_STATE_GENERIC_READ
-		}
-	};
-
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources{};
 	subresources.reserve(m_metadata.mipLevels);
 	for (size_t i{}; i < m_metadata.mipLevels; ++i) {
@@ -66,15 +54,13 @@ void DDSTexture::LoadFromDDS(
 	std::shared_ptr<CommandList> pCommandListCopy{
 		pCommandQueueCopy->GetCommandList(pDevice)
 	};
-	UpdateSubresources(
-		pCommandListCopy->m_pCommandList.Get(),
-		GetResource().Get(),
-		uploadBuffer.GetResource().Get(),
+	std::shared_ptr<GPUResource> pIntermediate{ UpdateSubresource(
+		pAllocator,
+		pCommandListCopy,
 		0,
-		0,
-		static_cast<UINT>(subresources.size()),
+		subresources.size(),
 		subresources.data()
-	);
+	) };
 	pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
 	std::shared_ptr<CommandList> pCommandListDirect{

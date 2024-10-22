@@ -1,7 +1,7 @@
 #include "Texture.h"
 
 bool Texture::IsDsv() const {
-	return m_flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 }
 const D3D12_DEPTH_STENCIL_VIEW_DESC* Texture::GetDsvDesc() const {
 	return nullptr;

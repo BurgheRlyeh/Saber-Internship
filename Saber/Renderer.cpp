@@ -121,153 +121,200 @@ void Renderer::Initialize(HWND hWnd) {
 
     // Create scenes
     {
-        m_pScenes.resize(5);
+        m_pScenes.resize(6);
 
         // 0
         m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
 
         // 1
-        m_pScenes[1] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
-        m_pScenes[1]->AddStaticObject(TestColorRenderObject::CreateTriangle(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
+        {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[1] };
+            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
+            pScene->AddStaticObject(TestColorRenderObject::CreateTriangle(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+        }
 
         // 2
-        m_pScenes[2] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
-        m_pScenes[2]->SetPostProcessing(CopyPostProcessing::Create(
-            m_pDevice,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[2]->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-            m_pDevice,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pCommandQueueDirect,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary,
-            m_pGBuffers[0],
-            m_pMaterialManager,
-            DirectX::XMMatrixIdentity()
-        ));
+        {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[2] };
+            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            pScene->SetPostProcessing(CopyPostProcessing::Create(
+                m_pDevice,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
+                m_pDevice,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            pScene->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pCommandQueueDirect,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary,
+                m_pGBuffers[0],
+                m_pMaterialManager,
+                DirectX::XMMatrixIdentity()
+            ));
+        }
 
         // 3
-        m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
-        for (size_t i{}; i < 15; ++i) {
-            m_pJobSystem->AddJob([&]() {
-                std::random_device rd;
-                std::mt19937 gen(rd());
-                std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-                // add static triangle at random position
-                m_pScenes[3]->AddStaticObject(TestColorRenderObject::CreateTriangle(
-                    m_pDevice,
-                    m_pAllocator,
-                    m_pCommandQueueCopy,
-                    m_pMeshAtlas,
-                    m_pShaderAtlas,
-                    m_pRootSignatureAtlas,
-                    m_pPSOLibrary,
-                    DirectX::XMMatrixTranslation(
-                        posDist(gen),
-                        posDist(gen),
-                        posDist(gen)
-                    )
-                ));
-                // add dynamic cube at random position
-                m_pScenes[3]->AddDynamicObject(TestColorRenderObject::CreateCube(
-                    m_pDevice,
-                    m_pAllocator,
-                    m_pCommandQueueCopy,
-                    m_pMeshAtlas,
-                    m_pShaderAtlas,
-                    m_pRootSignatureAtlas,
-                    m_pPSOLibrary,
-                    DirectX::XMMatrixTranslation(
-                        posDist(gen),
-                        posDist(gen),
-                        posDist(gen)
-                    )
-                ));
-            });
+        {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[3] };
+            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
+            for (size_t i{}; i < 15; ++i) {
+                m_pJobSystem->AddJob([&]() {
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+                    // add static triangle at random position
+                    pScene->AddStaticObject(TestColorRenderObject::CreateTriangle(
+                        m_pDevice,
+                        m_pAllocator,
+                        m_pCommandQueueCopy,
+                        m_pMeshAtlas,
+                        m_pShaderAtlas,
+                        m_pRootSignatureAtlas,
+                        m_pPSOLibrary,
+                        DirectX::XMMatrixTranslation(
+                            posDist(gen),
+                            posDist(gen),
+                            posDist(gen)
+                        )
+                    ));
+                    // add dynamic cube at random position
+                    pScene->AddDynamicObject(TestColorRenderObject::CreateCube(
+                        m_pDevice,
+                        m_pAllocator,
+                        m_pCommandQueueCopy,
+                        m_pMeshAtlas,
+                        m_pShaderAtlas,
+                        m_pRootSignatureAtlas,
+                        m_pPSOLibrary,
+                        DirectX::XMMatrixTranslation(
+                            posDist(gen),
+                            posDist(gen),
+                            posDist(gen)
+                        )
+                    ));
+                    });
+            }
         }
 
         // 4
-        m_pScenes[4] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
-        std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-        m_pScenes[4]->SetPostProcessing(CopyPostProcessing::Create(
-            m_pDevice,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[4]->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-            m_pDevice,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ));
-        m_pScenes[4]->AddStaticObject(TestTextureRenderObject::CreateModelFromGLTF(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pCommandQueueDirect,
-            m_pMeshAtlas,
-            filepath,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary,
-            m_pGBuffers[0],
-            m_pMaterialManager,
-            DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
-        ));
-        std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-        m_pScenes[4]->AddAlphaObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pCommandQueueDirect,
-            m_pMeshAtlas,
-            filepathGrass,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary,
-            m_pGBuffers[0],
-            m_pMaterialManager,
-            DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
-        ));
+        {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[4] };
+            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+            pScene->SetPostProcessing(CopyPostProcessing::Create(
+                m_pDevice,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
+                m_pDevice,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            pScene->AddStaticObject(TestTextureRenderObject::CreateModelFromGLTF(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pCommandQueueDirect,
+                m_pMeshAtlas,
+                filepath,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary,
+                m_pGBuffers[0],
+                m_pMaterialManager,
+                DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+            ));
+            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
+            pScene->AddAlphaObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pCommandQueueDirect,
+                m_pMeshAtlas,
+                filepathGrass,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary,
+                m_pGBuffers[0],
+                m_pMaterialManager,
+                DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
+            ));
+        }
+
+        // 5
+        {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[5] };
+            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            pScene->SetPostProcessing(CopyPostProcessing::Create(
+                m_pDevice,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
+                m_pDevice,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary
+            ));
+            std::filesystem::path filepath{ L"../../Resources/StaticModels/grass.glb" };
+            pScene->AddAlphaObject(TestIndirectMeshRenderObject<1000>::CreateIndirectAlphaModelFromGLTF(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pCommandQueueDirect,
+                m_pMeshAtlas,
+                filepath,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary,
+                m_pGBuffers[0],
+                m_pResourceDescHeapManager,
+                m_pMaterialManager,
+                DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -1.f, -1.f)
+            ));
+        }
 
         // cameras for all scenes
-        for (size_t sceneId{ 1 }; sceneId < 5; ++sceneId) {
-            m_pJobSystem->AddJob([&, sceneId]() {
+        for (std::unique_ptr<Scene>& pScene : m_pScenes) {
+            m_pJobSystem->AddJob([&]() {
                 // dynamic camera
-                m_pScenes.at(sceneId)->AddCamera(std::make_shared<DynamicCamera>());
+                pScene->AddCamera(std::make_shared<DynamicCamera>());
 
                 // standart camera
-                m_pScenes[sceneId]->AddCamera(std::make_shared<StaticCamera>(
+                pScene->AddCamera(std::make_shared<StaticCamera>(
                     DirectX::XMFLOAT3{ 0.f, 0.f, 3.f },
                     DirectX::XMFLOAT3{ 0.f, 0.f, 0.f },
                     DirectX::XMFLOAT3{ 0.f, 1.f, 0.f }
                 ));
 
                 // standart light
-                m_pScenes[sceneId]->AddLightSource(
+                pScene->AddLightSource(
                     { -1.5f, 0.f, 1.5f, 1.f },
                     { 1.f, 1.f, 0.f },
                     { 1.f, 1.f, 0.f }
@@ -279,14 +326,14 @@ void Renderer::Initialize(HWND hWnd) {
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
                     std::uniform_real_distribution<float> colorDist(0.f, 1.f);
-                    m_pScenes[sceneId]->AddLightSource(
+                    pScene->AddLightSource(
                         { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
                         { colorDist(gen), colorDist(gen), colorDist(gen) },
                         { colorDist(gen), colorDist(gen), colorDist(gen) }
                     );
                 }
 
-                m_pScenes[sceneId]->SetSceneReadiness(true);
+                pScene->SetSceneReadiness(true);
             });
         }
     }
