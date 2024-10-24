@@ -26,9 +26,8 @@ class Scene {
         DirectX::XMFLOAT4 nearFar{};
     } m_sceneBuffer;
     std::mutex m_sceneBufferMutex{};
-    std::shared_ptr<DynamicUploadHeap> m_pCameraHeap{};
+    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeap{};
     DynamicAllocation m_sceneCBDynamicAllocation{};
-    std::atomic<bool> m_isUpdateSceneCB{};
 
     struct Light {
         DirectX::XMFLOAT4 position{};
@@ -59,7 +58,6 @@ class Scene {
     size_t m_currCameraId{};
 
     std::atomic<bool> m_isSceneReady{};
-    std::atomic<bool> m_isUpdateCameraHeap{};
 
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
@@ -71,9 +69,9 @@ class Scene {
 public:
     Scene() = delete;
     Scene(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<DepthBuffer> m_pDepthBuffer = nullptr,
+        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+        std::shared_ptr<DepthBuffer> m_pDepthBuffer,
         std::shared_ptr<GBuffer> m_pGBuffer = nullptr
     );
 
@@ -88,15 +86,10 @@ public:
 
     void Update(float deltaTime);
     void BeforeFrameJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-        if (m_pDepthBuffer) {
-            m_pDepthBuffer->Clear(pCommandList);
-        }
+        m_pDepthBuffer->Clear(pCommandList);
         if (m_pGBuffer) {
             m_pGBuffer->Clear(pCommandList);
         }
-    }
-    void AfterFrameJob(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-        UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
     }
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
@@ -159,8 +152,6 @@ public:
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
-
-    void UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
 
 private:
     bool TryUpdateCamera(float deltaTime);

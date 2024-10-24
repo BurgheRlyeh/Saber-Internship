@@ -550,7 +550,8 @@ private:
     }
 };
 
-class TestAlphaRenderObject : protected TestRenderObject {
+class TestAlphaRenderObject : protected MeshRenderObject<ModelBuffer> {
+protected:
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -632,7 +633,7 @@ public:
         return pObj;
     }
 
-private:
+protected:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {

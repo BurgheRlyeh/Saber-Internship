@@ -1,17 +1,11 @@
 #include "Scene.h"
 
 Scene::Scene(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
-) : m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) {
-    m_pCameraHeap = std::make_shared<DynamicUploadHeap>(
-        pAllocator,
-        2 * sizeof(SceneBuffer),
-        true
-    );
-
+) : m_pDynamicUploadHeap(pDynamicUploadHeap), m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) {
     m_pLightCB = std::make_shared<ConstantBuffer>(
         pAllocator,
         sizeof(LightBuffer)
@@ -50,10 +44,6 @@ void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
     std::unique_lock<std::mutex> lock(m_camerasMutex);
     m_pCameras.push_back(pCamera);
     lock.unlock();
-
-    if (!m_sceneCBDynamicAllocation.pBuffer) {
-        m_isUpdateSceneCB.store(true);
-    }
 }
 
 void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
@@ -61,7 +51,6 @@ void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
     for (auto& camera : m_pCameras) {
         camera->SetAspectRatio(aspectRatio);
     }
-    m_isUpdateSceneCB.store(true);
 }
 
 bool Scene::TryMoveCamera(float forwardCoef, float rightCoef) {
@@ -95,9 +84,6 @@ bool Scene::SetCurrentCamera(size_t cameraId) {
         return false;
 
     m_currCameraId = cameraId;
-
-    m_isUpdateSceneCB.store(true);
-
     return true;
 }
 
@@ -382,14 +368,6 @@ void Scene::RenderPostProcessing(
     );
 }
 
-void Scene::UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-    if (!m_isUpdateCameraHeap.load()) {
-        return;
-    }
-    m_pCameraHeap->FinishFrame(fenceValue, lastCompletedFenceValue);
-    m_isUpdateCameraHeap.store(false);
-}
-
 bool Scene::TryUpdateCamera(float deltaTime) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     if (!m_isUpdateCamera.load()) {
@@ -402,33 +380,26 @@ bool Scene::TryUpdateCamera(float deltaTime) {
     }
 
     pSphereCamera->Update(deltaTime);
-    m_isUpdateSceneCB.store(true);
     return true;
 }
 
 void Scene::UpdateSceneBuffer() {
-    bool expected{ true };
-    if (m_isUpdateSceneCB.compare_exchange_strong(expected, false)) {
-        m_isUpdateCameraHeap.store(true);
+    std::scoped_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
+    std::scoped_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
-        std::scoped_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
-        std::scoped_lock<std::mutex> camerasMutexLock(m_camerasMutex);
+    std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
 
-        std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+    m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
+    m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
 
-        m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
-        m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-        
 
-        DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
-        m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-        m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+    DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
+    m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
+    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
 
-        m_sceneCBDynamicAllocation = m_pCameraHeap->Allocate(sizeof(SceneBuffer));
+    m_sceneCBDynamicAllocation = m_pDynamicUploadHeap->Allocate(sizeof(SceneBuffer));
 
-        memcpy(m_sceneCBDynamicAllocation.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
-        //m_pSceneCB->Update(&m_sceneBuffer);
-    }
+    memcpy(m_sceneCBDynamicAllocation.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
 }
 
 void Scene::UpdateLightBuffer() {

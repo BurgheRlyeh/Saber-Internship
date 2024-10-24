@@ -117,6 +117,18 @@ void Renderer::Initialize(HWND hWnd) {
         m_clientHeight
     );
 
+    const size_t DynamicUploadHeapDefaultSize{ 1024 };
+    m_pDynamicUploadHeapCPU = std::make_shared<DynamicUploadHeap>(
+        m_pAllocator,
+        DynamicUploadHeapDefaultSize,
+        true
+    );
+    m_pDynamicUploadHeapGPU = std::make_shared<DynamicUploadHeap>(
+        m_pAllocator,
+        DynamicUploadHeapDefaultSize,
+        false
+    );
+
     m_isInitialized = true;
 
     // Create scenes
@@ -124,12 +136,12 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes.resize(6);
 
         // 0
-        m_pScenes[0] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
+        m_pScenes[0] = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0]);
 
         // 1
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[1] };
-            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
+            pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0]);
             pScene->AddStaticObject(TestColorRenderObject::CreateTriangle(
                 m_pDevice,
                 m_pAllocator,
@@ -144,7 +156,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 2
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[2] };
-            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0], m_pGBuffers[0]);
             pScene->SetPostProcessing(CopyPostProcessing::Create(
                 m_pDevice,
                 m_pMeshAtlas,
@@ -176,7 +188,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 3
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[3] };
-            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
+            pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0]);
             for (size_t i{}; i < 15; ++i) {
                 m_pJobSystem->AddJob([&]() {
                     std::random_device rd;
@@ -219,7 +231,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 4
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[4] };
-            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0], m_pGBuffers[0]);
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
             pScene->SetPostProcessing(CopyPostProcessing::Create(
                 m_pDevice,
@@ -268,7 +280,7 @@ void Renderer::Initialize(HWND hWnd) {
         // 5
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[5] };
-            pScene = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0], m_pGBuffers[0]);
+            pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0], m_pGBuffers[0]);
             pScene->SetPostProcessing(CopyPostProcessing::Create(
                 m_pDevice,
                 m_pMeshAtlas,
@@ -283,7 +295,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pPSOLibrary
             ));
             std::filesystem::path filepath{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddAlphaObject(TestIndirectMeshRenderObject<1000>::CreateIndirectAlphaModelFromGLTF(
+            pScene->AddAlphaObject(TestIndirectMeshRenderObject<1000>::CreateDynamic(
                 m_pDevice,
                 m_pAllocator,
                 m_pCommandQueueCopy,
@@ -296,6 +308,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pGBuffers[0],
                 m_pResourceDescHeapManager,
                 m_pMaterialManager,
+                m_pDynamicUploadHeapCPU,
                 DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -1.f, -1.f)
             ));
         }
@@ -673,7 +686,8 @@ void Renderer::Render() {
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
-    scene->AfterFrameJob(fenceValue, lastCompletedFenceValue);
+    m_pDynamicUploadHeapCPU->FinishFrame(fenceValue, lastCompletedFenceValue);
+    m_pDynamicUploadHeapGPU->FinishFrame(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {

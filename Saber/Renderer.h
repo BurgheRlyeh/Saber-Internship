@@ -94,7 +94,7 @@ class Renderer {
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
-    size_t m_currSceneId{ 2 };
+    size_t m_currSceneId{ 5 };
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
@@ -104,6 +104,9 @@ class Renderer {
     std::shared_ptr<DescriptorHeapManager> m_pDsvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
+
+    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapCPU{};
+    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapGPU{};
 
     // Atlases
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};

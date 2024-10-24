@@ -150,6 +150,9 @@
     <ClInclude Include="IndirectMeshRenderObject.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="IndirectUpdater.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -274,6 +277,9 @@
     </FxCompile>
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">
       <Filter>Shaders\FidelityFX</Filter>
+    </FxCompile>
+    <FxCompile Include="IndirectUpdater.hlsl">
+      <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
