@@ -6,12 +6,14 @@ DepthBuffer::DepthBuffer(
 	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerDsv,
 	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 	UINT64 width,
-	UINT height
+	UINT height,
+	std::shared_ptr<SinglePassDownsampler> pSPD
 ) {
 	m_pDsvsRange = pDescHeapManagerDsv->AllocateRange(L"DepthBuffer/Ranges/DSV", 1);
-	m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(L"DepthBuffer/Ranges/SRV", 1 + m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(L"DepthBuffer/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pUavsRange = pDescHeapManagerCbvSrvUav->AllocateRange(L"DepthBuffer/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 
+	m_pSinglePassDownsampler = pSPD;
 	Resize(pDevice, pAllocator, width, height);
 }
 
@@ -21,22 +23,22 @@ void DepthBuffer::Resize(
 	UINT64 width,
 	UINT height
 ) {
+	m_width = width;
+	m_height = height;
+
 	m_pDsvsRange->Clear();
 	m_pSrvsRange->Clear();
 	m_pUavsRange->Clear();
-
-	m_depthBufferDesc.Width = width;
-	m_depthBufferDesc.Height = height;
-
-	m_depthBufferDesc.MipLevels = 1;
-	m_depthBufferDesc.Format = DXGI_FORMAT_D32_FLOAT;
-	m_depthBufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	
+	D3D12_RESOURCE_DESC resDesc{ m_depthBufferDesc };
+	resDesc.Width = width;
+	resDesc.Height = height;
 
 	m_pDepthBuffer = std::make_shared<Texture>(
 		pAllocator,
 		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		GPUResource::ResourceData{
-			m_depthBufferDesc,
+			resDesc,
 			D3D12_RESOURCE_STATE_DEPTH_WRITE,
 			&m_clearValue
 		}
@@ -52,7 +54,6 @@ void DepthBuffer::Resize(
 	m_pDepthBuffer->CreateDepthStencilView(
 		pDevice, m_pDsvsRange->GetNextCpuHandle(), &dsv
 	);
-	ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
 		.Format{ DXGI_FORMAT_R32_FLOAT },
@@ -60,29 +61,55 @@ void DepthBuffer::Resize(
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ 1 } }
 	};
+	m_depthSrvId = m_pSrvsRange->GetNextId();
 	m_pDepthBuffer->CreateShaderResourceView(
-		pDevice, m_pSrvsRange->GetNextCpuHandle(), &srvDesc
+		pDevice, m_pSrvsRange->GetCpuHandle(m_depthSrvId), &srvDesc
 	);
-	ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
-	// Hierarchical Z-Buffer
-	UINT mipLevels{ 1u + static_cast<UINT>(
-		std::log2f(std::max<float>(width, height))
-	) };
+	ResizeHZB(pDevice, pAllocator, width, height);
+}
 
-	m_depthBufferDesc.MipLevels = mipLevels;
-	m_depthBufferDesc.Format = DXGI_FORMAT_R32_FLOAT;
-	m_depthBufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+bool DepthBuffer::ResizeHZB(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	UINT64 width,
+	UINT height
+) {
+	if (!m_pSinglePassDownsampler) {
+		return false;
+	}
+
+	// TODO: splitting when resolution > 4096
+	float resMax{ std::max<float>(width, height) };
+	if (resMax > 4096) {
+		return false;
+	}
+
+	UINT mipLevels{ 1u + static_cast<UINT>(std::log2f(resMax)) };
+	D3D12_RESOURCE_DESC resDesc{ m_depthBufferDesc };
+	resDesc.Width = width;
+	resDesc.Height = height;
+	resDesc.MipLevels = mipLevels;
+	resDesc.Format = DXGI_FORMAT_R32_FLOAT;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	m_pHZBuffer = std::make_shared<Texture>(
 		pAllocator,
 		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		GPUResource::ResourceData{
-			m_depthBufferDesc,
+			resDesc,
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		}
 	);
-	srvDesc.Texture2D.MipLevels = mipLevels;
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+		.Format{ DXGI_FORMAT_R32_FLOAT },
+		.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
+		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
+		.Texture2D{ .MipLevels{ mipLevels } }
+	};
+	m_hzbSrvId = m_pSrvsRange->GetNextId();
+	m_pHZBuffer->CreateShaderResourceView(pDevice, m_pSrvsRange->GetCpuHandle(m_hzbSrvId), &srvDesc);
+
 	for (size_t i{ 1 }; i < mipLevels; ++i) {
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
 			.Format{ DXGI_FORMAT_R32_FLOAT },
@@ -90,8 +117,10 @@ void DepthBuffer::Resize(
 			.Texture2D{ .MipSlice{ static_cast<UINT>(i) } }
 		};
 		m_pHZBuffer->CreateUnorderedAccessView(pDevice, m_pUavsRange->GetNextCpuHandle(), &uavDesc);
-		m_pHZBuffer->CreateShaderResourceView(pDevice, m_pSrvsRange->GetNextCpuHandle(), &srvDesc);
 	}
+
+	m_pSinglePassDownsampler->Resize(pDevice, pAllocator, width, height);
+	return true;
 }
 
 void DepthBuffer::Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
@@ -102,6 +131,37 @@ void DepthBuffer::Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pComm
 		0,
 		0,
 		nullptr
+	);
+}
+
+void DepthBuffer::SetSinglePassDownsampler(std::shared_ptr<SinglePassDownsampler> pSPD, Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
+	m_pSinglePassDownsampler = pSPD;
+	ResizeHZB(pDevice, pAllocator, width, height);
+}
+
+void DepthBuffer::CreateHierarchicalDepthBuffer(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
+) {
+	if (!m_pSinglePassDownsampler) {
+		return;
+	}
+
+	// copy original depth-buffer as mip 0
+	pCommandList->CopyTextureRegion(
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
+		0, 0, 0,
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
+		&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
+	);
+
+	// run single pass downsampler
+	m_pSinglePassDownsampler->Dispatch(
+		pCommandList,
+		pDescHeap,
+		GetSrvGpuDescHandle(),
+		GetUavGpuDescHandleForMidMip(),
+		GetUavGpuDescHandleForMips()
 	);
 }
 
@@ -117,12 +177,20 @@ D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetSrvGpuDescHandle() const {
 	return m_pSrvsRange->GetGpuHandle();
 }
 
+D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetSrvGpuDescHandleWithMips() const {
+	return m_pSrvsRange->GetGpuHandle(1);
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandle() const {
 	return m_pUavsRange->GetGpuHandle();
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandleForMidMip() const {
 	return m_pUavsRange->GetGpuHandle(m_hzbMidMipId);
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandleForMips() const {
+	return m_pUavsRange->GetGpuHandle();
 }
 
 D3D12_DESCRIPTOR_RANGE1 DepthBuffer::GetSrvD3d12DescRange1(UINT baseShaderRegister, UINT registerSpace, D3D12_DESCRIPTOR_RANGE_FLAGS flags, UINT offsetInDescriptorsFromTableStart) const {
