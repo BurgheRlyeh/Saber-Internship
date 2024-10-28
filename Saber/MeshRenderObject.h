@@ -33,6 +33,7 @@ class MeshRenderObject : protected RenderObject {
 public:
     using RenderObject::InitMaterial;
     using RenderObject::Render;
+    using RenderObject::SetPsoRs;
 
     MeshRenderObject(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,

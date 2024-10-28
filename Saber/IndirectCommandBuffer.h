@@ -19,17 +19,26 @@ static inline UINT AlignForUavCounter(UINT bufferSize)
 template<typename CommandType>
 class IndirectCommandBuffer : public GPUResource {
 private:
-
-
+    uint32_t m_bufferSize;
 
 public:
-	IndirectCommandBuffer(
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		const HeapData& heapData,
-		const ResourceData& resData,
-		unsigned int objectsCount,
-		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
-	) : GPUResource(pAllocator, heapData, resData, allocationFlags), {}
+    IndirectCommandBuffer(
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        unsigned int objectsCount,
+        const HeapData& heapData = HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+        const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+    ) : m_bufferSize(AlignForUavCounter(objectsCount * sizeof(CommandType))), GPUResource(pAllocator, heapData, ResourceData{ResourceData{
+            CD3DX12_RESOURCE_DESC::Buffer(m_bufferSize),
+            D3D12_RESOURCE_STATE_COPY_DEST
+        }, }, allocationFlags) {}
+    uint32_t GetMemSize() { return m_bufferSize; };
 
+};
+
+struct SimpleIndirectCommand
+{
+    D3D12_GPU_VIRTUAL_ADDRESS cbv;
+    D3D12_DRAW_ARGUMENTS drawArguments;
+};
 
 #endif

@@ -15,6 +15,7 @@
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "Texture.h"
+#include "IndirectCommandBuffer.h"
 
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
@@ -46,6 +47,9 @@ class Scene {
 
     std::vector<std::shared_ptr<MeshRenderObject>> m_pStaticObjects{};
     std::mutex m_staticObjectsMutex{};
+    using StaticObjectsICB = IndirectCommandBuffer<SimpleIndirectCommand>;
+    std::shared_ptr<StaticObjectsICB> m_pStaticObjectsICB;
+
 
     std::vector<std::shared_ptr<MeshRenderObject>> m_pDynamicObjects{};
     std::mutex m_dynamicObjectsMutex{};
@@ -68,6 +72,8 @@ class Scene {
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
+    std::atomic<bool> m_useIndirectDraw{true};
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator;
 public:
     Scene() = delete;
     Scene(

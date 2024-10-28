@@ -84,6 +84,10 @@ public:
         ) {}
     ) const;
 
+    void SetPsoRs(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
+
+    //virtual void FillIndirectDrawParameters() const;
+
 protected:
     virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
     virtual void InnerRootParametersSetter(

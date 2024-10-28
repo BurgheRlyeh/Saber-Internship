@@ -39,8 +39,7 @@ void RenderObject::Render(
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
-    pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
+    SetPsoRs(pCommandListDirect);
 
     pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -61,6 +60,14 @@ void RenderObject::Render(
         0, 0, 0
     );
 }
+
+void RenderObject::SetPsoRs(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const
+{
+    assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+    pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
+    pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
+} 
 
 void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}
 
