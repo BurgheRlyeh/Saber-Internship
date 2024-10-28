@@ -2,6 +2,7 @@
 #define _INDIRECT_COMMAND_BUFFER
 // better protection than pragma once
 #include "Headers.h"
+#include <vector>
 
 #include "GPUResource.h"
 // From Microsoft's IndirectDraw example
@@ -16,11 +17,20 @@ static inline UINT AlignForUavCounter(UINT bufferSize)
     return (bufferSize + (alignment - 1)) & ~(alignment - 1);
 }
 
+struct SimpleIndirectCommand
+{
+    D3D12_GPU_VIRTUAL_ADDRESS cbv;
+    D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+    D3D12_INDEX_BUFFER_VIEW indexBufferView;
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+};
+
 template<typename CommandType>
 class IndirectCommandBuffer : public GPUResource {
 private:
     uint32_t m_bufferSize;
-
+    std::vector<D3D12_INDIRECT_ARGUMENT_DESC> argumentDescs;
+    D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc;
 public:
     IndirectCommandBuffer(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
@@ -33,12 +43,26 @@ public:
         }, }, allocationFlags) {}
     uint32_t GetMemSize() { return m_bufferSize; };
 
+    std::vector<CommandType>&& GetCpuBuffer() {
+        std::vector<CommandType> tmpBuffer; 
+        tmpBuffer.reserve(m_bufferSize);
+        return std::move(tmpBuffer);
+    };
+    void FillArgumentDescs() {
+        constexpr if (std::is_same<CommandType, SimpleIndirectCommand>)
+        {
+            argumentDescs.emplace_back(.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW, .RootParameterIndex = 0);
+            argumentDescs.emplace_back(.Type = D3D12_DRAW_INDEXED_ARGUMENTS);
+            argumentDescs.emplace_back(.Type = D3D12_INDEX_BUFFER_VIEW);
+            argumentDescs.emplace_back(.Type = D3D12_VERTEX_BUFFER_VIEW, .VertexBuffer.Slot = 0);
+
+            commandSignatureDesc.pArgumentDescs = argumentDescs;
+            commandSignatureDesc.NumArgumentDescs = _countof(argumentDescs);
+            commandSignatureDesc.ByteStride = sizeof(CommandType);
+        }
+    }
 };
 
-struct SimpleIndirectCommand
-{
-    D3D12_GPU_VIRTUAL_ADDRESS cbv;
-    D3D12_DRAW_ARGUMENTS drawArguments;
-};
+
 
 #endif

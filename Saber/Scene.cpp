@@ -227,8 +227,8 @@ void Scene::RenderStaticObjects(
             }
             auto memSize = m_pStaticObjectsICB->GetMemSize();
             auto intermediateBuffer = m_pCameraHeap->Allocate(memSize);
-            std::vector<SimpleIndirectCommand> commandBuffer;
-            commandBuffer.resize(m_pStaticObjects.size());
+            std::vector<SimpleIndirectCommand> commandBuffer = m_pStaticObjectsICB->GetCpuBuffer();
+
             //... here set common
             {
                 m_pStaticObjects[0]->SetPsoRs(pCommandListDirect);
@@ -243,7 +243,7 @@ void Scene::RenderStaticObjects(
             //... here fill data
             for(const auto& obj : m_pStaticObjects)
             {
-
+                commandBuffer.emplace_back(obj->IndirectCommandParameters());
             }
 
 
@@ -263,6 +263,8 @@ void Scene::RenderStaticObjects(
                 1,
                 &subresourceData
             );
+
+
         }
 
     }

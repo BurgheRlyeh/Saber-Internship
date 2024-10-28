@@ -36,6 +36,17 @@ void MeshRenderObject::Update() {
 
 }
 
+D3D12_GPU_VIRTUAL_ADDRESS MeshRenderObject::GetMeshCbGpuVirtualAdress()
+{
+    return m_pModelCB->GetResource()->GetGPUVirtualAddress();
+}
+
+SimpleIndirectCommand&& MeshRenderObject::IndirectCommandParameters()
+{
+    //SimpleIndirectCommand command{ m_pModelCB->GetResource()->GetGPUVirtualAddress(), { m_pMesh->GetIndicesCount(), 1, 0, 0, 0},  m_pMesh->GetIndexBufferView()->BufferLocation, m_pMesh->GetVertexBufferView()->BufferLocation};
+    return std::move(SimpleIndirectCommand{ m_pModelCB->GetResource()->GetGPUVirtualAddress(), D3D12_DRAW_INDEXED_ARGUMENTS{ static_cast<unsigned int>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0},  *m_pMesh->GetIndexBufferView(), *m_pMesh->GetVertexBufferView() });
+}
+
 void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {
     if (m_pMesh) {
         pCommandListDirect->IASetVertexBuffers(

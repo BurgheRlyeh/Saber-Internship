@@ -17,6 +17,7 @@
 #include "RenderObject.h"
 #include "Resources.h"
 #include "Vertices.h"
+#include "IndirectCommandBuffer.h"
 
 class MeshRenderObject : protected RenderObject {
     std::shared_ptr<Mesh> m_pMesh{};
@@ -53,6 +54,9 @@ public:
     virtual void SetMaterialId(size_t id);
 
     virtual void Update();
+
+    D3D12_GPU_VIRTUAL_ADDRESS GetMeshCbGpuVirtualAdress();
+    SimpleIndirectCommand && IndirectCommandParameters();
 
 protected:
     virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const override;
