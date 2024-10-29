@@ -38,7 +38,7 @@ void RenderObject::Render(
     std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter
 ) const {
     assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
-
+    
     pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
@@ -60,6 +60,14 @@ void RenderObject::Render(
         GetInstanceCount(),
         0, 0, 0
     );
+}
+
+Microsoft::WRL::ComPtr<ID3D12PipelineState> RenderObject::GetPipelineState() const {
+    return m_pPipelineState;
+}
+
+Microsoft::WRL::ComPtr<ID3D12RootSignature> RenderObject::GetRootSignature() const {
+    return m_pRootSignatureResource->pRootSignature;
 }
 
 void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}

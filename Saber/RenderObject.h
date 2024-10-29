@@ -84,6 +84,9 @@ public:
         ) {}
     ) const;
 
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> GetPipelineState() const;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature() const;
+
 protected:
     virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
     virtual void InnerRootParametersSetter(

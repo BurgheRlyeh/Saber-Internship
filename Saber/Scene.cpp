@@ -6,6 +6,10 @@ Scene::Scene(
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
 ) : m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) {
+    m_pStaticRenderSubsystem = std::make_shared<RenderSubsystem>();
+    m_pDynamicRenderSubsystem = std::make_shared<RenderSubsystem>();
+    m_pAlphaRenderSubsystem = std::make_shared<RenderSubsystem>();
+
     m_pCameraHeap = std::make_shared<DynamicUploadHeap>(
         pAllocator,
         2 * sizeof(SceneBuffer),
@@ -157,16 +161,13 @@ bool Scene::AddLightSource(
 }
 
 void Scene::AddStaticObject(const MeshRenderObject& object) {
-    std::scoped_lock<std::mutex> lock(m_staticObjectsMutex);
-    m_pStaticObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pStaticRenderSubsystem->Add(std::make_shared<MeshRenderObject>(object));
 }
 void Scene::AddDynamicObject(const MeshRenderObject& object) {
-    std::scoped_lock<std::mutex> lock(m_dynamicObjectsMutex);
-    m_pDynamicObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pDynamicRenderSubsystem->Add(std::make_shared<MeshRenderObject>(object));
 }
 void Scene::AddAlphaObject(const MeshRenderObject& object) {
-    std::scoped_lock<std::mutex> lock(m_alphaObjectsMutex);
-    m_pAlphaObjects.push_back(std::make_shared<MeshRenderObject>(object));
+    m_pAlphaRenderSubsystem->Add(std::make_shared<MeshRenderObject>(object));
 }
 
 void Scene::RenderStaticObjects(
@@ -179,7 +180,6 @@ void Scene::RenderStaticObjects(
         return;
 
     UpdateSceneBuffer();
-    UpdateLightBuffer();
 
     auto outerRootParametersSetter = [&](
             Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
@@ -199,20 +199,16 @@ void Scene::RenderStaticObjects(
         rtvs.push_back(renderTargetView);
     }
 
-    std::scoped_lock<std::mutex> staticObjectsLock(m_staticObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
-    for (const auto& obj : m_pStaticObjects) {
-        obj->Render(
-            pCommandListDirect,
-            viewport,
-            scissorRect,
-            rtvs.data(),
-            rtvs.size(),
-            &m_pDepthBuffer->GetDsvCpuDescHandle(),
-            outerRootParametersSetter
-        );
-    }
+    m_pStaticRenderSubsystem->Render(
+        pCommandListDirect,
+        viewport,
+        scissorRect,
+        rtvs.data(),
+        rtvs.size(),
+        &m_pDepthBuffer->GetDsvCpuDescHandle(),
+        outerRootParametersSetter
+    );
 }
 
 void Scene::RenderDynamicObjects(
@@ -225,7 +221,6 @@ void Scene::RenderDynamicObjects(
         return;
 
     UpdateSceneBuffer();
-    UpdateLightBuffer();
 
     auto outerRootParametersSetter = [&](
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
@@ -245,20 +240,16 @@ void Scene::RenderDynamicObjects(
         rtvs.push_back(renderTargetView);
     }
 
-    std::scoped_lock<std::mutex> dynamicObjectsLock(m_dynamicObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
-    for (const auto& obj : m_pDynamicObjects) {
-        obj->Render(
-            pCommandListDirect,
-            viewport,
-            scissorRect,
-            rtvs.data(),
-            rtvs.size(),
-            &m_pDepthBuffer->GetDsvCpuDescHandle(),
-            outerRootParametersSetter
-        );
-    }
+    m_pDynamicRenderSubsystem->Render(
+        pCommandListDirect,
+        viewport,
+        scissorRect,
+        rtvs.data(),
+        rtvs.size(),
+        &m_pDepthBuffer->GetDsvCpuDescHandle(),
+        outerRootParametersSetter
+    );
 }
 
 void Scene::RenderAlphaObjects(
@@ -273,7 +264,6 @@ void Scene::RenderAlphaObjects(
         return;
 
     UpdateSceneBuffer();
-    UpdateLightBuffer();
 
     auto outerRootParametersSetter = [&](
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
@@ -296,20 +286,16 @@ void Scene::RenderAlphaObjects(
         rtvs.push_back(renderTargetView);
     }
 
-    std::scoped_lock<std::mutex> alphaObjectsLock(m_alphaObjectsMutex);
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
-    for (const auto& obj : m_pAlphaObjects) {
-        obj->Render(
-            pCommandListDirect,
-            viewport,
-            scissorRect,
-            rtvs.data(),
-            rtvs.size(),
-            &m_pDepthBuffer->GetDsvCpuDescHandle(),
-            outerRootParametersSetter
-        );
-    }
+    m_pAlphaRenderSubsystem->Render(
+        pCommandListDirect,
+        viewport,
+        scissorRect,
+        rtvs.data(),
+        rtvs.size(),
+        &m_pDepthBuffer->GetDsvCpuDescHandle(),
+        outerRootParametersSetter
+    );
 }
 
 void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO) {
@@ -326,9 +312,11 @@ void Scene::RunDeferredShading(
     if (!m_pDeferredShadingComputeObject) {
         return;
     }
+    UpdateLightBuffer();
 
-    constexpr int block_size = 8;
+    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
 
+    constexpr int block_size{ 8 };
     m_pDeferredShadingComputeObject->Dispatch(
         pCommandListCompute,
         (width + block_size - 1) / block_size,
