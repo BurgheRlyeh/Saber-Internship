@@ -44,7 +44,7 @@ D3D12_GPU_VIRTUAL_ADDRESS MeshRenderObject::GetMeshCbGpuVirtualAdress()
 SimpleIndirectCommand&& MeshRenderObject::IndirectCommandParameters()
 {
     //SimpleIndirectCommand command{ m_pModelCB->GetResource()->GetGPUVirtualAddress(), { m_pMesh->GetIndicesCount(), 1, 0, 0, 0},  m_pMesh->GetIndexBufferView()->BufferLocation, m_pMesh->GetVertexBufferView()->BufferLocation};
-    return std::move(SimpleIndirectCommand{ m_pModelCB->GetResource()->GetGPUVirtualAddress(), D3D12_DRAW_INDEXED_ARGUMENTS{ static_cast<unsigned int>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0},  *m_pMesh->GetIndexBufferView(), *m_pMesh->GetVertexBufferView() });
+    return std::move(SimpleIndirectCommand{ m_pModelCB->GetResource()->GetGPUVirtualAddress(), *m_pMesh->GetIndexBufferView(), *m_pMesh->GetVertexBufferView() , D3D12_DRAW_INDEXED_ARGUMENTS{ static_cast<unsigned int>(m_pMesh->GetIndicesCount()), 1, 0, 0, 0} });
 }
 
 void MeshRenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {

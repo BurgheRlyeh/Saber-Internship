@@ -20,46 +20,78 @@ static inline UINT AlignForUavCounter(UINT bufferSize)
 struct SimpleIndirectCommand
 {
     D3D12_GPU_VIRTUAL_ADDRESS cbv;
-    D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+    D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+
 };
 
 template<typename CommandType>
 class IndirectCommandBuffer : public GPUResource {
 private:
     uint32_t m_bufferSize;
-    std::vector<D3D12_INDIRECT_ARGUMENT_DESC> argumentDescs;
-    D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc;
+    uint32_t m_Size;
+    //std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_argumentDescs;
+    //D3D12_COMMAND_SIGNATURE_DESC m_commandSignatureDesc;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_commandSignature;
 public:
-    IndirectCommandBuffer(
+    IndirectCommandBuffer(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         unsigned int objectsCount,
         const HeapData& heapData = HeapData{ D3D12_HEAP_TYPE_DEFAULT },
         const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
-    ) : m_bufferSize(AlignForUavCounter(objectsCount * sizeof(CommandType))), GPUResource(pAllocator, heapData, ResourceData{ResourceData{
-            CD3DX12_RESOURCE_DESC::Buffer(m_bufferSize),
+    ) : GPUResource(pAllocator, heapData, ResourceData{ ResourceData{
+            CD3DX12_RESOURCE_DESC::Buffer(AlignForUavCounter(objectsCount * sizeof(CommandType))),
             D3D12_RESOURCE_STATE_COPY_DEST
-        }, }, allocationFlags) {}
+        }, }, allocationFlags), m_bufferSize(AlignForUavCounter(objectsCount * sizeof(CommandType))), m_Size(objectsCount) {
+        GetResource().Get()->SetName(L"CommandBuffer");
+        FillArgumentDescs(pDevice, rootSignature);
+    }
+
     uint32_t GetMemSize() { return m_bufferSize; };
 
     std::vector<CommandType>&& GetCpuBuffer() {
         std::vector<CommandType> tmpBuffer; 
         tmpBuffer.reserve(m_bufferSize);
         return std::move(tmpBuffer);
-    };
-    void FillArgumentDescs() {
-        constexpr if (std::is_same<CommandType, SimpleIndirectCommand>)
+    }
+    void FillArgumentDescs(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature) {
+        if constexpr (std::is_same<CommandType, SimpleIndirectCommand>::value)  
         {
-            argumentDescs.emplace_back(.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW, .RootParameterIndex = 0);
-            argumentDescs.emplace_back(.Type = D3D12_DRAW_INDEXED_ARGUMENTS);
-            argumentDescs.emplace_back(.Type = D3D12_INDEX_BUFFER_VIEW);
-            argumentDescs.emplace_back(.Type = D3D12_VERTEX_BUFFER_VIEW, .VertexBuffer.Slot = 0);
+            std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_argumentDescs;
+            m_argumentDescs.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW, .ConstantBufferView = {.RootParameterIndex = 1} });
+            m_argumentDescs.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW });
+            m_argumentDescs.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW, .VertexBuffer = {.Slot = 0} });
+            m_argumentDescs.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED });
 
-            commandSignatureDesc.pArgumentDescs = argumentDescs;
-            commandSignatureDesc.NumArgumentDescs = _countof(argumentDescs);
-            commandSignatureDesc.ByteStride = sizeof(CommandType);
+            D3D12_COMMAND_SIGNATURE_DESC m_commandSignatureDesc = {};
+            m_commandSignatureDesc.pArgumentDescs = m_argumentDescs.data();
+            m_commandSignatureDesc.NumArgumentDescs = m_argumentDescs.size();
+            m_commandSignatureDesc.ByteStride = sizeof(CommandType);
+
+            ThrowIfFailed(pDevice->CreateCommandSignature(&m_commandSignatureDesc, rootSignature.Get(), IID_PPV_ARGS(&m_commandSignature)));
+            //ThrowIfFailed(pDevice->CreateCommandSignature(&m_commandSignatureDesc, NULL, IID_PPV_ARGS(&m_commandSignature)));
         }
+
+    }
+
+    void DrawIndirect(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList )
+    {
+        pCommandList->ExecuteIndirect(
+            m_commandSignature.Get(),
+            m_Size,
+            GetResource().Get(),
+            0,
+            nullptr,
+            0);
+        //pCommandListDirect->ExecuteIndirect(
+        //        m_commandSignature.Get(),
+        //        TriangleCount,
+        //        m_commandBuffer.Get(),
+        //        CommandSizePerFrame * m_frameIndex,
+        //        nullptr,
+        //        0);
     }
 };
 

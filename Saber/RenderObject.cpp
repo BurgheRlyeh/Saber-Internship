@@ -67,7 +67,12 @@ void RenderObject::SetPsoRs(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> p
 
     pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
     pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
-} 
+}
+Microsoft::WRL::ComPtr<ID3D12RootSignature> RenderObject::GetRootSignature()
+{
+    return m_pRootSignatureResource->pRootSignature.Get();
+}
+
 
 void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}
 

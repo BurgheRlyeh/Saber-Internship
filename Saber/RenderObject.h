@@ -85,6 +85,7 @@ public:
     ) const;
 
     void SetPsoRs(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature();
 
     //virtual void FillIndirectDrawParameters() const;
 

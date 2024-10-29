@@ -5,7 +5,7 @@ Scene::Scene(
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
-) : m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) , m_pAllocator(pAllocator){
+) : m_pDevice(pDevice), m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) , m_pAllocator(pAllocator){
     m_pCameraHeap = std::make_shared<DynamicUploadHeap>(
         pAllocator,
         2 * sizeof(SceneBuffer),
@@ -223,46 +223,87 @@ void Scene::RenderStaticObjects(
             //now for test create command buffer for existind only objects
             if (!m_pStaticObjectsICB)
             {
-                m_pStaticObjectsICB = std::make_shared<StaticObjectsICB>(m_pAllocator, m_pStaticObjects.size());
-            }
-            auto memSize = m_pStaticObjectsICB->GetMemSize();
-            auto intermediateBuffer = m_pCameraHeap->Allocate(memSize);
-            std::vector<SimpleIndirectCommand> commandBuffer = m_pStaticObjectsICB->GetCpuBuffer();
+                m_pStaticObjectsICB = std::make_shared<StaticObjectsICB>(m_pDevice, m_pStaticObjects[0]->GetRootSignature(), m_pAllocator, m_pStaticObjects.size());
+                auto memSize = m_pStaticObjectsICB->GetMemSize();
+                auto intermediateBuffer = m_pCameraHeap->Allocate(memSize);
+                std::vector<SimpleIndirectCommand> commandBuffer = m_pStaticObjectsICB->GetCpuBuffer();
 
-            //... here set common
+
+                //... here fill data
+                for (const auto& obj : m_pStaticObjects)
+                {
+                    commandBuffer.emplace_back(obj->IndirectCommandParameters());
+                }
+
+
+                D3D12_SUBRESOURCE_DATA subresourceData{
+                   .pData{ commandBuffer.data() },
+                   .RowPitch{ static_cast<LONG_PTR>(memSize) },
+                   .SlicePitch{ subresourceData.RowPitch }
+                };
+
+
+                auto copied = UpdateSubresources(
+                    pCommandListDirect.Get(),
+                    m_pStaticObjectsICB->GetResource().Get(),
+                    intermediateBuffer.pBuffer.Get(),
+                    intermediateBuffer.offset,
+                    0,
+                    1,
+                    &subresourceData
+                );
+                ResourceTransition(pCommandListDirect, m_pStaticObjectsICB->GetResource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+            }
+            else
             {
-                m_pStaticObjects[0]->SetPsoRs(pCommandListDirect);
-
-                pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-                pCommandListDirect->RSSetViewports(1, &viewport);
-                pCommandListDirect->RSSetScissorRects(1, &scissorRect);
-
-                pCommandListDirect->OMSetRenderTargets(static_cast<UINT>(rtvs.size()), rtvs.data(), FALSE, &m_pDepthBuffer->GetDsvCpuDescHandle());
+                ResourceTransition(pCommandListDirect, m_pStaticObjectsICB->GetResource(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_COPY_DEST);
             }
-            //... here fill data
-            for(const auto& obj : m_pStaticObjects)
-            {
-                commandBuffer.emplace_back(obj->IndirectCommandParameters());
-            }
+                auto memSize = m_pStaticObjectsICB->GetMemSize();
+                auto intermediateBuffer = m_pCameraHeap->Allocate(memSize);
+                std::vector<SimpleIndirectCommand> commandBuffer = m_pStaticObjectsICB->GetCpuBuffer();
+
+                //... here set common
+                {
+                    m_pStaticObjects[0]->SetPsoRs(pCommandListDirect);
+
+                    pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+                    pCommandListDirect->RSSetViewports(1, &viewport);
+                    pCommandListDirect->RSSetScissorRects(1, &scissorRect);
+
+                    pCommandListDirect->OMSetRenderTargets(static_cast<UINT>(rtvs.size()), rtvs.data(), FALSE, &m_pDepthBuffer->GetDsvCpuDescHandle());
+                    UINT rootParameterIndex{};
+
+                    outerRootParametersSetter(pCommandListDirect, rootParameterIndex);
+                }
+                //... here fill data
+                for (const auto& obj : m_pStaticObjects)
+                {
+                    commandBuffer.emplace_back(obj->IndirectCommandParameters());
+                }
 
 
-            D3D12_SUBRESOURCE_DATA subresourceData{
-               .pData{ commandBuffer.data() },
-               .RowPitch{ static_cast<LONG_PTR>(memSize) },
-               .SlicePitch{ subresourceData.RowPitch }
-            };
+                D3D12_SUBRESOURCE_DATA subresourceData{
+                   .pData{ commandBuffer.data() },
+                   .RowPitch{ static_cast<LONG_PTR>(memSize) },
+                   .SlicePitch{ subresourceData.RowPitch }
+                };
 
 
-            UpdateSubresources(
-                pCommandListDirect.Get(),
-                m_pStaticObjectsICB->GetResource().Get(),
-                intermediateBuffer.pBuffer.Get(),
-                intermediateBuffer.offset,
-                0,
-                1,
-                &subresourceData
-            );
+                auto copied = UpdateSubresources(
+                    pCommandListDirect.Get(),
+                    m_pStaticObjectsICB->GetResource().Get(),
+                    intermediateBuffer.pBuffer.Get(),
+                    intermediateBuffer.offset,
+                    0,
+                    1,
+                    &subresourceData
+                );
+
+                ResourceTransition(pCommandListDirect, m_pStaticObjectsICB->GetResource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+             
+
+            m_pStaticObjectsICB->DrawIndirect(pCommandListDirect);
 
 
         }

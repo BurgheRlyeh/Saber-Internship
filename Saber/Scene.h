@@ -74,6 +74,7 @@ class Scene {
 
     std::atomic<bool> m_useIndirectDraw{true};
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator;
+    Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice;
 public:
     Scene() = delete;
     Scene(

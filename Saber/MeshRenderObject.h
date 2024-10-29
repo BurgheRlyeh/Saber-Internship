@@ -35,6 +35,7 @@ public:
     using RenderObject::InitMaterial;
     using RenderObject::Render;
     using RenderObject::SetPsoRs;
+    using RenderObject::GetRootSignature;
 
     MeshRenderObject(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
