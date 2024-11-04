@@ -30,31 +30,10 @@ void RenderObject::InitMaterial(
 
 void RenderObject::Render(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT rect,
-    D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-    size_t rtvsCount,
-    D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
-    std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)> outerRootParametersSetter
+    UINT rootParameterIndex
 ) const {
-    assert(pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT);
-    
-    pCommandListDirect->SetPipelineState(m_pPipelineState.Get());
-    pCommandListDirect->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
-
-    pCommandListDirect->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    pCommandListDirect->RSSetViewports(1, &viewport);
-    pCommandListDirect->RSSetScissorRects(1, &rect);
-
-    pCommandListDirect->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, pDSV);
-
     RenderJob(pCommandListDirect);
-
-    UINT rootParameterIndex{};
-    outerRootParametersSetter(pCommandListDirect, rootParameterIndex);
     InnerRootParametersSetter(pCommandListDirect, rootParameterIndex);
-
     pCommandListDirect->DrawIndexedInstanced(
         GetIndexCountPerInstance(),
         GetInstanceCount(),
@@ -68,6 +47,11 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> RenderObject::GetPipelineState() con
 
 Microsoft::WRL::ComPtr<ID3D12RootSignature> RenderObject::GetRootSignature() const {
     return m_pRootSignatureResource->pRootSignature;
+}
+
+void RenderObject::SetPipelineStateAndRootSignature(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) const {
+    pCommandList->SetPipelineState(m_pPipelineState.Get());
+    pCommandList->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 }
 
 void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}

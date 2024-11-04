@@ -346,27 +346,36 @@ void Scene::SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing) {
 }
 
 void Scene::RenderPostProcessing(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
 ) {
-    if (!m_pGBuffer) {
+    if (!m_pPostProcessing || !m_pGBuffer) {
         return;
     }
 
-    m_pPostProcessing->Render(
-        pCommandListDirect,
-        viewport,
-        scissorRect,
-        &renderTargetView,
-        1,
-        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) {
-            pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-            pCommandListDirect->SetGraphicsRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle(m_pGBuffer->GetSize() - 1));
-        }
-    );
+	// prepare command list
+	UINT rootParameterIndex{};
+	{
+		m_pPostProcessing->SetPipelineStateAndRootSignature(pCommandList);
+
+		pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		pCommandList->RSSetViewports(1, &viewport);
+		pCommandList->RSSetScissorRects(1, &scissorRect);
+
+		pCommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
+
+		pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+		pCommandList->SetGraphicsRootDescriptorTable(
+            rootParameterIndex++,
+			m_pGBuffer->GetSrvDescHandle(m_pGBuffer->GetSize() - 1)
+		);
+    }
+
+    m_pPostProcessing->Render(pCommandList, rootParameterIndex);
 }
 
 void Scene::UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {

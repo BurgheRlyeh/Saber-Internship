@@ -37,11 +37,15 @@ public:
 		m_map[key]->values.pop_back();
 	}
 
-	void ForEachValue(std::function<void(Value& value)> function) {
+	void ForEachValue(
+		std::function<void(Value&)> forValue,
+		std::function<void(Value&)> forBucket = [](Value&) {}
+	) {
 		std::scoped_lock<std::mutex> mapLock{ m_mapMutex };
 		for (auto& [_, value] : m_map) {
 			std::scoped_lock<std::mutex> vectorLock(value->mutex);
-			std::for_each(value->values.begin(), value->values.end(), function);
+			forBucket(value->values.front());
+			std::for_each(value->values.begin(), value->values.end(), forValue);
 		}
 	}
 };
