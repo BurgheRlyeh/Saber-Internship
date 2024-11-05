@@ -18,7 +18,7 @@
 #include "Resources.h"
 #include "Vertices.h"
 
-class MeshRenderObject : protected RenderObject {
+class MeshRenderObject : public RenderObject {
     std::shared_ptr<Mesh> m_pMesh{};
 
     struct ModelBuffer {

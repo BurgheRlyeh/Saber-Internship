@@ -69,20 +69,17 @@ public:
         PipelineStateData& pipelineStateData
     );
 
-    virtual void Render(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT rect,
-        D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-        size_t rtvsCount,
-        D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilView,
-        std::function<
-            void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT& rootParameterIndex)
-        > outerRootParametersSetter = [](
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-            UINT& rootParamId
-        ) {}
+	virtual void Render(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+		UINT rootParameterIndex
     ) const;
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> GetPipelineState() const;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature() const;
+
+	void SetPipelineStateAndRootSignature(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+	) const;
 
 protected:
     virtual void RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const;

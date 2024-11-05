@@ -14,6 +14,7 @@
 #include "GBuffer.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
+#include "RenderSubsystem.h"
 #include "Texture.h"
 
 class Scene {
@@ -44,14 +45,9 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pStaticObjects{};
-    std::mutex m_staticObjectsMutex{};
-
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pDynamicObjects{};
-    std::mutex m_dynamicObjectsMutex{};
-
-    std::vector<std::shared_ptr<MeshRenderObject>> m_pAlphaObjects{};
-    std::mutex m_alphaObjectsMutex{};
+    std::shared_ptr<RenderSubsystem> m_pStaticRenderSubsystem{};
+    std::shared_ptr<RenderSubsystem> m_pDynamicRenderSubsystem{};
+    std::shared_ptr<RenderSubsystem> m_pAlphaRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
