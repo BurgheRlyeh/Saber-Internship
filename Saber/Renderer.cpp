@@ -25,7 +25,6 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
-    m_pSinglePassDownsampler.reset();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
@@ -86,7 +85,17 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDsvDescHeapManager,
         m_pResourceDescHeapManager,
         m_clientWidth,
-        m_clientHeight
+        m_clientHeight,
+        std::make_shared<SinglePassDownsampler>(
+            m_pDevice,
+            m_pAllocator,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary,
+            m_pResourceDescHeapManager,
+            m_clientWidth,
+            m_clientHeight
+        )
     );
 
     m_pGBuffers.resize(1);
@@ -104,29 +113,6 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDevice,
         m_pAllocator,
         m_pResourceDescHeapManager, 10
-    );
-
-    m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(
-        m_pDevice,
-        m_pAllocator,
-        m_pShaderAtlas,
-        m_pRootSignatureAtlas,
-        m_pPSOLibrary,
-        m_pResourceDescHeapManager,
-        m_clientWidth,
-        m_clientHeight
-    );
-
-    const size_t DynamicUploadHeapDefaultSize{ 1024 };
-    m_pDynamicUploadHeapCPU = std::make_shared<DynamicUploadHeap>(
-        m_pAllocator,
-        DynamicUploadHeapDefaultSize,
-        true
-    );
-    m_pDynamicUploadHeapGPU = std::make_shared<DynamicUploadHeap>(
-        m_pAllocator,
-        DynamicUploadHeapDefaultSize,
-        false
     );
 
     m_isInitialized = true;
@@ -420,8 +406,8 @@ void Renderer::PerformResize() {
         return;
 
     // Don't allow 0 size swap chain back buffers.
-    m_clientWidth = std::max(1u, width);
-    m_clientHeight = std::max(1u, height);
+    m_clientWidth  = std::min<uint32_t>(std::max(1u, width), 4096);
+    m_clientHeight = std::min<uint32_t>(std::max(1u, height), 4096);
 
     // Flush the GPU queue to make sure the swap chain's back buffers
     // are not being referenced by an in-flight command list.
@@ -457,7 +443,6 @@ void Renderer::PerformResize() {
     for (auto& pDepthBuffer : m_pDepthBuffers) {
         pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
-    m_pSinglePassDownsampler->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     for (auto& pGBuffer : m_pGBuffers) {
         pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
@@ -489,11 +474,13 @@ void Renderer::Render() {
     if (!scene->IsSceneReady())
         return;
 
+    size_t listPriority{};
+
     auto& backBuffer = m_pBackBuffers[m_currBackBufferId];
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 0)
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
     };
 
     // Some small work doesn't need to be moved to jobs, just as example
@@ -526,7 +513,7 @@ void Renderer::Render() {
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority)
     };
     m_pJobSystem->AddJob([&]() {
         PIXScopedEvent(
@@ -544,7 +531,7 @@ void Renderer::Render() {
     });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 1)
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
     };
     m_pJobSystem->AddJob([&]() {
         PIXScopedEvent(
@@ -565,7 +552,7 @@ void Renderer::Render() {
 
     uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 2, [] {},
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority, [] {},
             [&]() { fenceValueAfterRender = m_pCommandQueueDirect->Signal(); }
         )
     };
@@ -585,23 +572,23 @@ void Renderer::Render() {
     });
 
     
-    uint64_t fenceValueAfterHZB{};
+    uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3,
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterRender); },
             [&] { fenceValueAfterHZB = m_pCommandQueueDirect->Signal(); }
         )
     };
 
-    uint64_t fenceValueAfterDeferredShading{};
+    uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForDeferredShading{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 3,
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterHZB); },
             [&] { fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal(); }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, 4,
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterDeferredShading); }
         )
     };
@@ -612,12 +599,9 @@ void Renderer::Render() {
                 PIX_COLOR(0, 0, 0),
                 L"Building HZB"
             );
-            m_pSinglePassDownsampler->Dispatch(
+            scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB->m_pCommandList,
-                m_pResourceDescHeapManager->GetDescriptorHeap(),
-                scene->GetDepthBuffer()->GetSrvGpuDescHandle(),
-                scene->GetDepthBuffer()->GetUavGpuDescHandleForMidMip(),
-                scene->GetDepthBuffer()->GetUavGpuDescHandle()
+                m_pResourceDescHeapManager->GetDescriptorHeap()
             );
             commandListForHZB->SetReadyForExection();
         }
