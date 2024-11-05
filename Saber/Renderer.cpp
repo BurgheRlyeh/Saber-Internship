@@ -113,7 +113,19 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDevice,
         m_pAllocator,
         m_pResourceDescHeapManager, 10
-    );
+	);
+
+	const size_t DynamicUploadHeapDefaultSize{ 1024 };
+	m_pDynamicUploadHeapCPU = std::make_shared<DynamicUploadHeap>(
+		m_pAllocator,
+		DynamicUploadHeapDefaultSize,
+		true
+	);
+	m_pDynamicUploadHeapGPU = std::make_shared<DynamicUploadHeap>(
+		m_pAllocator,
+		DynamicUploadHeapDefaultSize,
+		false
+	);
 
     m_isInitialized = true;
 

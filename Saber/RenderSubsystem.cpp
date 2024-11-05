@@ -1,6 +1,6 @@
 #include "RenderSubsystem.h"
 
-void RenderSubsystem::Add(std::shared_ptr<MeshRenderObject> pObject) {
+void RenderSubsystem::Add(std::shared_ptr<RenderObject> pObject) {
 	m_objects.Add(PsoToMapKey(pObject->GetPipelineState()), pObject);
 }
 
@@ -15,10 +15,10 @@ void RenderSubsystem::Render(
 ) {
 	UINT rootParameterIndex{};
 	m_objects.ForEachValue(
-		[&](std::shared_ptr<MeshRenderObject> pObject) {
+		[&](std::shared_ptr<RenderObject> pObject) {
 			pObject->Render(pCommandList, rootParameterIndex);
 		},
-		[&](std::shared_ptr<MeshRenderObject> pObject) {
+		[&](std::shared_ptr<RenderObject> pObject) {
 			pObject->SetPipelineStateAndRootSignature(pCommandList);
 
 			pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

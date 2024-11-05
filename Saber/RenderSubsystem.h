@@ -7,10 +7,10 @@
 #include "SeparateChainingMap.h"
 
 class RenderSubsystem {
-	UnorderedSeparateChainingMap<size_t, std::shared_ptr<MeshRenderObject>> m_objects{};
+	UnorderedSeparateChainingMap<size_t, std::shared_ptr<RenderObject>> m_objects{};
 	
 public:
-	void Add(std::shared_ptr<MeshRenderObject> pObject);
+	void Add(std::shared_ptr<RenderObject> pObject);
 
 	void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
