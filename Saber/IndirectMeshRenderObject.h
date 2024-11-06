@@ -28,7 +28,7 @@ protected:
 		D3D12_DRAW_INDEXED_ARGUMENTS drawArguments{};
 		UINT alignment{};
 	};
-	std::shared_ptr<IndirectCommandBuffer<IndirectCommand, InstMaxCount>> m_pIndirectCommandBuffer{};
+	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 	static inline D3D12_INDIRECT_ARGUMENT_DESC m_indirectArgumentDescs[2]{
 		{ .Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW }, .ConstantBufferView{ 1 } },
@@ -78,14 +78,15 @@ public:
 		const std::wstring& objectName
 	) {
 		m_pIndirectCommandBuffer = std::make_shared<
-			StaticIndirectCommandBuffer<IndirectCommand, InstMaxCount>
+			StaticIndirectCommandBuffer<IndirectCommand>
 		>(
 			pDevice,
 			pAllocator,
 			m_commandSignatureDesc,
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
-			objectName
+			objectName,
+			InstMaxCount
 		);
 	}
 
@@ -166,7 +167,7 @@ public:
 		std::shared_ptr<ComputeObject> pIndirectUpdater
 	) {
 		m_pIndirectCommandBuffer = std::make_shared<
-			DynamicIndirectCommandBuffer<IndirectCommand, InstMaxCount>
+			DynamicIndirectCommandBuffer<IndirectCommand>
 		>(
 			pDevice,
 			pAllocator,
@@ -174,6 +175,7 @@ public:
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
 			objectName,
+			InstMaxCount,
 			pDynamicUploadHeap,
 			pIndirectUpdater
 		);

@@ -183,20 +183,20 @@ public:
         rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         pObj->InitMaterial(
             pDevice,
-            RootSignatureData(
+            RootSignatureData{
                 pRootSignatureAtlas,
                 CreateRootSignatureBlob(pDevice),
                 L"SimpleRootSignature"
-            ),
-            ShaderData(
+            },
+            ShaderData{
                 pShaderAtlas,
                 L"SimpleVertexShader.cso",
                 L"SimplePixelShader.cso"
-            ),
-            PipelineStateData(
+            },
+            PipelineStateData{
                 pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout), rtvFormats)
-            )
+            }
         );
 
         return pObj;
@@ -268,20 +268,20 @@ public:
         rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         pObj->InitMaterial(
             pDevice,
-            RootSignatureData(
+            RootSignatureData{
                 pRootSignatureAtlas,
                 CreateRootSignatureBlob(pDevice),
                 L"SimpleRootSignature"
-            ),
-            ShaderData(
+            },
+            ShaderData{
                 pShaderAtlas,
                 L"SimpleVertexShader.cso",
                 L"SimplePixelShader.cso"
-            ),
-            PipelineStateData(
+			},
+            PipelineStateData{
                 pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayout, _countof(m_inputLayout), rtvFormats)
-            )
+            }
         );
 
         return pObj;
@@ -408,20 +408,20 @@ public:
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
         pObj->InitMaterial(
             pDevice,
-            RootSignatureData(
+            RootSignatureData{
                 pRootSignatureAtlas,
                 CreateRootSignatureBlob(pDevice),
                 L"SimpleTextureRootSignature"
-            ),
-            ShaderData(
+            },
+            ShaderData{
                 pShaderAtlas,
                 L"SimpleUVVertexShader.cso",
                 L"SimpleUVPixelShader.cso"
-            ),
-            PipelineStateData(
+            },
+            PipelineStateData{
                 pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayoutAoS, _countof(m_inputLayoutAoS), pGBuffer->GetRtFormatArray())
-            )
+            }
         );
 
         pObj->SetModelBuffer(ModelBuffer{
@@ -481,20 +481,20 @@ public:
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
         pObj->InitMaterial(
             pDevice,
-            RootSignatureData(
+            RootSignatureData{
                 pRootSignatureAtlas,
                 CreateRootSignatureBlob(pDevice),
                 L"GLTFRootSignature"
-            ),
-            ShaderData(
+            },
+            ShaderData{
                 pShaderAtlas,
                 L"SoAUVVertexShader.cso",
                 L"SimpleUVPixelShader.cso"
-            ),
-            PipelineStateData(
+            },
+            PipelineStateData{
                 pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
-            )
+            }
         );
 
         pObj->SetModelBuffer(ModelBuffer{
@@ -602,20 +602,20 @@ public:
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
         pObj->InitMaterial(
             pDevice,
-            RootSignatureData(
+            RootSignatureData{
                 pRootSignatureAtlas,
                 CreateRootSignatureBlob(pDevice),
                 L"AlphaGrassGLTFRootSignature"
-            ),
-            ShaderData(
+            },
+            ShaderData{
                 pShaderAtlas,
                 L"AlphaVS.cso",
                 L"AlphaPS.cso"
-            ),
-            PipelineStateData(
+            },
+            PipelineStateData{
                 pPSOLibrary,
                 CreateAlphaPipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
-            )
+            }
         );
 
         pObj->SetModelBuffer(ModelBuffer{

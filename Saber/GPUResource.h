@@ -7,12 +7,12 @@
 #include "CommandQueue.h"
 
 class GPUResource {
-protected:
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 
-	GPUResource() = default;
-
 public:
+	GPUResource() = default;
+	virtual ~GPUResource() = default;
+
 	struct HeapData {
 		D3D12_HEAP_TYPE heapType{};
 		D3D12_HEAP_FLAGS heapFlags{};
@@ -29,6 +29,13 @@ public:
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
 	);
 
+	void CreateResource(
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		const HeapData& heapData,
+		const ResourceData& resData,
+		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+	);
+
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
 
 	std::shared_ptr<GPUResource> CreateIntermediate(
@@ -37,20 +44,22 @@ public:
 		UINT numSubresources
 	);
 
-	std::shared_ptr<GPUResource> UpdateSubresource(
+	void UpdateSubresource(
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<CommandList> pCommandList,
 		UINT firstSubresource,
 		UINT numSubresources,
-		const D3D12_SUBRESOURCE_DATA* pSrcData
+		const D3D12_SUBRESOURCE_DATA* pSrcData,
+		std::shared_ptr<GPUResource>& pIntermediate
 	);
-	std::shared_ptr<GPUResource> UpdateSubresource(
+	void UpdateSubresource(
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<CommandList> pCommandList,
 		UINT firstSubresource,
 		UINT numSubresources,
 		void* pResourceData,
-		const D3D12_SUBRESOURCE_INFO* pSrcData
+		const D3D12_SUBRESOURCE_INFO* pSrcData,
+		std::shared_ptr<GPUResource>& pIntermediate
 	);
 
 	bool IsSrv() const;
@@ -77,14 +86,6 @@ public:
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
 	);
-
-protected:
-	void CreateResource(
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		const HeapData& heapData,
-		const ResourceData& resData,
-		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
-	);
 };
 
 static void ResourceTransition(
@@ -100,5 +101,22 @@ static void ResourceTransition(
 			stateBefore,
 			stateAfter
 		)
+	);
+}
+
+static void ClearRenderTarget(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+	const float* clearColor = nullptr
+) {
+	assert(pResource->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+
+	static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
+	pCommandList->ClearRenderTargetView(
+		cpuDescHandle,
+		clearColor ? clearColor : defaultColor,
+		0,
+		nullptr
 	);
 }

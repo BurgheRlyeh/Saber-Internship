@@ -36,16 +36,15 @@ std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
 	);
 }
 
-std::shared_ptr<GPUResource> GPUResource::UpdateSubresource(
+void GPUResource::UpdateSubresource(
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	std::shared_ptr<CommandList> pCommandList,
 	UINT firstSubresource,
 	UINT numSubresources,
-	const D3D12_SUBRESOURCE_DATA* pSrcData
+	const D3D12_SUBRESOURCE_DATA* pSrcData,
+	std::shared_ptr<GPUResource>& pIntermediate
 ) {
-	std::shared_ptr<GPUResource> pIntermediate{
-		CreateIntermediate(pAllocator, firstSubresource, numSubresources)
-	};
+	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
 	UpdateSubresources(
 		pCommandList->m_pCommandList.Get(),
 		GetResource().Get(),
@@ -55,20 +54,18 @@ std::shared_ptr<GPUResource> GPUResource::UpdateSubresource(
 		numSubresources,
 		pSrcData
 	);
-	return pIntermediate;
 }
 
-std::shared_ptr<GPUResource> GPUResource::UpdateSubresource(
+void GPUResource::UpdateSubresource(
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	std::shared_ptr<CommandList> pCommandList,
 	UINT firstSubresource,
 	UINT numSubresources,
 	void* pResourceData,
-	const D3D12_SUBRESOURCE_INFO* pSrcData
+	const D3D12_SUBRESOURCE_INFO* pSrcData,
+	std::shared_ptr<GPUResource>& pIntermediate
 ) {
-	std::shared_ptr<GPUResource> pIntermediate{
-		CreateIntermediate(pAllocator, firstSubresource, numSubresources)
-	};
+	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
 	UpdateSubresources(
 		pCommandList->m_pCommandList.Get(),
 		GetResource().Get(),
@@ -79,7 +76,6 @@ std::shared_ptr<GPUResource> GPUResource::UpdateSubresource(
 		pResourceData,
 		pSrcData
 	);
-	return pIntermediate;
 }
 
 
