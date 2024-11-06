@@ -75,7 +75,8 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		const std::wstring& objectName
+		const std::wstring& objectName,
+		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
 	) {
 		m_pIndirectCommandBuffer = std::make_shared<
 			StaticIndirectCommandBuffer<IndirectCommand>
@@ -86,7 +87,8 @@ public:
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
 			objectName,
-			InstMaxCount
+			1,
+			pDynamicUploadHeap
 		);
 	}
 
@@ -175,14 +177,14 @@ public:
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
 			objectName,
-			InstMaxCount,
+			1,
 			pDynamicUploadHeap,
 			pIndirectUpdater
 		);
 	}
 };
 
-template <size_t InstMaxCount = 1000>
+template <size_t InstMaxCount = 1024>
 class TestIndirectMeshRenderObject : protected TestAlphaRenderObject {
 public:
 	static std::shared_ptr<IndirectMeshRenderObject<ModelBuffer, InstMaxCount>> CreateStatic(
@@ -198,6 +200,7 @@ public:
 		std::shared_ptr<GBuffer> pGBuffer,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapCbvSrvUav,
 		std::shared_ptr<MaterialManager> pMaterialManager,
+		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
 		const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
 	) {
 		Mesh::MeshDataGLTF data{
@@ -244,7 +247,7 @@ public:
 		);
 		pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, 
 			IndirectMeshRenderObject<ModelBuffer, InstMaxCount>::MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
-		pObj->InitIndirectCommandBuffer(pDevice, pAllocator, pDescHeapCbvSrvUav, L"IndirectAlphaGrassGLTF");
+		pObj->InitIndirectCommandBuffer(pDevice, pAllocator, pDescHeapCbvSrvUav, L"IndirectAlphaGrassGLTF", pDynamicUploadHeap);
 
 		size_t materialId{ pMaterialManager->AddMaterial(
 				pDevice,

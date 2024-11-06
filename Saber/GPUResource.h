@@ -120,3 +120,7 @@ static void ClearRenderTarget(
 		nullptr
 	);
 }
+
+static UINT AlignSize(UINT size, UINT alignment) {
+	return (size + (alignment - 1)) & ~(alignment - 1);
+}

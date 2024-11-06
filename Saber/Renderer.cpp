@@ -293,7 +293,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pPSOLibrary
             ));
             std::filesystem::path filepath{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddAlphaObject(TestIndirectMeshRenderObject<>::CreateDynamic(
+            pScene->AddAlphaObject(TestIndirectMeshRenderObject<>::CreateStatic(
                 m_pDevice,
                 m_pAllocator,
                 m_pCommandQueueCopy,
