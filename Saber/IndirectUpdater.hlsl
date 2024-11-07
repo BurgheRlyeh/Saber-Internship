@@ -16,8 +16,9 @@ struct DrawIndexedArguments
 struct IndirectCommand
 {
     uint2 cbvAddress;
+    uint4 indexBufferView;
+    uint4 vertexBufferView;
     DrawIndexedArguments drawArgs;
-    uint alignment;
 };
 
 StructuredBuffer<uint> updateBufferIds : register(t0);

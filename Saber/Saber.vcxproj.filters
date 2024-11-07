@@ -108,7 +108,7 @@
     <ClInclude Include="PostProcessing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="MeshRenderObject.h">
+    <ClInclude Include="RenderModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ComputeObject.h">

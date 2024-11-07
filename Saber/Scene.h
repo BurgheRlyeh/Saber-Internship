@@ -12,7 +12,7 @@
 #include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
 #include "GBuffer.h"
-#include "MeshRenderObject.h"
+#include "RenderModel.h"
 #include "PostProcessing.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
@@ -47,6 +47,7 @@ class Scene {
     std::shared_ptr<RenderSubsystem> m_pStaticRenderSubsystem{};
     std::shared_ptr<RenderSubsystem> m_pDynamicRenderSubsystem{};
     std::shared_ptr<RenderSubsystem> m_pAlphaRenderSubsystem{};
+    std::shared_ptr<IndirectRenderSubsystem> m_pIndirectRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -70,6 +71,79 @@ public:
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
         std::shared_ptr<GBuffer> m_pGBuffer = nullptr
     );
+
+    void AddIndirectObject(std::shared_ptr<MeshRenderObject> pObject) {
+        m_pIndirectRenderSubsystem->Add(pObject);
+    }
+    void InitIndirectRenderSubsystem(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+        std::shared_ptr<ComputeObject> pIndirectUpdater
+    ) {
+        m_pIndirectRenderSubsystem->InitializeIndirectCommandBuffer(
+            pDevice,
+            pAllocator,
+            pDescHeapManagerCbvSrvUav,
+            pDynamicUploadHeap,
+            pIndirectUpdater
+        );
+    }
+    void PerformIndirectRenderSubsystemUpdate(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<CommandQueue> pCommandQueueCopy,
+        std::shared_ptr<CommandQueue> pCommandQueueDirect
+    ) {
+        m_pIndirectRenderSubsystem->PerformIndirectBufferUpdate(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect
+        );
+    }
+
+    void RenderIndirectObjects(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+    ) {
+        if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+            return;
+
+        UpdateSceneBuffer();
+
+        auto outerRootParametersSetter = [&](
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+            UINT& rootParamId
+            ) {
+                pCommandListDirect->SetGraphicsRootConstantBufferView(
+                    rootParamId++,
+                    m_sceneCBDynamicAllocation.gpuAddress
+                );
+            };
+
+        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+        if (m_pGBuffer) {
+            rtvs = m_pGBuffer->GetRtvs();
+        }
+        else {
+            rtvs.push_back(renderTargetView);
+        }
+
+        std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+        m_pIndirectRenderSubsystem->Render(
+            pCommandListDirect,
+            viewport,
+            scissorRect,
+            rtvs.data(),
+            rtvs.size(),
+            &m_pDepthBuffer->GetDsvCpuDescHandle(),
+            outerRootParametersSetter
+        );
+    }
 
     void SetSceneReadiness(bool value);
     bool IsSceneReady();

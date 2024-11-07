@@ -9,6 +9,7 @@ Scene::Scene(
     m_pStaticRenderSubsystem = std::make_shared<RenderSubsystem>();
     m_pDynamicRenderSubsystem = std::make_shared<RenderSubsystem>();
     m_pAlphaRenderSubsystem = std::make_shared<RenderSubsystem>();
+    m_pIndirectRenderSubsystem = std::make_shared<IndirectRenderSubsystem>(L"Indirect");
 
     m_pLightCB = std::make_shared<ConstantBuffer>(
         pAllocator,

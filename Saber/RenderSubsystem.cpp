@@ -14,23 +14,23 @@ void RenderSubsystem::Render(
 	std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT&)> outerRootParametersSetter
 ) {
 	UINT rootParameterIndex{};
-	m_objects.ForEachValue(
-		[&](std::shared_ptr<RenderObject> pObject) {
-			pObject->Render(pCommandList, rootParameterIndex);
-		},
-		[&](std::shared_ptr<RenderObject> pObject) {
-			pObject->SetPipelineStateAndRootSignature(pCommandList);
+	std::function forPso{ [&](std::shared_ptr<RenderObject> pObject) {
+		pObject->SetPipelineStateAndRootSignature(pCommandList);
 
-			pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			pCommandList->RSSetViewports(1, &viewport);
-			pCommandList->RSSetScissorRects(1, &rect);
+		pCommandList->RSSetViewports(1, &viewport);
+		pCommandList->RSSetScissorRects(1, &rect);
 
-			pCommandList->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, pDSV);
+		pCommandList->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, pDSV);
 
-			outerRootParametersSetter(pCommandList, rootParameterIndex);
-		}
-	);
+		outerRootParametersSetter(pCommandList, rootParameterIndex);
+	} };
+	std::function forObj{ [&](std::shared_ptr<RenderObject> pObject) {
+		pObject->Render(pCommandList, rootParameterIndex);
+	} };
+
+	m_objects.ForEachValue(forObj, forPso);
 }
 
 size_t RenderSubsystem::PsoToMapKey(Microsoft::WRL::ComPtr<ID3D12PipelineState> pPso) {

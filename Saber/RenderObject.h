@@ -22,6 +22,10 @@ protected:
     std::shared_ptr<ShaderResource> m_pPixelShaderResource{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
 
+    RenderObject() = default;
+    RenderObject(const RenderObject&) = default;
+    RenderObject(RenderObject&&) = default;
+
 public:
     struct RootSignatureData {
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
@@ -62,7 +66,7 @@ protected:
     ) const;
 
     virtual void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
         UINT& rootParamId
     ) const;
 

@@ -12,7 +12,7 @@
 #include "GPUResource.h"
 #include "IndirectCommandBuffer.h"
 #include "IndirectUpdater.h"
-#include "MeshRenderObject.h"
+#include "RenderModel.h"
 #include "ModelBuffers.h"
 
 template <typename ModelBuffer, size_t InstMaxCount>
@@ -22,23 +22,30 @@ protected:
 
 	std::vector<ModelBuffer> m_modelBuffers{ InstMaxCount };
 	std::shared_ptr<ConstantBuffer> m_pModelCB{};
-
+	
 	struct IndirectCommand {
 		D3D12_GPU_VIRTUAL_ADDRESS cbv{};
+		D3D12_INDEX_BUFFER_VIEW indexBufferView{};
+		D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
 		D3D12_DRAW_INDEXED_ARGUMENTS drawArguments{};
-		UINT alignment{};
-	};
-	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
-	static inline D3D12_INDIRECT_ARGUMENT_DESC m_indirectArgumentDescs[2]{
-		{ .Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW }, .ConstantBufferView{ 1 } },
-		{ .Type{ D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED } }
+		static inline D3D12_INDIRECT_ARGUMENT_DESC indirectArgumentDescs[4]{
+			{.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW }, .ConstantBufferView{ 1 } },
+			{.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW } },
+			{.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW }, .VertexBuffer{} },
+			{.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED } },
+		};
+
+		static D3D12_COMMAND_SIGNATURE_DESC GetCommandSignatureDesc() {
+			return D3D12_COMMAND_SIGNATURE_DESC{
+				.ByteStride{ sizeof(IndirectCommand) },
+				.NumArgumentDescs{ _countof(indirectArgumentDescs) },
+				.pArgumentDescs{ indirectArgumentDescs }
+			};
+		}
 	};
-	static inline D3D12_COMMAND_SIGNATURE_DESC m_commandSignatureDesc{
-		.ByteStride{ sizeof(IndirectCommand) },
-		.NumArgumentDescs{ _countof(m_indirectArgumentDescs) },
-		.pArgumentDescs{ m_indirectArgumentDescs }
-	};
+
+	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 public:
 	IndirectMeshRenderObject(
@@ -83,7 +90,7 @@ public:
 		>(
 			pDevice,
 			pAllocator,
-			m_commandSignatureDesc,
+			IndirectCommand::GetCommandSignatureDesc(),
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
 			objectName,
@@ -117,10 +124,12 @@ public:
 			id,
 			IndirectCommand{
 				.cbv{ m_pModelCB->GetResource()->GetGPUVirtualAddress() + id * sizeof(ModelBuffer) },
+				.indexBufferView{ *m_pMesh->GetIndexBufferView() },
+				.vertexBufferView{ *m_pMesh->GetVertexBufferViews() },
 				.drawArguments{ D3D12_DRAW_INDEXED_ARGUMENTS{
 					.IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
 					.InstanceCount{ 1 },
-				} }
+				} },
 			}
 		);
 	}
@@ -173,7 +182,7 @@ public:
 		>(
 			pDevice,
 			pAllocator,
-			m_commandSignatureDesc,
+			IndirectCommand::GetCommandSignatureDesc(),
 			m_pRootSignatureResource->pRootSignature,
 			pDescHeapManagerCbvSrvUav,
 			objectName,

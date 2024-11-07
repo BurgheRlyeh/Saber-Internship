@@ -187,13 +187,14 @@ void Renderer::Initialize(HWND hWnd) {
         {
             std::unique_ptr<Scene>& pScene{ m_pScenes[3] };
             pScene = std::make_unique<Scene>(m_pAllocator, m_pDynamicUploadHeapCPU, m_pDepthBuffers[0]);
-            for (size_t i{}; i < 15; ++i) {
-                m_pJobSystem->AddJob([&]() {
+
+        	m_pJobSystem->AddJob([&]() {
+        		for (size_t i{}; i < 15; ++i) {
                     std::random_device rd;
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-10.f, 10.f);
                     // add static triangle at random position
-                    pScene->AddStaticObject(TestColorRenderObject::CreateTriangle(
+                    pScene->AddIndirectObject(TestColorRenderObject::CreateTriangle(
                         m_pDevice,
                         m_pAllocator,
                         m_pCommandQueueCopy,
@@ -208,7 +209,7 @@ void Renderer::Initialize(HWND hWnd) {
                         )
                     ));
                     // add dynamic cube at random position
-                    pScene->AddDynamicObject(TestColorRenderObject::CreateCube(
+                    pScene->AddIndirectObject(TestColorRenderObject::CreateCube(
                         m_pDevice,
                         m_pAllocator,
                         m_pCommandQueueCopy,
@@ -222,8 +223,23 @@ void Renderer::Initialize(HWND hWnd) {
                             posDist(gen)
                         )
                     ));
-                    });
-            }
+                }
+
+                pScene->InitIndirectRenderSubsystem(
+                    m_pDevice,
+                    m_pAllocator,
+                    m_pResourceDescHeapManager,
+                    m_pDynamicUploadHeapCPU,
+                    IndirectUpdater::Create(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
+                );
+
+                pScene->PerformIndirectRenderSubsystemUpdate(
+                    m_pDevice,
+                    m_pAllocator,
+                    m_pCommandQueueCopy,
+                    m_pCommandQueueDirect
+                );
+        	});
         }
 
         // 4
@@ -293,7 +309,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pPSOLibrary
             ));
             std::filesystem::path filepath{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddAlphaObject(TestIndirectMeshRenderObject<>::CreateStatic(
+            pScene->AddAlphaObject(TestIndirectMeshRenderObject<>::CreateDynamic(
                 m_pDevice,
                 m_pAllocator,
                 m_pCommandQueueCopy,
@@ -562,6 +578,24 @@ void Renderer::Render() {
         commandListForAlphaObjects->SetReadyForExection();
         });
 
+    std::shared_ptr<CommandList> commandListForIndirectObjects{
+        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
+    };
+    m_pJobSystem->AddJob([&]() {
+        PIXScopedEvent(
+            commandListForIndirectObjects->m_pCommandList.Get(),
+            PIX_COLOR(0, 0, 0),
+            L"Indirect Objects rendering"
+        );
+        scene->RenderIndirectObjects(
+            commandListForIndirectObjects->m_pCommandList,
+            m_viewport,
+            m_scissorRect,
+            rtv
+        );
+        commandListForIndirectObjects->SetReadyForExection();
+        });
+
     uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority, [] {},
@@ -581,7 +615,7 @@ void Renderer::Render() {
             rtv
         );
         commandListForDynamicObjects->SetReadyForExection();
-    });
+        });
 
     
     uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };

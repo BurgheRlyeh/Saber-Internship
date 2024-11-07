@@ -181,7 +181,7 @@
     <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
-    <ClInclude Include="MeshRenderObject.h" />
+    <ClInclude Include="RenderModel.h" />
     <ClInclude Include="ModelBuffers.h" />
     <ClInclude Include="PostProcessing.h" />
     <ClInclude Include="PSOLibrary.h" />
