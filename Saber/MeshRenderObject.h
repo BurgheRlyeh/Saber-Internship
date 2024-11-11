@@ -11,6 +11,7 @@
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
 #include "GBuffer.h"
+#include "IndirectCommand.h"
 #include "MaterialManager.h"
 #include "ModelBuffers.h"
 #include "Mesh.h"
@@ -19,21 +20,26 @@
 #include "Resources.h"
 #include "Vertices.h"
 
+template <typename ModelBuffer>
 class MeshRenderObject : public RenderObject {
 protected:
     std::shared_ptr<Mesh> m_pMesh{};
+
+    ModelBuffer m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCb{};
 
 public:
     MeshRenderObject(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        size_t modelBufferSize,
-        void* modelBufferData = nullptr
+        ModelBuffer* pModelBuffer = nullptr
     ) {
+        if (pModelBuffer) {
+            m_modelBuffer = *pModelBuffer;
+        }
         m_pModelCb = std::make_shared<ConstantBuffer>(
             pAllocator,
-            modelBufferSize,
-            modelBufferData
+            sizeof(ModelBuffer),
+            &m_modelBuffer
         );
     }
 
@@ -49,7 +55,7 @@ public:
         const MeshInitData& meshInitData
     ) {
         m_pMesh = meshInitData.pMeshAtlas->Assign(
-            meshInitData.meshFilename, 
+            meshInitData.meshFilename,
             pDevice,
             pAllocator,
             pCommandQueueCopy,
@@ -57,33 +63,19 @@ public:
         );
     }
 
-    void UpdateModelBuffer(void* pData) const {
-        m_pModelCb->Update(pData);
+    ModelBuffer& GetModelBuffer() {
+        return m_modelBuffer;
+    }
+    void SetModelBuffer(const ModelBuffer& modelBuffer) {
+        m_modelBuffer = modelBuffer;
+        UpdateModelBuffer();
+    }
+    void UpdateModelBuffer() {
+        m_pModelCb->Update(&m_modelBuffer);
     }
 
-    struct IndirectCommand {
-        D3D12_GPU_VIRTUAL_ADDRESS constantBufferView{};
-        D3D12_INDEX_BUFFER_VIEW indexBufferView{};
-        D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
-        D3D12_DRAW_INDEXED_ARGUMENTS drawArguments{};
-        
-        static inline D3D12_INDIRECT_ARGUMENT_DESC indirectArgumentDescs[4]{
-            {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW }, .ConstantBufferView{ 1 } },
-            {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW } },
-            {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW }, .VertexBuffer{} },
-            { .Type{ D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED } },
-        };
-
-        static D3D12_COMMAND_SIGNATURE_DESC GetCommandSignatureDesc() {
-            return D3D12_COMMAND_SIGNATURE_DESC{
-                .ByteStride{ sizeof(IndirectCommand) },
-                .NumArgumentDescs{ _countof(indirectArgumentDescs) },
-                .pArgumentDescs{ indirectArgumentDescs }
-            };
-        }
-    };
-    virtual IndirectCommand GetIndirectCommand() const {
-        return IndirectCommand{
+    void FillIndirectCommand(MeshCbIndirectCommand& indirectCommand) override {
+        indirectCommand = MeshCbIndirectCommand{
             .constantBufferView{
                 m_pModelCb->GetResource()->GetGPUVirtualAddress()
             },
@@ -136,38 +128,7 @@ protected:
     }
 };
 
-template <typename ModelBuffer>
-class RenderModel : public MeshRenderObject {
-protected:
-    ModelBuffer m_modelBuffer{};
-
-public:
-    RenderModel(
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        ModelBuffer* pModelBuffer = nullptr
-    ) : MeshRenderObject(
-        pAllocator, 
-        sizeof(ModelBuffer),
-        pModelBuffer
-    ) {
-        if (pModelBuffer) {
-            m_modelBuffer = *pModelBuffer;
-        }
-    }
-
-    ModelBuffer& GetModelBuffer() {
-        return m_modelBuffer;
-    }
-    void SetModelBuffer(const ModelBuffer& modelBuffer) {
-        m_modelBuffer = modelBuffer;
-        UpdateModelBuffer();
-    }
-    void UpdateModelBuffer() {
-        m_pModelCb->Update(&m_modelBuffer);
-    }
-};
-
-class TestRenderObject : protected RenderModel<ModelBuffer> {
+class TestRenderObject : protected MeshRenderObject<ModelBuffer> {
 protected:
     static D3D12_GRAPHICS_PIPELINE_STATE_DESC CreatePipelineStateDesc(
         D3D12_INPUT_ELEMENT_DESC* inputLayout,
@@ -200,7 +161,7 @@ class TestColorRenderObject : protected TestRenderObject {
     };
 
 public:
-    static std::shared_ptr<RenderModel<ModelBuffer>> CreateTriangle(
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateTriangle(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -236,8 +197,8 @@ public:
         };
 
         ModelBuffer modelBuffer{ modelMatrix };
-        std::shared_ptr<RenderModel<ModelBuffer>> pObj{
-            std::make_shared<RenderModel<ModelBuffer>>(pAllocator, &modelBuffer)
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, &modelBuffer)
         };
         pObj->InitMesh(
             pDevice,
@@ -268,7 +229,7 @@ public:
 
         return pObj;
     }
-    static std::shared_ptr<RenderModel<ModelBuffer>> CreateCube(
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -326,8 +287,8 @@ public:
         };
 
         ModelBuffer modelBuffer{ modelMatrix };
-        std::shared_ptr<RenderModel<ModelBuffer>> pObj{
-            std::make_shared<RenderModel<ModelBuffer>>(pAllocator, &modelBuffer)
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator, &modelBuffer)
         };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleCube"));
 
@@ -409,7 +370,7 @@ class TestTextureRenderObject : protected TestRenderObject {
     };
 
 public:
-    static std::shared_ptr<RenderModel<ModelBuffer>> CreateTextureCube(
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateTextureCube(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -469,8 +430,8 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT }
         };
 
-        std::shared_ptr<RenderModel<ModelBuffer>> pObj{
-            std::make_shared<RenderModel<ModelBuffer>>(pAllocator)
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
         pObj->InitMaterial(
@@ -506,7 +467,7 @@ public:
         return pObj;
     }
 
-    static std::shared_ptr<RenderModel<ModelBuffer>> CreateModelFromGLTF(
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -542,8 +503,8 @@ public:
             }
         };
 
-        std::shared_ptr<RenderModel<ModelBuffer>> pObj{
-            std::make_shared<RenderModel<ModelBuffer>>(pAllocator)
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
         pObj->InitMaterial(
@@ -617,7 +578,7 @@ private:
     }
 };
 
-class TestAlphaRenderObject : protected RenderModel<ModelBuffer> {
+class TestAlphaRenderObject : protected MeshRenderObject<ModelBuffer> {
 protected:
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -627,7 +588,7 @@ protected:
     };
 
 public:
-    static std::shared_ptr<RenderModel<ModelBuffer>> CreateAlphaModelFromGLTF(
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateAlphaModelFromGLTF(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -663,8 +624,8 @@ public:
             }
         };
 
-        std::shared_ptr<RenderModel<ModelBuffer>> pObj{
-            std::make_shared<RenderModel<ModelBuffer>>(pAllocator)
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
         pObj->InitMaterial(

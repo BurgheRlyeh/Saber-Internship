@@ -161,6 +161,7 @@
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="ComputeObject.h" />
     <ClInclude Include="ConstantBuffer.h" />
+    <ClInclude Include="CppHlslTypesRedefine.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="DDSTexture.h" />
     <ClInclude Include="DepthBuffer.h" />
@@ -173,6 +174,7 @@
     <ClInclude Include="GPUResource.h" />
     <ClInclude Include="Headers.h" />
     <ClInclude Include="HlslCppTypesRedefine.h" />
+    <ClInclude Include="IndirectCommand.h" />
     <ClInclude Include="IndirectCommandBuffer.h" />
     <ClInclude Include="IndirectMeshRenderObject.h" />
     <ClInclude Include="IndirectUpdater.h" />
@@ -181,7 +183,7 @@
     <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
-    <ClInclude Include="RenderModel.h" />
+    <ClInclude Include="MeshRenderObject.h" />
     <ClInclude Include="ModelBuffers.h" />
     <ClInclude Include="PostProcessing.h" />
     <ClInclude Include="PSOLibrary.h" />

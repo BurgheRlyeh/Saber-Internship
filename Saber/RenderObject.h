@@ -10,6 +10,7 @@
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
+#include "IndirectCommand.h"
 #include "Mesh.h"
 #include "PSOLibrary.h"
 #include "Resources.h"
@@ -47,6 +48,8 @@ public:
         const ShaderData& shaderData,
         PipelineStateData& pipelineStateData
     );
+
+    virtual void FillIndirectCommand(MeshCbIndirectCommand& indirectCommand) {}
 
 	virtual void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,

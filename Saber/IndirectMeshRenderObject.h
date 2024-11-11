@@ -12,7 +12,7 @@
 #include "GPUResource.h"
 #include "IndirectCommandBuffer.h"
 #include "IndirectUpdater.h"
-#include "RenderModel.h"
+#include "MeshRenderObject.h"
 #include "ModelBuffers.h"
 
 template <typename ModelBuffer, size_t InstMaxCount>

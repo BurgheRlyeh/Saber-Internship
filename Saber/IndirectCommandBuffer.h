@@ -11,7 +11,7 @@
 #include "DescriptorHeapRange.h"
 #include "DynamicUploadRingBuffer.h"
 #include "GPUResource.h"
-#include "RenderModel.h"
+#include "MeshRenderObject.h"
 #include "ModelBuffers.h"
 
 template <typename IndirectCommand>

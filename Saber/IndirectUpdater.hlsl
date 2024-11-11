@@ -1,29 +1,15 @@
 #define threadBlockSize 128
 
+#include "IndirectCommand.h"
+
 cbuffer UpdateCountBuffer : register(b0)
 {
     uint countToUpdate;
 }
 
-struct DrawIndexedArguments
-{
-    uint IndexCountPerInstance;
-    uint InstanceCount;
-    uint StartIndexLocation;
-    int BaseVertexLocation;
-    uint StartInstanceLocation;
-};
-struct IndirectCommand
-{
-    uint2 cbvAddress;
-    uint4 indexBufferView;
-    uint4 vertexBufferView;
-    DrawIndexedArguments drawArgs;
-};
-
 StructuredBuffer<uint> updateBufferIds : register(t0);
-StructuredBuffer<IndirectCommand> updateBuffer : register(t1);
-RWStructuredBuffer<IndirectCommand> indirectCommandBuffer : register(u0);
+StructuredBuffer<MeshCbIndirectCommand> updateBuffer : register(t1);
+RWStructuredBuffer<MeshCbIndirectCommand> indirectCommandBuffer : register(u0);
 
 struct ComputeShaderInput
 {
@@ -38,8 +24,6 @@ void main(ComputeShaderInput IN)
     uint index = (IN.GroupID.x * threadBlockSize) + IN.GroupIndex;
     if (index < countToUpdate)
     {
-        uint instId = updateBufferIds[index];
-        IndirectCommand indirectCommand = updateBuffer[index];
-        indirectCommandBuffer[instId] = indirectCommand;
+        indirectCommandBuffer[updateBufferIds[index]] = updateBuffer[index];
     }
 }

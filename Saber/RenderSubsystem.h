@@ -1,10 +1,11 @@
 #pragma once
 
 #include "Headers.h"
-#include "IndirectCommandBuffer.h"
 
+#include "IndirectCommand.h"
+#include "IndirectCommandBuffer.h"
 #include "RenderObject.h"
-#include "RenderModel.h"
+#include "MeshRenderObject.h"
 #include "ModelBuffers.h"
 #include "SeparateChainingMap.h"
 
@@ -29,24 +30,29 @@ protected:
 	size_t PsoToMapKey(Microsoft::WRL::ComPtr<ID3D12PipelineState> pPso);
 };
 
+template <typename IndirectCommand>
 class IndirectRenderSubsystem {
 	std::wstring m_name{};
-	std::vector<std::shared_ptr<MeshRenderObject>> m_objects{};
+	std::vector<std::shared_ptr<RenderObject>> m_objects{};
 	std::mutex m_objectsMutex{};
 
-	std::shared_ptr<IndirectCommandBuffer<MeshRenderObject::IndirectCommand>> m_pIndirectCommandBuffer{};
+	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 public:
-	IndirectRenderSubsystem(const std::wstring& name) : m_name(name) {}
+	IndirectRenderSubsystem(const std::wstring& name) : m_name(name) {
+		IndirectCommandBase<IndirectCommand>::Assert();
+	}
 
-	void Add(std::shared_ptr<MeshRenderObject> pObject) {
+	void Add(std::shared_ptr<RenderObject> pObject) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
 		if (!m_objects.empty()) {
 			assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
 		}
 		m_objects.push_back(pObject);
 		if (m_pIndirectCommandBuffer) {
-			m_pIndirectCommandBuffer->SetUpdateAt(m_objects.size() - 1, pObject->GetIndirectCommand());
+			IndirectCommand indirectCommand;
+			pObject->FillIndirectCommand(indirectCommand);
+			m_pIndirectCommandBuffer->SetUpdateAt(m_objects.size() - 1, indirectCommand);
 		}
 	}
 
@@ -102,11 +108,11 @@ public:
 			return false;
 		}
 		m_pIndirectCommandBuffer = std::make_shared<
-			DynamicIndirectCommandBuffer<MeshRenderObject::IndirectCommand>
+			DynamicIndirectCommandBuffer<IndirectCommand>
 		>(
 			pDevice,
 			pAllocator,
-			MeshRenderObject::IndirectCommand::GetCommandSignatureDesc(),
+			IndirectCommand::GetCommandSignatureDesc(),
 			m_objects.front()->GetRootSignature(),
 			pDescHeapManagerCbvSrvUav,
 			m_name + L"IndirectBuffer",
@@ -116,7 +122,9 @@ public:
 		);
 
 		for (size_t i{}; i < m_objects.size(); ++i) {
-			m_pIndirectCommandBuffer->SetUpdateAt(i, m_objects[i]->GetIndirectCommand());
+			IndirectCommand indirectCommand;
+			m_objects[i]->FillIndirectCommand(indirectCommand);
+			m_pIndirectCommandBuffer->SetUpdateAt(i, indirectCommand);
 		}
 
 		return true;

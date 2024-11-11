@@ -12,7 +12,7 @@
 #include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
 #include "GBuffer.h"
-#include "RenderModel.h"
+#include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
@@ -47,7 +47,7 @@ class Scene {
     std::shared_ptr<RenderSubsystem> m_pStaticRenderSubsystem{};
     std::shared_ptr<RenderSubsystem> m_pDynamicRenderSubsystem{};
     std::shared_ptr<RenderSubsystem> m_pAlphaRenderSubsystem{};
-    std::shared_ptr<IndirectRenderSubsystem> m_pIndirectRenderSubsystem{};
+    std::shared_ptr<IndirectRenderSubsystem<MeshCbIndirectCommand>> m_pIndirectRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -72,7 +72,7 @@ public:
         std::shared_ptr<GBuffer> m_pGBuffer = nullptr
     );
 
-    void AddIndirectObject(std::shared_ptr<MeshRenderObject> pObject) {
+    void AddIndirectObject(std::shared_ptr<RenderObject> pObject) {
         m_pIndirectRenderSubsystem->Add(pObject);
     }
     void InitIndirectRenderSubsystem(
