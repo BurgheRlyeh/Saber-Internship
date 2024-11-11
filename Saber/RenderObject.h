@@ -49,7 +49,8 @@ public:
         PipelineStateData& pipelineStateData
     );
 
-    virtual void FillIndirectCommand(MeshCbIndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(CbMesh4IndirectCommand& indirectCommand) {}
 
 	virtual void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,

@@ -77,7 +77,7 @@ public:
         const MeshData& meshData
     );
 
-    const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferView() const;
+    const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferView(size_t id = 0) const;
 
     const D3D12_VERTEX_BUFFER_VIEW* GetVertexBufferViews() const;
 

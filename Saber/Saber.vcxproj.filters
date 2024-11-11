@@ -293,7 +293,10 @@
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">
       <Filter>Shaders\FidelityFX</Filter>
     </FxCompile>
-    <FxCompile Include="IndirectUpdater.hlsl">
+    <FxCompile Include="CbMeshIndirectUpdater.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

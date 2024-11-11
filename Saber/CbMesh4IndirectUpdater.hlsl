@@ -8,8 +8,8 @@ cbuffer UpdateCountBuffer : register(b0)
 }
 
 StructuredBuffer<uint> updateBufferIds : register(t0);
-StructuredBuffer<MeshCbIndirectCommand> updateBuffer : register(t1);
-RWStructuredBuffer<MeshCbIndirectCommand> indirectCommandBuffer : register(u0);
+StructuredBuffer<CbMesh4IndirectCommand> updateBuffer : register(t1);
+RWStructuredBuffer<CbMesh4IndirectCommand> indirectCommandBuffer : register(u0);
 
 struct ComputeShaderInput
 {

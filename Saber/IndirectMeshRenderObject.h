@@ -350,7 +350,7 @@ public:
 			pDescHeapCbvSrvUav,
 			L"IndirectAlphaGrassGLTF",
 			pDynamicUploadHeap,
-			IndirectUpdater::Create(pDevice, pShaderAtlas, pRootSignatureAtlas, pPSOLibrary)
+			IndirectUpdater::CreateCbMeshUpdater(pDevice, pShaderAtlas, pRootSignatureAtlas, pPSOLibrary)
 		);
 
 		size_t materialId{ pMaterialManager->AddMaterial(

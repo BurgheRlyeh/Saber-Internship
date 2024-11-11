@@ -20,6 +20,8 @@
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
 
+    std::wstring m_name{};
+
     struct SceneBuffer {
         DirectX::XMMATRIX viewProjMatrix{};
         DirectX::XMMATRIX invViewProjMatrix{};
@@ -44,10 +46,9 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::shared_ptr<RenderSubsystem> m_pStaticRenderSubsystem{};
-    std::shared_ptr<RenderSubsystem> m_pDynamicRenderSubsystem{};
-    std::shared_ptr<RenderSubsystem> m_pAlphaRenderSubsystem{};
-    std::shared_ptr<IndirectRenderSubsystem<MeshCbIndirectCommand>> m_pIndirectRenderSubsystem{};
+    std::shared_ptr<RenderSubsystem<CbMeshIndirectCommand>> m_pStaticRenderSubsystem{};
+    std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pDynamicRenderSubsystem{};
+    std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pAlphaRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -66,23 +67,35 @@ class Scene {
 public:
     Scene() = delete;
     Scene(
+        const std::wstring& name,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
         std::shared_ptr<GBuffer> m_pGBuffer = nullptr
     );
 
-    void AddIndirectObject(std::shared_ptr<RenderObject> pObject) {
-        m_pIndirectRenderSubsystem->Add(pObject);
-    }
-    void InitIndirectRenderSubsystem(
+    void InitializeRenderSubsystems(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
         std::shared_ptr<ComputeObject> pIndirectUpdater
     ) {
-        m_pIndirectRenderSubsystem->InitializeIndirectCommandBuffer(
+        m_pStaticRenderSubsystem->InitializeIndirectCommandBuffer(
+            pDevice,
+            pAllocator,
+            pDescHeapManagerCbvSrvUav,
+            pDynamicUploadHeap,
+            pIndirectUpdater
+        );
+        m_pDynamicRenderSubsystem->InitializeIndirectCommandBuffer(
+            pDevice,
+            pAllocator,
+            pDescHeapManagerCbvSrvUav,
+            pDynamicUploadHeap,
+            pIndirectUpdater
+        );
+        m_pAlphaRenderSubsystem->InitializeIndirectCommandBuffer(
             pDevice,
             pAllocator,
             pDescHeapManagerCbvSrvUav,
@@ -90,58 +103,30 @@ public:
             pIndirectUpdater
         );
     }
-    void PerformIndirectRenderSubsystemUpdate(
+
+    void UpdateRenderSubsystems(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> pCommandQueueCopy,
         std::shared_ptr<CommandQueue> pCommandQueueDirect
     ) {
-        m_pIndirectRenderSubsystem->PerformIndirectBufferUpdate(
+        m_pStaticRenderSubsystem->PerformIndirectBufferUpdate(
             pDevice,
             pAllocator,
             pCommandQueueCopy,
             pCommandQueueDirect
         );
-    }
-
-    void RenderIndirectObjects(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
-    ) {
-        if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
-            return;
-
-        UpdateSceneBuffer();
-
-        auto outerRootParametersSetter = [&](
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-            UINT& rootParamId
-            ) {
-                pCommandListDirect->SetGraphicsRootConstantBufferView(
-                    rootParamId++,
-                    m_sceneCBDynamicAllocation.gpuAddress
-                );
-            };
-
-        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
-        if (m_pGBuffer) {
-            rtvs = m_pGBuffer->GetRtvs();
-        }
-        else {
-            rtvs.push_back(renderTargetView);
-        }
-
-        std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-        m_pIndirectRenderSubsystem->Render(
-            pCommandListDirect,
-            viewport,
-            scissorRect,
-            rtvs.data(),
-            rtvs.size(),
-            &m_pDepthBuffer->GetDsvCpuDescHandle(),
-            outerRootParametersSetter
+        m_pDynamicRenderSubsystem->PerformIndirectBufferUpdate(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect
+        );
+        m_pAlphaRenderSubsystem->PerformIndirectBufferUpdate(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect
         );
     }
 

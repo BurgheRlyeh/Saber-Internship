@@ -1,15 +1,19 @@
 #include "Scene.h"
 
 Scene::Scene(
+    const std::wstring& name,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
-) : m_pDynamicUploadHeap(pDynamicUploadHeap), m_pDepthBuffer(pDepthBuffer), m_pGBuffer(pGBuffer) {
-    m_pStaticRenderSubsystem = std::make_shared<RenderSubsystem>();
-    m_pDynamicRenderSubsystem = std::make_shared<RenderSubsystem>();
-    m_pAlphaRenderSubsystem = std::make_shared<RenderSubsystem>();
-    m_pIndirectRenderSubsystem = std::make_shared<IndirectRenderSubsystem<MeshCbIndirectCommand>>(L"Indirect");
+) : m_name(name),
+	m_pDynamicUploadHeap(pDynamicUploadHeap),
+	m_pDepthBuffer(pDepthBuffer),
+	m_pGBuffer(pGBuffer)
+{
+    m_pStaticRenderSubsystem = std::make_shared<RenderSubsystem<CbMeshIndirectCommand>>(m_name + L"Static");
+    m_pDynamicRenderSubsystem = std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"Dynamic");
+    m_pAlphaRenderSubsystem = std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"Alpha");
 
     m_pLightCB = std::make_shared<ConstantBuffer>(
         pAllocator,
@@ -158,7 +162,7 @@ void Scene::AddAlphaObject(std::shared_ptr<RenderObject> pObject) {
 }
 
 void Scene::RenderStaticObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
@@ -168,16 +172,6 @@ void Scene::RenderStaticObjects(
 
     UpdateSceneBuffer();
 
-    auto outerRootParametersSetter = [&](
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-            UINT& rootParamId
-        ) {
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_sceneCBDynamicAllocation.gpuAddress
-            );
-        };
-
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
         rtvs = m_pGBuffer->GetRtvs();
@@ -186,20 +180,34 @@ void Scene::RenderStaticObjects(
         rtvs.push_back(renderTargetView);
     }
 
+    auto commandListPrepare = [&] {
+        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        pCommandList->RSSetViewports(1, &viewport);
+        pCommandList->RSSetScissorRects(1, &scissorRect);
+
+        pCommandList->OMSetRenderTargets(
+            static_cast<UINT>(rtvs.size()),
+            rtvs.data(),
+            FALSE,
+            &m_pDepthBuffer->GetDsvCpuDescHandle()
+        );
+
+        pCommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_sceneCBDynamicAllocation.gpuAddress
+        );
+    };
+
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pStaticRenderSubsystem->Render(
-        pCommandListDirect,
-        viewport,
-        scissorRect,
-        rtvs.data(),
-        rtvs.size(),
-        &m_pDepthBuffer->GetDsvCpuDescHandle(),
-        outerRootParametersSetter
+        pCommandList,
+        commandListPrepare
     );
 }
 
 void Scene::RenderDynamicObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
@@ -209,16 +217,6 @@ void Scene::RenderDynamicObjects(
 
     UpdateSceneBuffer();
 
-    auto outerRootParametersSetter = [&](
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        UINT& rootParamId
-        ) {
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_sceneCBDynamicAllocation.gpuAddress
-            );
-        };
-
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
         rtvs = m_pGBuffer->GetRtvs();
@@ -227,20 +225,34 @@ void Scene::RenderDynamicObjects(
         rtvs.push_back(renderTargetView);
     }
 
+    auto commandListPrepare = [&] {
+        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        pCommandList->RSSetViewports(1, &viewport);
+        pCommandList->RSSetScissorRects(1, &scissorRect);
+
+        pCommandList->OMSetRenderTargets(
+            static_cast<UINT>(rtvs.size()),
+            rtvs.data(),
+            FALSE,
+            &m_pDepthBuffer->GetDsvCpuDescHandle()
+        );
+
+        pCommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_sceneCBDynamicAllocation.gpuAddress
+        );
+        };
+
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pDynamicRenderSubsystem->Render(
-        pCommandListDirect,
-        viewport,
-        scissorRect,
-        rtvs.data(),
-        rtvs.size(),
-        &m_pDepthBuffer->GetDsvCpuDescHandle(),
-        outerRootParametersSetter
+        pCommandList,
+        commandListPrepare
     );
 }
 
 void Scene::RenderAlphaObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
@@ -252,19 +264,6 @@ void Scene::RenderAlphaObjects(
 
     UpdateSceneBuffer();
 
-    auto outerRootParametersSetter = [&](
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-        UINT& rootParamId
-        ) {
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_sceneCBDynamicAllocation.gpuAddress
-            );
-            pCommandListDirect->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-            pCommandListDirect->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-            pCommandListDirect->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
-        };
-
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
         rtvs = m_pGBuffer->GetRtvs();
@@ -273,15 +272,32 @@ void Scene::RenderAlphaObjects(
         rtvs.push_back(renderTargetView);
     }
 
+    auto commandListPrepare = [&] {
+        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        pCommandList->RSSetViewports(1, &viewport);
+        pCommandList->RSSetScissorRects(1, &scissorRect);
+
+        pCommandList->OMSetRenderTargets(
+            static_cast<UINT>(rtvs.size()),
+            rtvs.data(),
+            FALSE,
+            &m_pDepthBuffer->GetDsvCpuDescHandle()
+        );
+
+        pCommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_sceneCBDynamicAllocation.gpuAddress
+        );
+        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+        pCommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        };
+
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pAlphaRenderSubsystem->Render(
-        pCommandListDirect,
-        viewport,
-        scissorRect,
-        rtvs.data(),
-        rtvs.size(),
-        &m_pDepthBuffer->GetDsvCpuDescHandle(),
-        outerRootParametersSetter
+        pCommandList,
+        commandListPrepare
     );
 }
 

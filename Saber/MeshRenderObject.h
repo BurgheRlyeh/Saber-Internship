@@ -74,8 +74,8 @@ public:
         m_pModelCb->Update(&m_modelBuffer);
     }
 
-    void FillIndirectCommand(MeshCbIndirectCommand& indirectCommand) override {
-        indirectCommand = MeshCbIndirectCommand{
+    void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) override {
+        indirectCommand = CbMeshIndirectCommand{
             .constantBufferView{
                 m_pModelCb->GetResource()->GetGPUVirtualAddress()
             },
@@ -83,8 +83,27 @@ public:
                 *m_pMesh->GetIndexBufferView()
             },
             .vertexBufferView{
-                *m_pMesh->GetVertexBufferViews()
+                *m_pMesh->GetVertexBufferView()
             },
+            .drawArguments{
+                .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
+                .InstanceCount{ 1 }
+            },
+        };
+    }
+
+    void FillIndirectCommand(CbMesh4IndirectCommand& indirectCommand) override {
+        indirectCommand = CbMesh4IndirectCommand{
+            .constantBufferView{
+                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+            },
+            .indexBufferView{
+                *m_pMesh->GetIndexBufferView()
+            },
+            .vertexBufferView{ *m_pMesh->GetVertexBufferView() },
+            .vertexBufferView1{ *m_pMesh->GetVertexBufferView(1) },
+            .vertexBufferView2{ *m_pMesh->GetVertexBufferView(2) },
+            .vertexBufferView3{ *m_pMesh->GetVertexBufferView(3) },
             .drawArguments{
                 .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
                 .InstanceCount{ 1 }

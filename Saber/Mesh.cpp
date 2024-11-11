@@ -18,8 +18,9 @@ Mesh::Mesh(
     }, meshData.data);
 }
 
-const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
-    return GetVertexBuffersCount() == 1 ? &m_bufferViews.front() : nullptr;
+const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView(size_t id) const {
+    assert(id < GetVertexBuffersCount());
+    return &m_bufferViews[id];
 }
 
 const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferViews() const {

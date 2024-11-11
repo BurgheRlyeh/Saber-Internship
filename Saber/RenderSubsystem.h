@@ -9,29 +9,29 @@
 #include "ModelBuffers.h"
 #include "SeparateChainingMap.h"
 
-class RenderSubsystem {
-protected:
-	UnorderedSeparateChainingMap<size_t, std::shared_ptr<RenderObject>> m_objects{};
-	
-public:
-	void Add(std::shared_ptr<RenderObject> pObject);
-
-	void Render(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-		D3D12_VIEWPORT viewport,
-		D3D12_RECT rect,
-		D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-		size_t rtvsCount,
-		D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
-		std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT&)> outerRootParametersSetter
-	);
-
-protected:
-	size_t PsoToMapKey(Microsoft::WRL::ComPtr<ID3D12PipelineState> pPso);
-};
+//class RenderSubsystem {
+//protected:
+//	UnorderedSeparateChainingMap<size_t, std::shared_ptr<RenderObject>> m_objects{};
+//	
+//public:
+//	void Add(std::shared_ptr<RenderObject> pObject);
+//
+//	void Render(
+//		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+//		D3D12_VIEWPORT viewport,
+//		D3D12_RECT rect,
+//		D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
+//		size_t rtvsCount,
+//		D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
+//		std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT&)> outerRootParametersSetter
+//	);
+//
+//protected:
+//	size_t PsoToMapKey(Microsoft::WRL::ComPtr<ID3D12PipelineState> pPso);
+//};
 
 template <typename IndirectCommand>
-class IndirectRenderSubsystem {
+class RenderSubsystem {
 	std::wstring m_name{};
 	std::vector<std::shared_ptr<RenderObject>> m_objects{};
 	std::mutex m_objectsMutex{};
@@ -39,7 +39,7 @@ class IndirectRenderSubsystem {
 	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 public:
-	IndirectRenderSubsystem(const std::wstring& name) : m_name(name) {
+	RenderSubsystem(const std::wstring& name) : m_name(name) {
 		IndirectCommandBase<IndirectCommand>::Assert();
 	}
 
@@ -58,42 +58,16 @@ public:
 
 	void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-		D3D12_VIEWPORT viewport,
-		D3D12_RECT rect,
-		D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-		size_t rtvsCount,
-		D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
-		std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT&)> outerRootParametersSetter
+		const std::function<void()>& commandListPrepare
 	) {
+		std::scoped_lock<std::mutex> lock(m_objectsMutex);
 		if (m_objects.empty()) {
 			return;
 		}
 
-		UINT rootParameterIndex{};
-		std::function forPso{ [&](std::shared_ptr<RenderObject> pObject) {
-			pObject->SetPipelineStateAndRootSignature(pCommandList);
-
-			pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			pCommandList->RSSetViewports(1, &viewport);
-			pCommandList->RSSetScissorRects(1, &rect);
-
-			pCommandList->OMSetRenderTargets(static_cast<UINT>(rtvsCount), pRTVs, FALSE, pDSV);
-
-			outerRootParametersSetter(pCommandList, rootParameterIndex);
-		} };
-		std::function forObj{ [&](std::shared_ptr<RenderObject> pObject) {
-			pObject->Render(pCommandList, rootParameterIndex);
-		} };
-
-		//m_objects.ForEachValue(forObj, forPso);
-		std::scoped_lock<std::mutex> lock(m_objectsMutex);
-		forPso(m_objects.front());
+		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
+		commandListPrepare();
 		m_pIndirectCommandBuffer->Execute(pCommandList);
-
-		//for (const auto& pObject : m_objects) {
-		//	forObj(pObject);
-		//}
 	}
 
 	bool InitializeIndirectCommandBuffer(
@@ -101,25 +75,42 @@ public:
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
-		std::shared_ptr<ComputeObject> pIndirectUpdater
+		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
 	) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
 		if (m_objects.empty()) {
 			return false;
 		}
-		m_pIndirectCommandBuffer = std::make_shared<
-			DynamicIndirectCommandBuffer<IndirectCommand>
-		>(
-			pDevice,
-			pAllocator,
-			IndirectCommand::GetCommandSignatureDesc(),
-			m_objects.front()->GetRootSignature(),
-			pDescHeapManagerCbvSrvUav,
-			m_name + L"IndirectBuffer",
-			m_objects.size(),
-			pDynamicUploadHeap,
-			pIndirectUpdater
-		);
+
+		if (pIndirectUpdater) {
+			m_pIndirectCommandBuffer = std::make_shared<
+				DynamicIndirectCommandBuffer<IndirectCommand>
+			>(
+				pDevice,
+				pAllocator,
+				IndirectCommand::GetCommandSignatureDesc(),
+				m_objects.front()->GetRootSignature(),
+				pDescHeapManagerCbvSrvUav,
+				m_name + L"IndirectBuffer",
+				m_objects.size(),
+				pDynamicUploadHeap,
+				pIndirectUpdater
+			);
+		}
+		else {
+			m_pIndirectCommandBuffer = std::make_shared<
+				StaticIndirectCommandBuffer<IndirectCommand>
+			>(
+				pDevice,
+				pAllocator,
+				IndirectCommand::GetCommandSignatureDesc(),
+				m_objects.front()->GetRootSignature(),
+				pDescHeapManagerCbvSrvUav,
+				m_name + L"IndirectBuffer",
+				m_objects.size(),
+				pDynamicUploadHeap
+			);
+		}
 
 		for (size_t i{}; i < m_objects.size(); ++i) {
 			IndirectCommand indirectCommand;

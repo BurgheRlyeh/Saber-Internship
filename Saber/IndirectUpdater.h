@@ -8,11 +8,43 @@
 
 class IndirectUpdater : ComputeObject {
 public:
-    static std::shared_ptr<ComputeObject> Create(
+    static std::shared_ptr<ComputeObject> CreateCbMeshUpdater(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary
+    ) {
+        return Create(
+            pDevice,
+            pShaderAtlas,
+            pRootSignatureAtlas,
+            pPSOLibrary,
+            L"CbMeshIndirectUpdater.cso"
+        );
+    }
+     
+    static std::shared_ptr<ComputeObject> CreateCbMesh4Updater(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+        std::shared_ptr<PSOLibrary> pPSOLibrary
+    ) {
+        return Create(
+            pDevice,
+            pShaderAtlas,
+            pRootSignatureAtlas,
+            pPSOLibrary,
+            L"CbMesh4IndirectUpdater.cso"
+        );
+    }
+
+private:
+    static std::shared_ptr<ComputeObject> Create(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
+        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
+        std::shared_ptr<PSOLibrary> pPSOLibrary,
+        const LPCWSTR& filename
     ) {
         std::shared_ptr<ComputeObject> pComputeObj{ std::make_shared<ComputeObject>() };
         pComputeObj->InitMaterial(
@@ -22,17 +54,13 @@ public:
                 CreateRootSignatureBlob(pDevice),
                 L"IndirectUpdaterRootSignature"
             ),
-            ComputeShaderData(
-                pShaderAtlas,
-                L"IndirectUpdater.cso"
-            ),
+            ComputeShaderData(pShaderAtlas, filename),
             pPSOLibrary
         );
 
         return pComputeObj;
     }
 
-private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
     ) {
