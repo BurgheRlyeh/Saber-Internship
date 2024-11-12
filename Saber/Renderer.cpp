@@ -74,7 +74,7 @@ void Renderer::Initialize(HWND hWnd) {
         L"DescHeapManagerCbvSrvUav",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        100,
+        200,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     );
 
@@ -102,7 +102,7 @@ void Renderer::Initialize(HWND hWnd) {
         L"../../Resources/Textures/",
         m_pDevice,
         m_pAllocator,
-        m_pResourceDescHeapManager, 10
+        m_pResourceDescHeapManager, 50
     );
 
     m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(
@@ -152,19 +152,30 @@ void Renderer::Initialize(HWND hWnd) {
             m_pRootSignatureAtlas,
             m_pPSOLibrary
         ));
-        m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pCommandQueueDirect,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary,
-            m_pGBuffers[0],
-            m_pMaterialManager,
-            DirectX::XMMatrixIdentity()
-        ));
+        for (size_t i{}; i < 5; ++i)
+        {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+
+            m_pScenes[2]->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
+                m_pDevice,
+                m_pAllocator,
+                m_pCommandQueueCopy,
+                m_pCommandQueueDirect,
+                m_pMeshAtlas,
+                m_pShaderAtlas,
+                m_pRootSignatureAtlas,
+                m_pPSOLibrary,
+                m_pGBuffers[0],
+                m_pMaterialManager,
+                DirectX::XMMatrixTranslation(
+                    posDist(gen),
+                    posDist(gen),
+                    posDist(gen)
+                )
+            ));
+        }
 
         // 3
         m_pScenes[3] = std::make_unique<Scene>(m_pDevice, m_pAllocator, m_pDepthBuffers[0]);
