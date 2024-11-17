@@ -20,7 +20,7 @@ class SinglePassDownsampler : public ComputeObject {
     struct SpdGlobalAtomicBuffer {
         FfxUInt32 counter[6];
     };
-    std::shared_ptr<Texture> m_pSpdCounterBuffer{};
+    std::shared_ptr<GPUResource> m_pSpdCounterBuffer{};
     std::shared_ptr<DescHeapRange> m_pSpdCounterBufferRange{};
 
     struct SPDConstantBuffer {

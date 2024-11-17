@@ -20,6 +20,8 @@
 class Scene {
     static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
 
+    std::wstring m_name{};
+
     struct SceneBuffer {
         DirectX::XMMATRIX viewProjMatrix{};
         DirectX::XMMATRIX invViewProjMatrix{};
@@ -27,9 +29,11 @@ class Scene {
         DirectX::XMFLOAT4 nearFar{};
     } m_sceneBuffer;
     std::mutex m_sceneBufferMutex{};
-    std::shared_ptr<DynamicUploadHeap> m_pCameraHeap{};
+    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapCpu{};
+    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapGpu{};
     DynamicAllocation m_sceneCBDynamicAllocation{};
-    std::atomic<bool> m_isUpdateSceneCB{};
+    std::atomic<bool> m_isUpdSceneCb{ true };
+    std::shared_ptr<ConstantBuffer> m_pSceneCb{};
 
     struct Light {
         DirectX::XMFLOAT4 position{};
@@ -45,9 +49,17 @@ class Scene {
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    std::shared_ptr<RenderSubsystem> m_pStaticRenderSubsystem{};
-    std::shared_ptr<RenderSubsystem> m_pDynamicRenderSubsystem{};
-    std::shared_ptr<RenderSubsystem> m_pAlphaRenderSubsystem{};
+    enum RenderSubsystemId {
+	    Static = 0,
+        Dynamic = 1,
+        StaticAlphaKill = 2,
+        DynamicAlphaKill = 3,
+        Count = 4
+    };
+    std::vector<std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>>> m_pRenderSubsystems{};
+    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pStaticRenderSubsystem{};
+    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pDynamicRenderSubsystem{};
+    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pAlphaRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -55,7 +67,6 @@ class Scene {
     size_t m_currCameraId{};
 
     std::atomic<bool> m_isSceneReady{};
-    std::atomic<bool> m_isUpdateCameraHeap{};
 
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
@@ -67,11 +78,47 @@ class Scene {
 public:
     Scene() = delete;
     Scene(
+        const std::wstring& name,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
+        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
+        std::shared_ptr<DepthBuffer> m_pDepthBuffer,
+        std::shared_ptr<GBuffer> m_pGBuffer
+    );
+
+    void InitializeRenderSubsystems(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<DepthBuffer> m_pDepthBuffer = nullptr,
-        std::shared_ptr<GBuffer> m_pGBuffer = nullptr
-    );
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+        std::shared_ptr<ComputeObject> pIndirectUpdater
+    ) {
+        for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
+            m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
+                pDevice,
+                pAllocator,
+                pDescHeapManagerCbvSrvUav,
+                pDynamicUploadHeap,
+                i == Static || i == StaticAlphaKill ? nullptr : pIndirectUpdater
+            );
+        }
+    }
+
+    void UpdateRenderSubsystems(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<CommandQueue> pCommandQueueCopy,
+        std::shared_ptr<CommandQueue> pCommandQueueDirect
+    ) {
+        for (auto& pRenderSubsystem : m_pRenderSubsystems) {
+            pRenderSubsystem->PerformIndirectBufferUpdate(
+                pDevice,
+                pAllocator,
+                pCommandQueueCopy,
+                pCommandQueueDirect
+            );
+        }
+    }
 
     void SetSceneReadiness(bool value);
     bool IsSceneReady();
@@ -82,17 +129,12 @@ public:
     std::shared_ptr<GBuffer> GetGBuffer();
     void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
 
-    void Update(float deltaTime);
+    void Update(float deltaTime, std::shared_ptr<CommandList> pCommandList);
     void BeforeFrameJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-        if (m_pDepthBuffer) {
-            m_pDepthBuffer->Clear(pCommandList);
-        }
+        m_pDepthBuffer->Clear(pCommandList);
         if (m_pGBuffer) {
             m_pGBuffer->Clear(pCommandList);
         }
-    }
-    void AfterFrameJob(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-        UpdateCameraHeap(fenceValue, lastCompletedFenceValue);
     }
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
@@ -114,9 +156,10 @@ public:
         const float& specularPower = 1.f
     );
 
-    void AddStaticObject(const MeshRenderObject& object);
-    void AddDynamicObject(const MeshRenderObject& object);
-    void AddAlphaObject(const MeshRenderObject& object);
+    void AddStaticObject(std::shared_ptr<RenderObject> pObject) const;
+    void AddDynamicObject(std::shared_ptr<RenderObject> pObject) const;
+    void AddStaticAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
+    void AddDynamicAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
     void RenderStaticObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
@@ -129,7 +172,15 @@ public:
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
-    void RenderAlphaObjects(
+    void RenderStaticAlphaKillObjects(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect,
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        std::shared_ptr<MaterialManager> pMaterialManager
+    );
+    void RenderDynamicAlphaKillObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
@@ -156,11 +207,9 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
     );
 
-    void UpdateCameraHeap(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
-
 private:
     bool TryUpdateCamera(float deltaTime);
 
-    void UpdateSceneBuffer();
+    void UpdateSceneBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
     void UpdateLightBuffer();
 };

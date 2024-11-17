@@ -10,17 +10,10 @@
 #include "Resources.h"
 
 class PostProcessing : public RenderObject {
-public:
-    using RenderObject::InitMaterial;
-    
-    virtual void Render(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-		UINT rootParameterIndex
-    );
-
 protected:
-    UINT GetIndexCountPerInstance() const override;
-    UINT GetInstanceCount() const override;
+    virtual void DrawCall(
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+    ) const override;
 };
 
 class CopyPostProcessing : public PostProcessing {

@@ -4,9 +4,7 @@
 
 #include "GPUResource.h"
 
-class ConstantBuffer : GPUResource {
-	size_t m_CbvSize{};
-
+class ConstantBuffer : public GPUResource {
 public:
 	ConstantBuffer(
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
@@ -16,12 +14,10 @@ public:
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
 	);
 
-	using GPUResource::GetResource;
-
 	void CreateConstantBufferView(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle
 	);
 
-	void Update(void* newData);
+	void Update(void* newData, size_t offset = 0, size_t size = 0);
 };

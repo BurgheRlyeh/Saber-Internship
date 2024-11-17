@@ -63,8 +63,12 @@ float2 BestUVDerivative(
         if (uvmiDelta.z == 0.f && uvmiDelta.w == 0.f && length(uvmiDelta.xy) < length(uvBest))
             uvBest = uvmiDelta.xy;
     }
-    
-    return uvBest == float2(1.f, 1.f) ? float2(0.f, 0.f) : uvBest;
+
+    if (uvBest.x == 1.f && uvBest.y == 1.f)
+    {
+        return float2(0.f, 0.f);
+    }
+    return uvBest;
 }
 
 #define FFX_GPU

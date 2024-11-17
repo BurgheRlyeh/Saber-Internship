@@ -25,6 +25,7 @@
 #include "CommandList.h"
 #include "DepthBuffer.h"
 #include "GBuffer.h"
+#include "IndirectUpdater.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
@@ -102,6 +103,14 @@ class Renderer {
     std::shared_ptr<DescriptorHeapManager> m_pDsvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
+
+    enum RingBufferId {
+	    Cpu = 0,
+        Gpu = 1,
+        GpuWritable = 2,
+        Count = 3
+    };
+    std::vector<std::shared_ptr<DynamicUploadHeap>> m_pRingBuffers{};
 
     // Atlases
     std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};

@@ -44,7 +44,7 @@ void SinglePassDownsampler::Resize(
     m_pSpdConstantBufferRange->Clear();
 
     // global atomic counter buffer
-    m_pSpdCounterBuffer = std::make_shared<Texture>(
+    m_pSpdCounterBuffer = std::make_shared<GPUResource>(
         pAllocator,
         GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
         GPUResource::ResourceData{

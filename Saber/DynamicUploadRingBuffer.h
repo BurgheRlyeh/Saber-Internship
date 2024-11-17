@@ -52,13 +52,13 @@ public:
 struct DynamicAllocation {
     DynamicAllocation() = default;
     DynamicAllocation(
-        Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer,
+        std::shared_ptr<GPUResource> pBuffer,
         size_t offset,
         size_t size
     ) : pBuffer(pBuffer), offset(offset), size(size)
     {}
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> pBuffer{};   // The D3D buffer associated with this memory.
+    std::shared_ptr<GPUResource> pBuffer{};   // The D3D buffer associated with this memory.
     size_t offset{};                                    // Offset from start of buffer resource
     size_t size{};			                            // Reserved size of this allocation
     void* cpuAddress{};			                        // The CPU-writeable address
@@ -75,7 +75,8 @@ public:
     GPURingBuffer(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         size_t capacity,
-        bool isCPUAccessable
+        bool isCPUAccessable,
+        bool isGPUWritable
     );
 
     ~GPURingBuffer();
@@ -89,6 +90,7 @@ private:
 class DynamicUploadHeap {
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
     const bool m_isCPUAccessible;
+    const bool m_isGPUWritable;
     std::list<GPURingBuffer> m_ringBuffers{};
 
 public:
@@ -96,7 +98,8 @@ public:
     DynamicUploadHeap(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         size_t initialCapacity,
-        bool isCPUAccessible
+        bool isCPUAccessible,
+        bool isGPUWritable = false
     );
 
     DynamicAllocation Allocate(size_t size, size_t alignment = DEFAULT_ALIGN);

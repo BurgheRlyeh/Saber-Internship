@@ -18,8 +18,9 @@ Mesh::Mesh(
     }, meshData.data);
 }
 
-const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView() const {
-    return GetVertexBuffersCount() == 1 ? &m_bufferViews.front() : nullptr;
+const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferView(size_t id) const {
+    assert(id < GetVertexBuffersCount());
+    return &m_bufferViews[id];
 }
 
 const D3D12_VERTEX_BUFFER_VIEW* Mesh::GetVertexBufferViews() const {
@@ -44,17 +45,6 @@ void Mesh::InitFromVerticesIndices(
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
     const MeshDataVerticesIndices& meshData
 ) {
-    AddVertexBuffer(
-        pDevice,
-        pAllocator,
-        pCommandQueueCopy,
-        BufferData{
-            .data{ meshData.vertices },
-            .count{ meshData.verticesCnt },
-            .size{ meshData.vertexSize }
-        }
-    );
-
     AddIndexBuffer(
         pDevice,
         pAllocator,
@@ -66,6 +56,19 @@ void Mesh::InitFromVerticesIndices(
         },
         meshData.indexFormat
     );
+
+    for (const VertexData& vertexData : meshData.verticesData) {
+        AddVertexBuffer(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            BufferData{
+                .data{ vertexData.data },
+                .count{ meshData.verticesCnt },
+                .size{ vertexData.size }
+            }
+        );
+    }
 }
 
 void Mesh::InitFromGLTF(
