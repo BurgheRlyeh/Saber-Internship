@@ -31,16 +31,22 @@ class Mesh {
     };
 
 public:
+    struct VertexData {
+        void* data{};
+        size_t size{};
+    };
     struct MeshDataVerticesIndices {
-        // vertices data
-        void* vertices{};
-        size_t verticesCnt{};
-        size_t vertexSize{};
+        //void* vertices{};
+        //size_t verticesCnt{};
+        //size_t vertexSize{};
         // indices data
         void* indices{};
         size_t indicesCnt{};
         size_t indexSize{};
         DXGI_FORMAT indexFormat{};
+        // vertices data
+        size_t verticesCnt{};
+        const std::initializer_list<VertexData>& verticesData{};
     };
 
     struct Attribute {

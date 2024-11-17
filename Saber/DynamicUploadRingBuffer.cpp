@@ -64,7 +64,8 @@ void RingBuffer::ReleaseCompletedFrames(uint64_t completedFenceValue) {
 GPURingBuffer::GPURingBuffer(
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     size_t capacity,
-    bool isCPUAccessable
+    bool isCPUAccessable,
+    bool isGPUWritable
 ) : RingBuffer(capacity),
     m_cpuVirtualAddress(nullptr),
     m_gpuVirtualAddress(0)
@@ -75,17 +76,14 @@ GPURingBuffer::GPURingBuffer(
             pAllocator,
             GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
             GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(
-                    GetCapacity(),
-                    D3D12_RESOURCE_FLAG_NONE
-                ),
+                CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
                 D3D12_RESOURCE_STATE_GENERIC_READ
             }
         );
 
         m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
     }
-    else {
+    else if (isGPUWritable) {
         m_pBuffer = std::make_shared<GPUResource>(
             pAllocator,
             GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
@@ -95,6 +93,16 @@ GPURingBuffer::GPURingBuffer(
                     D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
                 ),
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            }
+        );
+    }
+    else {
+        m_pBuffer = std::make_shared<GPUResource>(
+            pAllocator,
+            GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+            GPUResource::ResourceData{
+                CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
+                D3D12_RESOURCE_STATE_GENERIC_READ
             }
         );
     }
@@ -129,11 +137,17 @@ void GPURingBuffer::Destroy() {
     m_gpuVirtualAddress = 0;
 }
 
-DynamicUploadHeap::DynamicUploadHeap(Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, size_t initialCapacity, bool isCPUAccessible)
+DynamicUploadHeap::DynamicUploadHeap(
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    size_t initialCapacity,
+    bool isCPUAccessible,
+    bool isGPUWritable
+)
     : m_pAllocator(pAllocator)
     , m_isCPUAccessible(isCPUAccessible)
+	, m_isGPUWritable(isGPUWritable)
 {
-    m_ringBuffers.emplace_back(m_pAllocator, initialCapacity, m_isCPUAccessible);
+    m_ringBuffers.emplace_back(m_pAllocator, initialCapacity, m_isCPUAccessible, m_isGPUWritable);
 }
 
 DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
@@ -148,7 +162,7 @@ DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
         while (newCapacity < alignedSize) {
             newCapacity <<= 1;
         }
-        m_ringBuffers.emplace_back(m_pAllocator, newCapacity, m_isCPUAccessible);
+        m_ringBuffers.emplace_back(m_pAllocator, newCapacity, m_isCPUAccessible, m_isGPUWritable);
         dynamicAllocation = m_ringBuffers.back().Allocate(alignedSize);
     }
 

@@ -9,27 +9,6 @@
 #include "ModelBuffers.h"
 #include "SeparateChainingMap.h"
 
-//class RenderSubsystem {
-//protected:
-//	UnorderedSeparateChainingMap<size_t, std::shared_ptr<RenderObject>> m_objects{};
-//	
-//public:
-//	void Add(std::shared_ptr<RenderObject> pObject);
-//
-//	void Render(
-//		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
-//		D3D12_VIEWPORT viewport,
-//		D3D12_RECT rect,
-//		D3D12_CPU_DESCRIPTOR_HANDLE* pRTVs,
-//		size_t rtvsCount,
-//		D3D12_CPU_DESCRIPTOR_HANDLE* pDSV,
-//		std::function<void(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, UINT&)> outerRootParametersSetter
-//	);
-//
-//protected:
-//	size_t PsoToMapKey(Microsoft::WRL::ComPtr<ID3D12PipelineState> pPso);
-//};
-
 template <typename IndirectCommand>
 class RenderSubsystem {
 	std::wstring m_name{};
@@ -46,7 +25,7 @@ public:
 	void Add(std::shared_ptr<RenderObject> pObject) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
 		if (!m_objects.empty()) {
-			assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
+			//assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
 		}
 		m_objects.push_back(pObject);
 		if (m_pIndirectCommandBuffer) {

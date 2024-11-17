@@ -1,6 +1,7 @@
-#define threadBlockSize 128
+#ifndef INDIRECT_COMMAND_UPDATER_HLSLI
+#define INDIRECT_COMMAND_UPDATER_HLSLI
 
-#include "IndirectCommand.h"
+#define threadBlockSize 128
 
 cbuffer UpdateCountBuffer : register(b0)
 {
@@ -8,8 +9,8 @@ cbuffer UpdateCountBuffer : register(b0)
 }
 
 StructuredBuffer<uint> updateBufferIds : register(t0);
-StructuredBuffer<CbMeshIndirectCommand> updateBuffer : register(t1);
-RWStructuredBuffer<CbMeshIndirectCommand> indirectCommandBuffer : register(u0);
+StructuredBuffer<CommandType> updateBuffer : register(t1);
+RWStructuredBuffer<CommandType> indirectCommandBuffer : register(u0);
 
 struct ComputeShaderInput
 {
@@ -18,8 +19,9 @@ struct ComputeShaderInput
     uint3 DispatchThreadID : SV_DispatchThreadID; // 3D index of global thread ID in the dispatch.
     uint GroupIndex : SV_GroupIndex; // Flattened local index of the thread within a thread group.
 };
+
 [numthreads(threadBlockSize, 1, 1)]
-void main(ComputeShaderInput IN)
+void UpdateIndirectCommands(ComputeShaderInput IN)
 {
     uint index = (IN.GroupID.x * threadBlockSize) + IN.GroupIndex;
     if (index < countToUpdate)
@@ -27,3 +29,5 @@ void main(ComputeShaderInput IN)
         indirectCommandBuffer[updateBufferIds[index]] = updateBuffer[index];
     }
 }
+
+#endif

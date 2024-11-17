@@ -147,9 +147,6 @@
     <ClInclude Include="ModelBuffers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="IndirectMeshRenderObject.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IndirectUpdater.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -242,9 +239,6 @@
     <ClCompile Include="SinglePassDownsampler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="RenderSubsystem.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc">
@@ -260,19 +254,10 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="SimpleVertexShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="SimplePixelShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="SimpleUVVertexShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="SimpleUVPixelShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="SoAUVVertexShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="CopyPostProcessingVS.hlsl">
@@ -293,9 +278,6 @@
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">
       <Filter>Shaders\FidelityFX</Filter>
     </FxCompile>
-    <FxCompile Include="CbMeshIndirectUpdater.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -308,5 +290,8 @@
       <Filter>Shaders\Includes</Filter>
     </None>
     <None Include="packages.config" />
+    <None Include="IndirectCommandUpdater.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

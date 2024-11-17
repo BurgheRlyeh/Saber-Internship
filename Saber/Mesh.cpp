@@ -45,17 +45,6 @@ void Mesh::InitFromVerticesIndices(
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
     const MeshDataVerticesIndices& meshData
 ) {
-    AddVertexBuffer(
-        pDevice,
-        pAllocator,
-        pCommandQueueCopy,
-        BufferData{
-            .data{ meshData.vertices },
-            .count{ meshData.verticesCnt },
-            .size{ meshData.vertexSize }
-        }
-    );
-
     AddIndexBuffer(
         pDevice,
         pAllocator,
@@ -67,6 +56,19 @@ void Mesh::InitFromVerticesIndices(
         },
         meshData.indexFormat
     );
+
+    for (const VertexData& vertexData : meshData.verticesData) {
+        AddVertexBuffer(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            BufferData{
+                .data{ vertexData.data },
+                .count{ meshData.verticesCnt },
+                .size{ vertexData.size }
+            }
+        );
+    }
 }
 
 void Mesh::InitFromGLTF(

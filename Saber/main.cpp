@@ -61,8 +61,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case '1':
         case '2':
         case '3':
-        case '4':
-        case '5':
             g_pRenderer->SetSceneId(wParam - '0');
             break;
         case 'C':

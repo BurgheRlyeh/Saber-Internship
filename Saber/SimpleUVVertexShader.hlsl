@@ -17,14 +17,6 @@ struct ModelBuffer
 
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 
-struct VSInput
-{
-    float3 position : POSITION;
-    float3 norm : NORMAL;
-    float4 tang : TANGENT;
-    float2 uv : TEXCOORD;
-};
-
 struct VSOutput
 {
     float3 worldPos : POSITION;
@@ -34,20 +26,26 @@ struct VSOutput
     float4 position : SV_Position;
 };
 
-VSOutput main(VSInput vtxIn)
+VSOutput main(
+    float3 position : POSITION,
+    float3 norm : NORMAL,
+    float4 tang : TANGENT,
+    float2 uv : TEXCOORD
+)
 {
     VSOutput vtxOut;
     
-    float4 position = float4(vtxIn.position.xyz, 1.f);
-    vtxOut.worldPos = mul(ModelCB.modelMatrix, position).xyz;
+    float4 pos = float4(position.xyz, 1.f);
+    vtxOut.worldPos = mul(ModelCB.modelMatrix, pos);
     
-    vtxOut.norm = mul(ModelCB.normalMatrix, float4(vtxIn.norm.xyz, 0.f)).xyz;
-    vtxOut.tang.xyz = mul(ModelCB.normalMatrix, float4(vtxIn.tang.xyz, 0.f)).xyz;
-    vtxOut.tang.w = vtxIn.tang.w;
-    vtxOut.uv = vtxIn.uv;
+    vtxOut.norm = mul(ModelCB.normalMatrix, float4(norm.xyz, 0.f)).xyz;
+    vtxOut.tang.xyz = mul(ModelCB.normalMatrix, float4(tang.xyz, 0.f)).xyz;
+    vtxOut.tang.w = tang.w;
     
-    position = float4(vtxOut.worldPos, 1.f);
-    vtxOut.position = mul(SceneCB.vpMatrix, position);
+    vtxOut.uv = uv;
+    
+    pos = float4(vtxOut.worldPos, 1.f);
+    vtxOut.position = mul(SceneCB.vpMatrix, pos);
     
     return vtxOut;
 }

@@ -1,20 +1,36 @@
 #include "Scene.h"
+#include "Scene.h"
+#include "Scene.h"
 
 Scene::Scene(
     const std::wstring& name,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
+    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
 ) : m_name(name),
-	m_pDynamicUploadHeap(pDynamicUploadHeap),
+	m_pDynamicUploadHeapCpu(pDynamicUploadHeapCpu),
+	m_pDynamicUploadHeapGpu(pDynamicUploadHeapGpu),
 	m_pDepthBuffer(pDepthBuffer),
 	m_pGBuffer(pGBuffer)
 {
-    m_pStaticRenderSubsystem = std::make_shared<RenderSubsystem<CbMeshIndirectCommand>>(m_name + L"Static");
-    m_pDynamicRenderSubsystem = std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"Dynamic");
-    m_pAlphaRenderSubsystem = std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"Alpha");
-
+    m_pRenderSubsystems.resize(RenderSubsystemId::Count);
+    m_pRenderSubsystems[RenderSubsystemId::Static] =
+        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static");
+    m_pRenderSubsystems[RenderSubsystemId::Dynamic] =
+        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic");
+    m_pRenderSubsystems[RenderSubsystemId::StaticAlphaKill] =
+        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static/AlphaKill");
+    m_pRenderSubsystems[RenderSubsystemId::DynamicAlphaKill] =
+        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic/AlphaKill");
+	
+    m_pSceneCb = std::make_shared<ConstantBuffer>(
+        pAllocator,
+        sizeof(SceneBuffer),
+        nullptr,
+        GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT }
+    );
     m_pLightCB = std::make_shared<ConstantBuffer>(
         pAllocator,
         sizeof(LightBuffer)
@@ -45,8 +61,9 @@ std::shared_ptr<GBuffer> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 
-void Scene::Update(float deltaTime) {
+void Scene::Update(float deltaTime, std::shared_ptr<CommandList> pCommandList) {
     TryUpdateCamera(deltaTime);
+    UpdateSceneBuffer(pCommandList->m_pCommandList);
 }
 
 void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
@@ -151,14 +168,17 @@ bool Scene::AddLightSource(
     return true;
 }
 
-void Scene::AddStaticObject(std::shared_ptr<RenderObject> pObject) {
-    m_pStaticRenderSubsystem->Add(pObject);
+void Scene::AddStaticObject(std::shared_ptr<RenderObject> pObject) const {
+    m_pRenderSubsystems[Static]->Add(pObject);
 }
-void Scene::AddDynamicObject(std::shared_ptr<RenderObject> pObject) {
-    m_pDynamicRenderSubsystem->Add(pObject);
+void Scene::AddDynamicObject(std::shared_ptr<RenderObject> pObject) const {
+    m_pRenderSubsystems[Dynamic]->Add(pObject);
 }
-void Scene::AddAlphaObject(std::shared_ptr<RenderObject> pObject) {
-    m_pAlphaRenderSubsystem->Add(pObject);
+void Scene::AddStaticAlphaKillObject(std::shared_ptr<RenderObject> pObject) const {
+    m_pRenderSubsystems[StaticAlphaKill]->Add(pObject);
+}
+void Scene::AddDynamicAlphaKillObject(std::shared_ptr<RenderObject> pObject) const {
+    m_pRenderSubsystems[DynamicAlphaKill]->Add(pObject);
 }
 
 void Scene::RenderStaticObjects(
@@ -169,8 +189,6 @@ void Scene::RenderStaticObjects(
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
-
-    UpdateSceneBuffer();
 
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
@@ -200,7 +218,7 @@ void Scene::RenderStaticObjects(
     };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pStaticRenderSubsystem->Render(
+    m_pRenderSubsystems[Static]->Render(
         pCommandList,
         commandListPrepare
     );
@@ -214,8 +232,6 @@ void Scene::RenderDynamicObjects(
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
-
-    UpdateSceneBuffer();
 
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
@@ -245,13 +261,13 @@ void Scene::RenderDynamicObjects(
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pDynamicRenderSubsystem->Render(
+    m_pRenderSubsystems[Dynamic]->Render(
         pCommandList,
         commandListPrepare
     );
 }
 
-void Scene::RenderAlphaObjects(
+void Scene::RenderStaticAlphaKillObjects(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
@@ -261,8 +277,6 @@ void Scene::RenderAlphaObjects(
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
-
-    UpdateSceneBuffer();
 
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
     if (m_pGBuffer) {
@@ -295,7 +309,55 @@ void Scene::RenderAlphaObjects(
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pAlphaRenderSubsystem->Render(
+    m_pRenderSubsystems[StaticAlphaKill]->Render(
+        pCommandList,
+        commandListPrepare
+    );
+}
+
+void Scene::RenderDynamicAlphaKillObjects(
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect,
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    std::shared_ptr<MaterialManager> pMaterialManager
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+    if (m_pGBuffer) {
+        rtvs = m_pGBuffer->GetRtvs();
+    }
+    else {
+        rtvs.push_back(renderTargetView);
+    }
+
+    auto commandListPrepare = [&] {
+        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        pCommandList->RSSetViewports(1, &viewport);
+        pCommandList->RSSetScissorRects(1, &scissorRect);
+
+        pCommandList->OMSetRenderTargets(
+            static_cast<UINT>(rtvs.size()),
+            rtvs.data(),
+            FALSE,
+            &m_pDepthBuffer->GetDsvCpuDescHandle()
+        );
+
+        pCommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_sceneCBDynamicAllocation.gpuAddress
+        );
+        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+        pCommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        };
+
+    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+    m_pRenderSubsystems[DynamicAlphaKill]->Render(
         pCommandList,
         commandListPrepare
     );
@@ -396,7 +458,7 @@ bool Scene::TryUpdateCamera(float deltaTime) {
     return true;
 }
 
-void Scene::UpdateSceneBuffer() {
+void Scene::UpdateSceneBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
     std::scoped_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
     std::scoped_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
@@ -410,9 +472,30 @@ void Scene::UpdateSceneBuffer() {
     m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
     m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
 
-    m_sceneCBDynamicAllocation = m_pDynamicUploadHeap->Allocate(sizeof(SceneBuffer));
+    DynamicAllocation cpuAlloc = m_pDynamicUploadHeapCpu->Allocate(sizeof(SceneBuffer));
 
-    memcpy(m_sceneCBDynamicAllocation.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+    memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+
+    m_sceneCBDynamicAllocation = m_pDynamicUploadHeapGpu->Allocate(sizeof(SceneBuffer));
+    ResourceTransition(
+        pCommandList,
+        m_sceneCBDynamicAllocation.pBuffer->GetResource(),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_COPY_DEST
+    );
+    pCommandList->CopyBufferRegion(
+        m_sceneCBDynamicAllocation.pBuffer->GetResource().Get(),
+        m_sceneCBDynamicAllocation.offset,
+        cpuAlloc.pBuffer->GetResource().Get(),
+        cpuAlloc.offset,
+        sizeof(SceneBuffer)
+    );
+    ResourceTransition(
+        pCommandList,
+        m_sceneCBDynamicAllocation.pBuffer->GetResource(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_GENERIC_READ
+    );
 }
 
 void Scene::UpdateLightBuffer() {
