@@ -144,9 +144,6 @@
     <ClInclude Include="IndirectCommandBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ModelBuffers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IndirectUpdater.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -161,6 +158,9 @@
     </ClInclude>
     <ClInclude Include="IndirectCommand.h">
       <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelBuffers.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

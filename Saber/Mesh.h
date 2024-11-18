@@ -27,18 +27,15 @@ class Mesh {
         void* data{};
         size_t count{};
         size_t size{};
-        DXGI_FORMAT format{};
     };
 
 public:
     struct VertexData {
         void* data{};
         size_t size{};
+        std::function<void(void*, size_t)> handler{};
     };
-    struct MeshDataVerticesIndices {
-        //void* vertices{};
-        //size_t verticesCnt{};
-        //size_t vertexSize{};
+    struct MeshDataIndicesVertices {
         // indices data
         void* indices{};
         size_t indicesCnt{};
@@ -52,6 +49,7 @@ public:
     struct Attribute {
         const std::string& name{};
         const size_t& size{};
+        std::function<void(void*, size_t)> handler{};
     };
 
     struct MeshDataGLTF {
@@ -61,12 +59,12 @@ public:
 
     struct MeshData {
         std::variant<
-            MeshDataVerticesIndices,
+            MeshDataIndicesVertices,
             MeshDataGLTF
         > data{};
 
         MeshData() = delete;
-        MeshData(const MeshDataVerticesIndices& vertexIndexData)
+        MeshData(const MeshDataIndicesVertices& vertexIndexData)
             : data(vertexIndexData)
         {}
         MeshData(const MeshDataGLTF & gltfData)
@@ -98,7 +96,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const MeshDataVerticesIndices& meshData
+        const MeshDataIndicesVertices& meshData
     );
     void InitFromGLTF(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,

@@ -9,7 +9,7 @@ Mesh::Mesh(
 ) {
     std::visit([&](const auto& data) {
         using T = std::decay_t<decltype(data)>;
-        if constexpr (std::is_same_v<T, MeshDataVerticesIndices>) {
+        if constexpr (std::is_same_v<T, MeshDataIndicesVertices>) {
             InitFromVerticesIndices(pDevice, pAllocator, pCommandQueueCopy, data);
         }
         else if constexpr (std::is_same_v<T, MeshDataGLTF>) {
@@ -43,7 +43,7 @@ void Mesh::InitFromVerticesIndices(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    const MeshDataVerticesIndices& meshData
+    const MeshDataIndicesVertices& meshData
 ) {
     AddIndexBuffer(
         pDevice,
@@ -58,6 +58,9 @@ void Mesh::InitFromVerticesIndices(
     );
 
     for (const VertexData& vertexData : meshData.verticesData) {
+        if (vertexData.handler) {
+            vertexData.handler(vertexData.data, vertexData.size);
+        }
         AddVertexBuffer(
             pDevice,
             pAllocator,
@@ -89,8 +92,7 @@ void Mesh::InitFromGLTF(
         BufferData indexBufferData{
             .data{ indices.data() },
             .count{ indices.size() },
-            .size{ sizeof(indices.front())},
-            .format{format}
+            .size{ sizeof(indices.front())}
         };
         AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
     }
@@ -103,8 +105,7 @@ void Mesh::InitFromGLTF(
         BufferData indexBufferData{
             .data{ indices.data() },
             .count{ indices.size() },
-            .size{ sizeof(indices.front())},
-            .format{ format }
+            .size{ sizeof(indices.front())}
         };
         AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
     }
@@ -123,11 +124,15 @@ void Mesh::InitFromGLTF(
             throw std::runtime_error(ss.str());
         }
 
+        size_t verticesCnt{ vertexData.size() / (attribute.size / 4) };
+        if (attribute.handler) {
+            attribute.handler(vertexData.data(), verticesCnt);
+        }
+
         BufferData vertexBufferData{
             .data{ vertexData.data() },
-            .count{ vertexData.size() / (attribute.size / 4) },
-            .size{ attribute.size},
-            .format{ DXGI_FORMAT_R32_FLOAT }
+            .count{ verticesCnt },
+            .size{ attribute.size }
         };
         AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
     }

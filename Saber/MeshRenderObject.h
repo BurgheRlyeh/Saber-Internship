@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <initializer_list>
+#include <limits>
 
 #include "Atlas.h"
 #include "CommandQueue.h"
@@ -213,7 +214,19 @@ public:
             20, 22, 21, 20, 23, 22
         };
 
-        Mesh::MeshDataVerticesIndices meshData{
+        DirectX::XMFLOAT4 bbmin{
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            0.f
+        };
+        DirectX::XMFLOAT4 bbmax{
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            0.f
+        };
+        Mesh::MeshDataIndicesVertices meshData{
             // indices data
             .indices{ indices },
             .indicesCnt{ _countof(indices) },
@@ -222,7 +235,21 @@ public:
             // vertices data
             .verticesCnt{ 24 },
 			.verticesData{
-				{ .data{ positions }, .size{ sizeof(*positions) } },
+				{
+					.data{ positions },
+					.size{ sizeof(*positions) },
+                    .handler{ [&](void* data, size_t size) {
+                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
+                        for (size_t i{}; i < size; ++i) {
+                            bbmin.x = std::min(bbmin.x, positions[i].x);
+                            bbmin.y = std::min(bbmin.y, positions[i].y);
+                            bbmin.z = std::min(bbmin.z, positions[i].z);
+                            bbmax.x = std::max(bbmax.x, positions[i].x);
+                            bbmax.y = std::max(bbmax.y, positions[i].y);
+                            bbmax.z = std::max(bbmax.z, positions[i].z);
+                        }
+                    }}
+				},
 				{ .data{ normals }, .size{ sizeof(*normals) } },
 				{ .data{ tangents }, .size{ sizeof(*tangents) } },
 				{ .data{ uvs }, .size{ sizeof(*uvs) } }
@@ -280,12 +307,35 @@ public:
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
+        DirectX::XMFLOAT4 bbmin{
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            0.f
+        };
+        DirectX::XMFLOAT4 bbmax{
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            0.f
+        };
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) }
+                    .size{ sizeof(DirectX::XMFLOAT3) },
+                    .handler{ [&](void* data, size_t size) {
+                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
+                        for (size_t i{}; i < size; ++i) {
+                            bbmin.x = std::min(bbmin.x, positions[i].x);
+                            bbmin.y = std::min(bbmin.y, positions[i].y);
+                            bbmin.z = std::min(bbmin.z, positions[i].z);
+                            bbmax.x = std::max(bbmax.x, positions[i].x);
+                            bbmax.y = std::max(bbmax.y, positions[i].y);
+                            bbmax.z = std::max(bbmax.z, positions[i].z);
+                        }
+                    }}
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -415,12 +465,35 @@ public:
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
+        DirectX::XMFLOAT4 bbmin{
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            0.f
+        };
+        DirectX::XMFLOAT4 bbmax{
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            0.f
+        };
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) }
+                    .size{ sizeof(DirectX::XMFLOAT3) },
+                    .handler{ [&](void* data, size_t size) {
+                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
+                        for (size_t i{}; i < size; ++i) {
+                            bbmin.x = std::min(bbmin.x, positions[i].x);
+                            bbmin.y = std::min(bbmin.y, positions[i].y);
+                            bbmin.z = std::min(bbmin.z, positions[i].z);
+                            bbmax.x = std::max(bbmax.x, positions[i].x);
+                            bbmax.y = std::max(bbmax.y, positions[i].y);
+                            bbmax.z = std::max(bbmax.z, positions[i].z);
+                        }
+                    }}
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
