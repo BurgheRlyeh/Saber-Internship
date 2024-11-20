@@ -12,22 +12,16 @@
 #include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
 #include "GBuffer.h"
+#include "LightBuffer.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "RenderSubsystem.h"
-#include "Texture.h"
+#include "SceneBuffer.h"
 
 class Scene {
-    static constexpr size_t LIGHTS_MAX_COUNT{ 10 };
-
     std::wstring m_name{};
 
-    struct SceneBuffer {
-        DirectX::XMMATRIX viewProjMatrix{};
-        DirectX::XMMATRIX invViewProjMatrix{};
-        DirectX::XMFLOAT4 cameraPosition{};
-        DirectX::XMFLOAT4 nearFar{};
-    } m_sceneBuffer;
+    SceneBuffer m_sceneBuffer;
     std::mutex m_sceneBufferMutex{};
     std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapCpu{};
     std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapGpu{};
@@ -35,16 +29,7 @@ class Scene {
     std::atomic<bool> m_isUpdSceneCb{ true };
     std::shared_ptr<ConstantBuffer> m_pSceneCb{};
 
-    struct Light {
-        DirectX::XMFLOAT4 position{};
-        DirectX::XMFLOAT4 diffuseColorAndPower{};
-        DirectX::XMFLOAT4 specularColorAndPower{};
-    };
-    struct LightBuffer {
-        DirectX::XMFLOAT4 ambientColorAndPower{ 0.5f, 0.5f, 0.5f, 1.f };
-        DirectX::XMUINT4 lightsCount{};
-        Light lights[LIGHTS_MAX_COUNT]{};
-    } m_lightBuffer;
+    LightBuffer m_lightBuffer;
     std::mutex m_lightBufferMutex{};
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
     std::atomic<bool> m_isUpdateLightCB{};
@@ -57,9 +42,6 @@ class Scene {
         Count = 4
     };
     std::vector<std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>>> m_pRenderSubsystems{};
-    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pStaticRenderSubsystem{};
-    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pDynamicRenderSubsystem{};
-    //std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>> m_pAlphaRenderSubsystem{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -92,33 +74,13 @@ public:
         std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
         std::shared_ptr<ComputeObject> pIndirectUpdater
-    ) {
-        for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
-            m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
-                pDevice,
-                pAllocator,
-                pDescHeapManagerCbvSrvUav,
-                pDynamicUploadHeap,
-                i == Static || i == StaticAlphaKill ? nullptr : pIndirectUpdater
-            );
-        }
-    }
-
+    ) const;
     void UpdateRenderSubsystems(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<CommandQueue> pCommandQueueCopy,
         std::shared_ptr<CommandQueue> pCommandQueueDirect
-    ) {
-        for (auto& pRenderSubsystem : m_pRenderSubsystems) {
-            pRenderSubsystem->PerformIndirectBufferUpdate(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect
-            );
-        }
-    }
+    ) const;
 
     void SetSceneReadiness(bool value);
     bool IsSceneReady();

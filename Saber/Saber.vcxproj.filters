@@ -159,8 +159,14 @@
     <ClInclude Include="IndirectCommand.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="ModelBuffers.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="ModelBuffer.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneBuffer.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LightBuffer.h">
+      <Filter>Common Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -279,6 +285,9 @@
       <Filter>Shaders\FidelityFX</Filter>
     </FxCompile>
     <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="OcclusionCullingFirstPass.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

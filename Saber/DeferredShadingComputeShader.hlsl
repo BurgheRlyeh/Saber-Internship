@@ -1,26 +1,9 @@
 #include "BlinnPhongLighting.hlsli"
 #include "Math.hlsli"
 #include "MaterialCB.h"
-
-#define LIGHTS_MAX_COUNT 10
-
-struct SceneBuffer
-{
-    matrix vpMatrix;
-    matrix invViewProjMatrix;
-    float4 cameraPosition;
-    float4 nearFar;
-};
+#include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
-struct LightBuffer
-{
-    float4 ambientColorAndPower;
-    uint4 lightCount;
-    Light lights[LIGHTS_MAX_COUNT];
-};
-
 ConstantBuffer<LightBuffer> LightCB : register(b1);
 
 Texture2D<float4> uvMaterialId : register(t0);
@@ -134,7 +117,7 @@ void main(ComputeShaderInput IN)
     float3 worldPos = WorldPositionFromDepth(uvGlobal, depth);
     
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
-    for (uint i = 0; i < LightCB.lightCount.x; ++i)
+    for (uint i = 0; i < LightCB.lightsCount.x; ++i)
     {
         Lighting lighting = GetPointLight(
             LightCB.lights[i],

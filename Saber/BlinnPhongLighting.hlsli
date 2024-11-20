@@ -1,9 +1,4 @@
-struct Light
-{
-    float4 position;
-    float4 diffuseColorAndPower;
-    float4 specularColorAndPower;
-};
+#include "LightBuffer.h"
 
 struct Lighting
 {

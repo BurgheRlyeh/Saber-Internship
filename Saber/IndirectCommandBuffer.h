@@ -12,7 +12,6 @@
 #include "DynamicUploadRingBuffer.h"
 #include "GPUResource.h"
 #include "MeshRenderObject.h"
-#include "ModelBuffers.h"
 
 template <typename IndirectCommand>
 class IndirectCommandBuffer {
@@ -398,7 +397,6 @@ public:
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
 		static const size_t threadBlockSize{ 128 };
-		UINT u = static_cast<UINT>(std::ceil(updCnt / float(threadBlockSize)));
 		m_pIndirectUpdater->Dispatch(
 			pCommandListDirect->m_pCommandList,
 			static_cast<UINT>(std::ceil(updCnt / float(threadBlockSize))), 1, 1,

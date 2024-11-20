@@ -1,22 +1,9 @@
 #include "Math.hlsli"
 #include "MaterialCB.h"
-
-struct SceneBuffer
-{
-    matrix vpMatrix;
-    matrix invViewProjMatrix;
-    float4 cameraPosition;
-    float4 nearFar;
-};
+#include "ModelBuffer.h"
+#include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
-struct ModelBuffer
-{
-    matrix modelMatrix;
-    matrix normalMatrix;
-    uint4 materialId;
-};
 
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
 

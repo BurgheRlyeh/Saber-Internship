@@ -14,7 +14,7 @@
 #include "GBuffer.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
-#include "ModelBuffers.h"
+#include "ModelBuffer.h"
 #include "Mesh.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"

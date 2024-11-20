@@ -21,6 +21,31 @@ public:
 	DirectX::XMMATRIX GetViewMatrix() const;
 	DirectX::XMMATRIX GetProjectionMatrix() const;
 	DirectX::XMMATRIX GetViewProjectionMatrix() const;
+
+	void BuildViewFrustumPlanes(
+		DirectX::XMFLOAT4 (&planes)[6],
+		const DirectX::XMMATRIX* viewProjectionMatrix
+	) const {
+		DirectX::XMMATRIX t{ DirectX::XMMatrixTranspose(
+			viewProjectionMatrix ? *viewProjectionMatrix : GetViewProjectionMatrix()
+		) };
+
+		auto extractPlane{ [](DirectX::XMVECTOR v1, DirectX::XMVECTOR v2) {
+			DirectX::XMVECTOR plane{
+				DirectX::XMPlaneNormalize(DirectX::XMVectorAdd(v1, v2))
+			};
+			DirectX::XMFLOAT4 result;
+			DirectX::XMStoreFloat4(&result, plane);
+			return result;
+		} };
+
+		planes[0] = extractPlane(t.r[3], t.r[0]);							// left
+		planes[1] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[0]));	// right
+		planes[2] = extractPlane(t.r[3], t.r[1]);							// bottom
+		planes[3] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[1]));	// up
+		planes[4] = extractPlane(t.r[3], t.r[2]);							// near
+		planes[5] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[2]));	// far
+	}
 };
 
 class StaticCamera : public Camera {

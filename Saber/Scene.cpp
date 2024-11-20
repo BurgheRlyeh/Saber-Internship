@@ -35,6 +35,41 @@ Scene::Scene(
         pAllocator,
         sizeof(LightBuffer)
     );
+    m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
+}
+
+void Scene::InitializeRenderSubsystems(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+	std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+    std::shared_ptr<ComputeObject> pIndirectUpdater
+) const {
+	for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
+		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
+			pDevice,
+			pAllocator,
+			pDescHeapManagerCbvSrvUav,
+			pDynamicUploadHeap,
+			i == Static || i == StaticAlphaKill ? nullptr : pIndirectUpdater
+		);
+	}
+}
+
+void Scene::UpdateRenderSubsystems(
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> pCommandQueueCopy,
+	std::shared_ptr<CommandQueue> pCommandQueueDirect
+) const {
+	for (auto& pRenderSubsystem : m_pRenderSubsystems) {
+		pRenderSubsystem->PerformIndirectBufferUpdate(
+			pDevice,
+			pAllocator,
+			pCommandQueueCopy,
+			pCommandQueueDirect
+		);
+	}
 }
 
 /* scene readiness */
@@ -126,14 +161,7 @@ void Scene::SetAmbientLight(
     const float& power
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-
-    m_lightBuffer.ambientColorAndPower = {
-        color.x,
-        color.y,
-        color.z,
-        power
-    };
-
+    m_lightBuffer.SetAmbientLight(color, power);
     m_isUpdateLightCB.store(true);
 }
 bool Scene::AddLightSource(
@@ -144,28 +172,18 @@ bool Scene::AddLightSource(
     const float& specularPower
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-    if (m_lightBuffer.lightsCount.x == LIGHTS_MAX_COUNT) {
-        return false;
-    }
-
-    m_lightBuffer.lights[m_lightBuffer.lightsCount.x++] = {
+    bool result{ m_lightBuffer.Add(
         position,
-        {
-            diffuseColor.x,
-            diffuseColor.y,
-            diffuseColor.z,
-            diffusePower
-        },
-        {
-            specularColor.x,
-            specularColor.y,
-            specularColor.z,
-            specularPower
-        }
-    };
+        diffuseColor,
+        diffusePower,
+        specularColor,
+        specularPower
+    ) };
 
-    m_isUpdateLightCB.store(true);
-    return true;
+    if (result) {
+        m_isUpdateLightCB.store(true);
+    }
+    return result;
 }
 
 void Scene::AddStaticObject(std::shared_ptr<RenderObject> pObject) const {

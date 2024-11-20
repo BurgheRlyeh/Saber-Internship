@@ -6,7 +6,6 @@
 #include "IndirectCommandBuffer.h"
 #include "RenderObject.h"
 #include "MeshRenderObject.h"
-#include "ModelBuffers.h"
 #include "SeparateChainingMap.h"
 
 template <typename IndirectCommand>
@@ -16,6 +15,9 @@ class RenderSubsystem {
 	std::mutex m_objectsMutex{};
 
 	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
+
+	std::shared_ptr<DescHeapRange> m_pVisibilityBufferUavRange{};
+	std::shared_ptr<GPUResource> m_pVisibilityBuffer{};
 
 public:
 	RenderSubsystem(const std::wstring& name) : m_name(name) {
@@ -47,6 +49,46 @@ public:
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
 		m_pIndirectCommandBuffer->Execute(pCommandList);
+	}
+
+	void CreateVisibilityBuffer(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
+	) {
+		uint32_t bufferSize{ (m_objects.size() + 31) / 32 };
+
+		m_pVisibilityBuffer = std::make_shared<GPUResource>(
+			pAllocator,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceData{
+				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+					bufferSize,
+					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+				) },
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+			}
+		);
+
+
+		m_pVisibilityBufferUavRange = pResDescHeapManager->AllocateRange(
+			m_name + L"/VisibilityBufferUavRange",
+			1
+		);
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC desc{
+			.Format{ DXGI_FORMAT_R32_TYPELESS },
+			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
+			.Buffer{
+				.NumElements{ bufferSize },
+				.Flags{ D3D12_BUFFER_UAV_FLAG_RAW }
+			}
+		};
+		m_pVisibilityBuffer->CreateUnorderedAccessView(
+			pDevice,
+			m_pVisibilityBufferUavRange->GetNextCpuHandle(),
+			&desc
+		);
 	}
 
 	bool InitializeIndirectCommandBuffer(

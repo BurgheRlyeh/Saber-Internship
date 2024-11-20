@@ -182,12 +182,13 @@
     <ClInclude Include="IndirectCommandBuffer.h" />
     <ClInclude Include="IndirectUpdater.h" />
     <ClInclude Include="JobSystem.h" />
+    <ClInclude Include="LightBuffer.h" />
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="MeshRenderObject.h" />
-    <ClInclude Include="ModelBuffers.h" />
+    <ClInclude Include="ModelBuffer.h" />
     <ClInclude Include="PostProcessing.h" />
     <ClInclude Include="PSOLibrary.h" />
     <ClInclude Include="RenderObject.h" />
@@ -198,6 +199,7 @@
     <ClInclude Include="Resources.h" />
     <ClInclude Include="Saber.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="SceneBuffer.h" />
     <ClInclude Include="SeparateChainingMap.h" />
     <ClInclude Include="SinglePassDownsampler.h" />
     <ClInclude Include="targetver.h" />
@@ -287,6 +289,16 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="OcclusionCullingFirstPass.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
