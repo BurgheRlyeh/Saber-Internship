@@ -38,9 +38,18 @@ void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers.resize(m_numFrames);
     m_frameFenceValues.resize(m_numFrames);
 
+#if defined(_DEBUG)
+    EnableDebugLayer();
+#endif
+
     // device and allocator
     Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter{ GetAdapter(m_useWarp) };
     m_pDevice = CreateDevice(pAdapter);
+
+#if defined(_DEBUG)
+    SetInfoQueueFilter(m_pDevice);
+#endif
+
     m_pAllocator = CreateAllocator(m_pDevice, pAdapter);
 
     // command queues
@@ -517,7 +526,7 @@ void Renderer::Render() {
 
     // Some small work doesn't need to be moved to jobs, just as example
     {
-        PIXScopedEvent(
+        PIXBeginEvent(
             commandListBeforeFrame->m_pCommandList.Get(),
             PIX_COLOR(0, 0, 0),
             L"Before frame part"
@@ -540,6 +549,7 @@ void Renderer::Render() {
             );
         }
 
+        PIXEndEvent(commandListBeforeFrame->m_pCommandList.Get());
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
     }
 
@@ -548,7 +558,7 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority)
     };
     m_pJobSystem->AddJob([&]() {
-        PIXScopedEvent(
+        PIXBeginEvent(
             commandListForStaticObjects->m_pCommandList.Get(),
             PIX_COLOR(0, 0, 0),
             L"Static Objects rendering"
@@ -559,6 +569,7 @@ void Renderer::Render() {
             m_scissorRect,
             rtv
         );
+        PIXEndEvent(commandListForStaticObjects->m_pCommandList.Get());
         commandListForStaticObjects->SetReadyForExection();
     });
 
@@ -566,7 +577,7 @@ void Renderer::Render() {
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
     };
     m_pJobSystem->AddJob([&]() {
-        PIXScopedEvent(
+        PIXBeginEvent(
             commandListForAlphaObjects->m_pCommandList.Get(),
             PIX_COLOR(0, 0, 0),
             L"Alpha Objects rendering"
@@ -579,6 +590,7 @@ void Renderer::Render() {
             m_pResourceDescHeapManager,
             m_pMaterialManager
         );
+        PIXEndEvent(commandListForAlphaObjects->m_pCommandList.Get());
         commandListForAlphaObjects->SetReadyForExection();
         });
 
@@ -589,7 +601,7 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXScopedEvent(
+        PIXBeginEvent(
             commandListForDynamicObjects->m_pCommandList.Get(),
             PIX_COLOR(0, 0, 0),
             L"Dynamic Objects rendering"
@@ -600,6 +612,7 @@ void Renderer::Render() {
             m_scissorRect,
             rtv
         );
+        PIXEndEvent(commandListForDynamicObjects->m_pCommandList.Get());
         commandListForDynamicObjects->SetReadyForExection();
         });
 
@@ -626,7 +639,7 @@ void Renderer::Render() {
     };
     m_pJobSystem->AddJob([&]() {
         {
-            PIXScopedEvent(
+            PIXBeginEvent(
                 commandListForHZB->m_pCommandList.Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Building HZB"
@@ -635,11 +648,12 @@ void Renderer::Render() {
                 commandListForHZB->m_pCommandList,
                 m_pResourceDescHeapManager->GetDescriptorHeap()
             );
+            PIXEndEvent(commandListForHZB->m_pCommandList.Get());
             commandListForHZB->SetReadyForExection();
         }
 
         {
-            PIXScopedEvent(
+            PIXBeginEvent(
                 commandListForDeferredShading->m_pCommandList.Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Deferred shading"
@@ -651,11 +665,12 @@ void Renderer::Render() {
                 m_clientWidth,
                 m_clientHeight
             );
+            PIXEndEvent(commandListForDeferredShading->m_pCommandList.Get());
             commandListForDeferredShading->SetReadyForExection();
         }
 
         {
-            PIXScopedEvent(
+            PIXBeginEvent(
                 commandListAfterFrame->m_pCommandList.Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Post Processing"
@@ -674,6 +689,7 @@ void Renderer::Render() {
                 D3D12_RESOURCE_STATE_PRESENT
             );
 
+            PIXEndEvent(commandListAfterFrame->m_pCommandList.Get());
             commandListAfterFrame->SetReadyForExection();
         }
     });
@@ -737,14 +753,57 @@ bool Renderer::CheckTearingSupport() {
     return allowTearing;
 }
 
-void Renderer::EnableDebugLayer() {
 #if defined(_DEBUG)
+void Renderer::EnableDebugLayer() {
     Microsoft::WRL::ComPtr<ID3D12Debug> pDebugInterface;
     //ThrowIfFailed(D3D12GetInterface(CLSID_D3D12Debug, IID_PPV_ARGS(&debugInterface))); // TODO
     ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
     pDebugInterface->EnableDebugLayer();
-#endif
 }
+
+void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
+    ThrowIfFailed(pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue)));
+    
+    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+
+    // Suppress whole categories of messages
+    //D3D12_MESSAGE_CATEGORY Categories[]{};
+
+    // Suppress messages based on their severity level
+    D3D12_MESSAGE_SEVERITY Severities[]{
+        D3D12_MESSAGE_SEVERITY_INFO,
+    };
+
+    // Suppress individual messages by their ID
+    D3D12_MESSAGE_ID DenyIds[] = {
+        D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
+        D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
+        D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
+        
+        D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_HAS_NO_RESOURCE,            // For D3D12MA compatibility
+
+        D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
+
+        D3D12_MESSAGE_ID_RESOURCE_BARRIER_BEFORE_AFTER_MISMATCH,
+        D3D12_MESSAGE_ID_INVALID_SUBRESOURCE_STATE
+    };
+    D3D12_INFO_QUEUE_FILTER NewFilter{
+        .DenyList{
+            //.NumCategories{ _countof(Categories) },
+            //.pCategoryList{ Categories },
+            .NumSeverities{ _countof(Severities) },
+            .pSeverityList{ Severities },
+            .NumIDs{ _countof(DenyIds) },
+            .pIDList{ DenyIds }
+        }
+    };
+
+    ThrowIfFailed(pInfoQueue->PushStorageFilter(&NewFilter));
+}
+#endif
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
     // IDXGIFactory
@@ -809,53 +868,9 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
 Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter) {
     // Represents a virtual adapter
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice;
-    // D3D12CreateDevice
+
     // Creates a device that represents the display adapter
     ThrowIfFailed(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
-
-    // Enable debug messages in debug mode.
-#if defined(_DEBUG)
-    // ID3D12InfoQueue
-    // An information-queue interface stores, retrieves, and filters debug messages
-    // The queue consists of a message queue, an optional storage filter stack, and a optional retrieval filter stack
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
-    if (SUCCEEDED(pDevice.As(&pInfoQueue))) {
-        // SetBreakOnSeverity
-        // Set a message severity level to break on when a message with that severity level passes through the storage filter
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
-
-        // Suppress whole categories of messages
-        //D3D12_MESSAGE_CATEGORY Categories[]{};
-
-        // Suppress messages based on their severity level
-        D3D12_MESSAGE_SEVERITY Severities[]{
-            D3D12_MESSAGE_SEVERITY_INFO // Indicates an information message
-        };
-
-        // Suppress individual messages by their ID
-        D3D12_MESSAGE_ID DenyIds[]{
-            D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
-            D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
-            D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
-        };
-
-        D3D12_INFO_QUEUE_FILTER NewFilter{
-            .DenyList{
-                //.NumCategories{ _countof(Categories) },
-                //.pCategoryList{ Categories },
-                .NumSeverities{ _countof(Severities) },
-                .pSeverityList{ Severities },
-                .NumIDs{ _countof(DenyIds) },
-                .pIDList{ DenyIds },
-        }
-        };
-
-        ThrowIfFailed(pInfoQueue->PushStorageFilter(&NewFilter));
-    }
-#endif
-
     return pDevice;
 }
 
