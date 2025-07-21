@@ -143,7 +143,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
 
     // mips
     CD3DX12_DESCRIPTOR_RANGE1 rangeUavMips[1]{};
-    rangeUavMips[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, -1, 2);
+    rangeUavMips[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, -1, 2, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
     rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavMips), rangeUavMips);
 
     D3D12_STATIC_SAMPLER_DESC sampler{
