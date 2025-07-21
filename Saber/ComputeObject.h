@@ -150,7 +150,7 @@ private:
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials);
          
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
-        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 3);
+        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
         rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial);
 
         D3D12_STATIC_SAMPLER_DESC sampler{

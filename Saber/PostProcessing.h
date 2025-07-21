@@ -108,9 +108,14 @@ private:
         rtvFormats.NumRenderTargets = 1;
         rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+        CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc{};
+        depthStencilDesc.DepthEnable = FALSE;
+        depthStencilDesc.StencilEnable = FALSE;
+
         CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
         pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         pipelineStateStream.RasterizerState = rasterizerDesc;
+        pipelineStateStream.DepthStencilState = depthStencilDesc;
         pipelineStateStream.RTVFormats = rtvFormats;
 
         return pipelineStateStream.GraphicsDescV0();

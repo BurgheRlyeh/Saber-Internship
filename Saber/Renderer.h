@@ -159,7 +159,10 @@ private:
 
     bool CheckTearingSupport();
 
+#if defined(_DEBUG)
     void EnableDebugLayer();
+    void SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice);
+#endif
 
     Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
 

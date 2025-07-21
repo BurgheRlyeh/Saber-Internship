@@ -34,11 +34,11 @@ std::shared_ptr<DescHeapRange> DescriptorHeapManager::AllocateRange(
 			static_cast<UINT>(m_firstFreeId),
 			m_handleIncSize
 		),
-		CD3DX12_GPU_DESCRIPTOR_HANDLE(
+		m_heapDesc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE ? CD3DX12_GPU_DESCRIPTOR_HANDLE(
 			m_pDescHeap->GetGPUDescriptorHandleForHeapStart(),
 			static_cast<UINT>(m_firstFreeId),
 			m_handleIncSize
-		),
+		) : D3D12_GPU_DESCRIPTOR_HANDLE{ static_cast<UINT64>(-1) },
 		type
 	) };
 	m_firstFreeId += size;
