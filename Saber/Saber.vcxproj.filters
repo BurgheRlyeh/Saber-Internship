@@ -1,30 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-    <Filter Include="Shaders">
-      <UniqueIdentifier>{bf35d645-0b89-47ad-bb0d-362090a91e01}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Shaders\Includes">
-      <UniqueIdentifier>{be022f20-3e2f-4812-8a9e-75f334da38d9}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Common Files">
-      <UniqueIdentifier>{67099d74-4999-4475-b019-998faf034db6}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Shaders\FidelityFX">
-      <UniqueIdentifier>{66848513-c9e2-4a8e-8c09-ae30516cc79b}</UniqueIdentifier>
-    </Filter>
+    <FxCompile Include="AlphaPS.hlsl" />
+    <FxCompile Include="AlphaVS.hlsl" />
+    <FxCompile Include="CbMeshIndirectUpdater.hlsl" />
+    <FxCompile Include="DeferredShadingComputeShader.hlsl" />
+    <FxCompile Include="CopyPostProcessingPS.hlsl" />
+    <FxCompile Include="CopyPostProcessingVS.hlsl" />
+    <FxCompile Include="CbMesh4IndirectUpdater.hlsl" />
+    <FxCompile Include="SimpleUVPixelShader.hlsl" />
+    <FxCompile Include="SimpleUVVertexShader.hlsl" />
+    <FxCompile Include="SinglePassDownsamplerCS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -247,17 +233,54 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="Saber.rc">
-      <Filter>Resource Files</Filter>
-    </ResourceCompile>
+    <ClInclude Include="Atlas.h" />
+    <ClInclude Include="Camera.h" />
+    <ClInclude Include="CommandList.h" />
+    <ClInclude Include="CommandQueue.h" />
+    <ClInclude Include="ComputeObject.h" />
+    <ClInclude Include="ConstantBuffer.h" />
+    <ClInclude Include="CppHlslTypesRedefine.h" />
+    <ClInclude Include="D3D12MemAlloc.h" />
+    <ClInclude Include="DDSTexture.h" />
+    <ClInclude Include="DepthBuffer.h" />
+    <ClInclude Include="DescriptorHeapManager.h" />
+    <ClInclude Include="DescriptorHeapRange.h" />
+    <ClInclude Include="DynamicUploadRingBuffer.h" />
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="GBuffer.h" />
+    <ClInclude Include="GLTFLoader.h" />
+    <ClInclude Include="GPUResource.h" />
+    <ClInclude Include="Headers.h" />
+    <ClInclude Include="HlslCppTypesRedefine.h" />
+    <ClInclude Include="IndirectCommand.h" />
+    <ClInclude Include="IndirectCommandBuffer.h" />
+    <ClInclude Include="IndirectUpdater.h" />
+    <ClInclude Include="JobSystem.h" />
+    <ClInclude Include="LockFreeQueue.h" />
+    <ClInclude Include="MaterialCB.h" />
+    <ClInclude Include="MemoryMappedFile.h" />
+    <ClInclude Include="Mesh.h" />
+    <ClInclude Include="MeshRenderObject.h" />
+    <ClInclude Include="ModelBuffers.h" />
+    <ClInclude Include="PostProcessing.h" />
+    <ClInclude Include="PSOLibrary.h" />
+    <ClInclude Include="RenderObject.h" />
+    <ClInclude Include="OutputContext.h" />
+    <ClInclude Include="Renderer.h" />
+    <ClInclude Include="RenderSubsystem.h" />
+    <ClInclude Include="Resource.h" />
+    <ClInclude Include="Resources.h" />
+    <ClInclude Include="Saber.h" />
+    <ClInclude Include="Scene.h" />
+    <ClInclude Include="SeparateChainingMap.h" />
+    <ClInclude Include="SinglePassDownsampler.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="Texture.h" />
+    <ClInclude Include="MaterialManager.h" />
+    <ClInclude Include="Vertices.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="Saber.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
+    <ResourceCompile Include="Saber.rc" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="SimpleUVVertexShader.hlsl">
@@ -292,15 +315,9 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="BlinnPhongLighting.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="Math.hlsli">
-      <Filter>Shaders\Includes</Filter>
-    </None>
+    <None Include="BlinnPhongLighting.hlsli" />
+    <None Include="IndirectCommandUpdater.hlsli" />
+    <None Include="Math.hlsli" />
     <None Include="packages.config" />
-    <None Include="IndirectCommandUpdater.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
   </ItemGroup>
 </Project>

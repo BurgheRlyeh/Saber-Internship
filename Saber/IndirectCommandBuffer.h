@@ -16,9 +16,12 @@
 template <typename IndirectCommand>
 class IndirectCommandBuffer {
 protected:
-	std::shared_ptr<DescriptorHeapManager> m_pDescHeapManagerCbvSrvUav{};
 	Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_pCommandSignature{};
+
 	std::shared_ptr<GPUResource> m_pIndirectCommandBuffer{};
+	std::shared_ptr<DescHeapRange> m_pDescHeapRangeSrv{};
+
+	std::shared_ptr<GPUResource> m_pAppendIndirectCommandBuffer{};
 	std::shared_ptr<DescHeapRange> m_pDescHeapRangeUav{};
 	
 	uint32_t m_size{};
@@ -33,31 +36,25 @@ public:
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		const std::wstring& renderObjectName,
 		uint32_t capacity
-	) : m_pDescHeapManagerCbvSrvUav(pDescHeapManagerCbvSrvUav),
-		m_capacity(std::bit_ceil(capacity))
-	{
+	) {
 		m_pCommandSignature = CreateCommandSignature(
 			pDevice,
 			commandSignatureDesc,
 			pRootSignature
 		);
 
+		m_pDescHeapRangeSrv = pDescHeapManagerCbvSrvUav->AllocateRange(
+			(renderObjectName + L"/IndirectCommandBuffer/Srv").c_str(),
+			1,
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+		);
 		m_pDescHeapRangeUav = pDescHeapManagerCbvSrvUav->AllocateRange(
 			(renderObjectName + L"/IndirectCommandBuffer/Uav").c_str(),
 			1,
 			D3D12_DESCRIPTOR_RANGE_TYPE_UAV
 		);
 
-		m_capacity = AlignSize(
-			m_capacity * sizeof(IndirectCommand),
-			D3D12_UAV_COUNTER_PLACEMENT_ALIGNMENT
-		) / sizeof(IndirectCommand);
-		m_pIndirectCommandBuffer = CreateBuffer(pAllocator, m_capacity);
-		m_pIndirectCommandBuffer->CreateUnorderedAccessView(
-			pDevice,
-			m_pDescHeapRangeUav->GetNextCpuHandle(),
-			&GetUavDesc(m_capacity)
-		);
+		CreateBuffersAndViews(pDevice, pAllocator, capacity);
 	}
 
 	virtual void SetUpdateAll(IndirectCommand* indirectCommands, size_t count) = 0;
@@ -98,37 +95,68 @@ protected:
 		return pCommandSignature;
 	}
 
-	static std::shared_ptr<GPUResource> CreateBuffer(
+	void CreateBuffersAndViews(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		uint32_t capacity,
-		const D3D12_RESOURCE_STATES& initState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		uint32_t numElements
 	) {
-		uint32_t alignedSize{ AlignSize(
-			capacity * sizeof(IndirectCommand),
+		m_pDescHeapRangeSrv->Clear();
+		m_pDescHeapRangeUav->Clear();
+
+		uint32_t bufferSize{ AlignSize(
+			std::bit_ceil(numElements) * sizeof(IndirectCommand),
 			D3D12_UAV_COUNTER_PLACEMENT_ALIGNMENT
 		) };
-		//capacity = alignedSize / sizeof(IndirectCommand);
-		return std::make_shared<GPUResource>(
+		m_capacity = bufferSize / sizeof(IndirectCommand);
+
+		m_pIndirectCommandBuffer = std::make_shared<GPUResource>(
 			pAllocator,
-			GPUResource::HeapData{.heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
 			GPUResource::ResourceData{
 				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
-					alignedSize,
+					bufferSize,
 					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 				) },
-				.resInitState{ initState }
+				.resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
 			}
 		);
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+			.ViewDimension{ D3D12_SRV_DIMENSION_BUFFER },
+			.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
+			.Buffer{
+				.NumElements{ m_capacity },
+				.StructureByteStride{ sizeof(IndirectCommand) }
 	}
+		};
+		m_pIndirectCommandBuffer->CreateShaderResourceView(
+			pDevice,
+			m_pDescHeapRangeSrv->GetNextCpuHandle(),
+			&srvDesc
+		);
 
-	static D3D12_UNORDERED_ACCESS_VIEW_DESC GetUavDesc(const size_t capacity) {
-		return D3D12_UNORDERED_ACCESS_VIEW_DESC{
+		m_pAppendIndirectCommandBuffer = std::make_shared<GPUResource>(
+			pAllocator,
+			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+			GPUResource::ResourceData{
+				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+					bufferSize + sizeof(DirectX::XMUINT4),
+					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+				) },
+				.resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
+			}
+		);
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
 			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
 			.Buffer{
-				.NumElements{ static_cast<UINT>(capacity) },
+				.NumElements{ m_capacity },
 				.StructureByteStride{ sizeof(IndirectCommand) }
 			}
 		};
+		m_pAppendIndirectCommandBuffer->CreateUnorderedAccessView(
+			pDevice,
+			m_pDescHeapRangeUav->GetNextCpuHandle(),
+			&uavDesc
+		);
 	}
 
 	bool Expand(
@@ -142,6 +170,11 @@ protected:
 			return false;
 		}
 
+		uint32_t oldCapacity{ m_capacity };
+		std::shared_ptr<GPUResource> pOldIndirectCommandBuffer{ m_pIndirectCommandBuffer };
+
+		CreateBuffersAndViews(pDevice, pAllocator, numElements);
+
 		std::shared_ptr<CommandList> pCommandListDirect{
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
@@ -153,20 +186,15 @@ protected:
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 
-		uint32_t newCapacity{ std::bit_ceil(numElements) };
-		std::shared_ptr<GPUResource> pIndirectCommandBufferNew{
-			CreateBuffer(pAllocator, newCapacity, D3D12_RESOURCE_STATE_COPY_DEST)
-		};
-
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
 		pCommandListCopy->m_pCommandList->CopyBufferRegion(
-			pIndirectCommandBufferNew->GetResource().Get(),
-			0,
 			m_pIndirectCommandBuffer->GetResource().Get(),
 			0,
-			m_capacity * sizeof(IndirectCommand)
+			pOldIndirectCommandBuffer->GetResource().Get(),
+			0,
+			oldCapacity * sizeof(IndirectCommand)
 		);
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
@@ -178,14 +206,6 @@ protected:
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
-
-		pIndirectCommandBufferNew->CreateUnorderedAccessView(
-			pDevice,
-			m_pDescHeapRangeUav->GetCpuHandle(),
-			&GetUavDesc(newCapacity)
-		);
-		m_capacity = newCapacity;
-		m_pIndirectCommandBuffer = pIndirectCommandBufferNew;
 
 		return true;
 	}
@@ -301,7 +321,7 @@ template <typename IndirectCommand>
 class DynamicIndirectCommandBuffer : public IndirectCommandBuffer<IndirectCommand> {
 	std::vector<UINT> m_updBufIds{};
 	std::vector<IndirectCommand> m_updBuf{};
-	size_t m_updMaxId{};
+	size_t m_updSize{};
 
 	std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeap{};
 	std::shared_ptr<ComputeObject> m_pIndirectUpdater{};
@@ -331,7 +351,7 @@ public:
 	{
 		m_updBufIds.reserve(m_capacity);
 		m_updBuf.reserve(m_capacity);
-		m_updMaxId = m_capacity - 1;
+		m_updSize = m_capacity;
 	}
 
 	void SetDynamicUploadHeap(const std::shared_ptr<DynamicUploadHeap>& pDynamicUploadHeap) {
@@ -346,7 +366,7 @@ public:
 		if (count > m_capacity) {
 			m_updBufIds.reserve(std::bit_ceil(count));
 			m_updBuf.reserve(std::bit_ceil(count));
-			m_updMaxId = count;
+			m_updSize = count;
 		}
 		for (size_t i{}; i < count; ++i) {
 			m_updBufIds.push_back(i);
@@ -357,7 +377,7 @@ public:
 	void SetUpdateAt(size_t id, const IndirectCommand& indirectCommand) override {
 		m_updBufIds.push_back(id);
 		m_updBuf.push_back(indirectCommand);
-		m_updMaxId = std::max<size_t>(m_updMaxId, id);
+		m_updSize = std::max<size_t>(m_updSize, id + 1);
 	}
 
 	virtual void PerformUpdate(
@@ -372,16 +392,16 @@ public:
 			return;
 		}
 
-		if (m_updMaxId >= m_capacity) {
+		if (m_updSize > m_capacity) {
 			IndirectCommandBuffer<IndirectCommand>::Expand(
 				pDevice,
 				pAllocator,
 				pCommandQueueCopy,
 				pCommandQueueDirect,
-				m_updMaxId + 1
+				m_updSize
 			);
 		}
-		m_updMaxId = m_capacity - 1;
+		m_updSize = m_capacity;
 
 		size_t updBufIdsSize{ updCnt * sizeof(UINT) };
 		DynamicAllocation updBufIdsAllocation{ m_pDynamicUploadHeap->Allocate(updBufIdsSize) };
@@ -399,15 +419,14 @@ public:
 		static const size_t threadBlockSize{ 128 };
 		m_pIndirectUpdater->Dispatch(
 			pCommandListDirect->m_pCommandList,
-			static_cast<UINT>(std::ceil(updCnt / float(threadBlockSize))), 1, 1,
+			(updCnt + threadBlockSize - 1) / threadBlockSize, 1, 1,
 			[&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, UINT& rootParamId) {
 				pCommandList->SetComputeRoot32BitConstant(rootParamId++, updCnt, 0);
 				pCommandList->SetComputeRootShaderResourceView(rootParamId++, updBufIdsAllocation.gpuAddress);
 				pCommandList->SetComputeRootShaderResourceView(rootParamId++, updBufAllocation.gpuAddress);
-				
-				pCommandList->SetDescriptorHeaps(1, m_pDescHeapManagerCbvSrvUav->GetDescriptorHeap().GetAddressOf());
-				pCommandList->SetComputeRootDescriptorTable(rootParamId++,
-					m_pDescHeapRangeUav->GetGpuHandle()
+				pCommandList->SetComputeRootUnorderedAccessView(
+					rootParamId++,
+					m_pIndirectCommandBuffer->GetResource()->GetGPUVirtualAddress()
 				);
 			}
 		);

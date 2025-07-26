@@ -69,13 +69,7 @@ private:
         rootParameters[rpId++].InitAsConstants(1, 0);
         rootParameters[rpId++].InitAsShaderResourceView(0);
         rootParameters[rpId++].InitAsShaderResourceView(1);
-
-        CD3DX12_DESCRIPTOR_RANGE1 rangeUavIndirect[1]{};
-        rangeUavIndirect[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-        rootParameters[rpId++].InitAsDescriptorTable(
-            _countof(rangeUavIndirect),
-            rangeUavIndirect
-        );
+        rootParameters[rpId++].InitAsUnorderedAccessView(0);
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);
