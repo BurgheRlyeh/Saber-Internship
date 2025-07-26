@@ -24,6 +24,7 @@
 #include "CommandQueue.h"
 #include "CommandList.h"
 #include "DepthBuffer.h"
+#include "GPUResource.h"
 #include "GBuffer.h"
 #include "IndirectUpdater.h"
 #include "PostProcessing.h"
@@ -62,8 +63,8 @@ class Renderer {
     UINT m_currBackBufferId{};
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
 
-	// By default, enable V-Sync.
-	// Can be toggled with the V key.
+    // By default, enable V-Sync.
+    // Can be toggled with the V key.
     bool m_isTearingSupported{};
     bool m_isVSync{};
 
@@ -105,7 +106,7 @@ class Renderer {
     std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
 
     enum RingBufferId {
-	    Cpu = 0,
+        Cpu = 0,
         Gpu = 1,
         GpuWritable = 2,
         Count = 3

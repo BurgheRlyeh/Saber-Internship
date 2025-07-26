@@ -1,5 +1,7 @@
 #include "GPUResource.h"
 
+std::shared_ptr<GPUResource> GPUResource::m_pCounterResetter = nullptr;
+
 GPUResource::GPUResource(
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	const HeapData& heapData,
@@ -7,6 +9,21 @@ GPUResource::GPUResource(
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) {
 	CreateResource(pAllocator, heapData, resData, allocationFlags);
+}
+
+void GPUResource::ResetCounter(
+	std::shared_ptr<CommandList> pCommandList,
+	uint64_t counterOffset
+) const {
+	assert(m_pCounterResetter);
+
+	pCommandList->m_pCommandList->CopyBufferRegion(
+		GetResource().Get(),
+		counterOffset,
+		m_pCounterResetter->GetResource().Get(),
+		0,
+		sizeof(UINT)
+	);
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> GPUResource::GetResource() const {

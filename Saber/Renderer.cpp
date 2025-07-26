@@ -25,6 +25,7 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    GPUResource::DestroyCounterResetter();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
@@ -56,6 +57,13 @@ void Renderer::Initialize(HWND hWnd) {
     m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
     m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
+
+    GPUResource::InitCounterResetter(
+        m_pDevice,
+        m_pAllocator,
+        m_pCommandQueueCopy,
+        m_pCommandQueueDirect
+    );
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
@@ -122,9 +130,9 @@ void Renderer::Initialize(HWND hWnd) {
         m_pDevice,
         m_pAllocator,
         m_pResourceDescHeapManager, 1024
-	);
+    );
 
-	const size_t RingBufferDefaultSize{ 1024 };
+    const size_t RingBufferDefaultSize{ 1024 };
     m_pRingBuffers.resize(RingBufferId::Count);
     m_pRingBuffers[RingBufferId::Cpu] = std::make_shared<DynamicUploadHeap>(
         m_pAllocator,
@@ -325,7 +333,7 @@ void Renderer::Initialize(HWND hWnd) {
                     m_pRingBuffers[RingBufferId::Cpu],
                     IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
                 );
-            });
+                });
         }
 
         // cameras for all scenes
@@ -362,7 +370,7 @@ void Renderer::Initialize(HWND hWnd) {
                 }
 
                 pScene->SetSceneReadiness(true);
-            });
+                });
         }
     }
     m_pPSOLibrary->FlushCacheToFile();
@@ -489,7 +497,7 @@ void Renderer::Update() {
         pScene->Update(deltaTime.count() * 1e-9f, pCommandList);
         m_pCommandQueueDirect->ExecuteCommandListImmediately(pCommandList);
 
-    	pScene->UpdateRenderSubsystems(
+        pScene->UpdateRenderSubsystems(
             m_pDevice,
             m_pAllocator,
             m_pCommandQueueCopy,
@@ -571,7 +579,7 @@ void Renderer::Render() {
         );
         PIXEndEvent(commandListForStaticObjects->m_pCommandList.Get());
         commandListForStaticObjects->SetReadyForExection();
-    });
+        });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
@@ -616,7 +624,7 @@ void Renderer::Render() {
         commandListForDynamicObjects->SetReadyForExection();
         });
 
-    
+
     uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
@@ -692,7 +700,7 @@ void Renderer::Render() {
             PIXEndEvent(commandListAfterFrame->m_pCommandList.Get());
             commandListAfterFrame->SetReadyForExection();
         }
-    });
+        });
 
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
@@ -764,7 +772,7 @@ void Renderer::EnableDebugLayer() {
 void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
     ThrowIfFailed(pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue)));
-    
+
     pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
     pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
     pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
@@ -782,7 +790,7 @@ void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice
         D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
         D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
         D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
-        
+
         D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_HAS_NO_RESOURCE,            // For D3D12MA compatibility
 
         D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
