@@ -26,6 +26,7 @@ protected:
 	
 	uint32_t m_size{};
 	uint32_t m_capacity{};
+	uint32_t m_counterOffset{};
 
 public:
 	IndirectCommandBuffer(
@@ -108,6 +109,7 @@ protected:
 			D3D12_UAV_COUNTER_PLACEMENT_ALIGNMENT
 		) };
 		m_capacity = bufferSize / sizeof(IndirectCommand);
+		m_counterOffset = bufferSize;
 
 		m_pIndirectCommandBuffer = std::make_shared<GPUResource>(
 			pAllocator,
@@ -149,13 +151,15 @@ protected:
 			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
 			.Buffer{
 				.NumElements{ m_capacity },
-				.StructureByteStride{ sizeof(IndirectCommand) }
+				.StructureByteStride{ sizeof(IndirectCommand) },
+				.CounterOffsetInBytes{ m_counterOffset }
 			}
 		};
 		m_pAppendIndirectCommandBuffer->CreateUnorderedAccessView(
 			pDevice,
 			m_pDescHeapRangeUav->GetNextCpuHandle(),
-			&uavDesc
+			&uavDesc,
+			m_pAppendIndirectCommandBuffer->GetResource()
 		);
 	}
 
