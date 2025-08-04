@@ -206,6 +206,7 @@
     <ClInclude Include="Texture.h" />
     <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Vertices.h" />
+    <ClInclude Include="VisibilityBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />

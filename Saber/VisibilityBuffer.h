@@ -1,0 +1,104 @@
+#pragma once
+
+#include "Headers.h"
+
+#include <bit>
+#include <climits>
+
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "GPUResource.h"
+
+class VisibilityBuffer {
+	static constexpr size_t BITS_PER_UINT4{ 4 * sizeof(uint32_t) * CHAR_BIT };
+	static constexpr size_t LOG2_BITS_PER_UINT4{ std::bit_width(BITS_PER_UINT4) - 1 };
+
+	std::shared_ptr<GPUResource> m_pVisibilityBuffer{};
+	std::shared_ptr<DescHeapRange> m_pDescHeapRangeUav{};
+
+	size_t m_capacity{};
+
+public:
+	VisibilityBuffer(
+		const std::wstring& renderObjectName,
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+		size_t& numElements
+	) {
+		m_pDescHeapRangeUav = pDescHeapManagerCbvSrvUav->AllocateRange(
+			(renderObjectName + L"/VisibilityBuffer/Uav").c_str(),
+			1,
+			D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+		);
+
+		m_capacity = ElementsToCapacity(numElements);
+		numElements = CapacityToElements(m_capacity);
+
+		m_pVisibilityBuffer = std::make_shared<GPUResource>(
+			pAllocator,
+			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+			GPUResource::ResourceData{
+				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+					m_capacity,
+					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+				) },
+				.resInitState{ D3D12_RESOURCE_STATE_COPY_DEST }
+			}
+		);
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
+			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
+			.Buffer{
+				.NumElements{ m_capacity },
+				.StructureByteStride{ 4 * sizeof(uint32_t) }
+			}
+		};
+		m_pVisibilityBuffer->CreateUnorderedAccessView(
+			pDevice,
+			m_pDescHeapRangeUav->GetNextCpuHandle(),
+			&uavDesc
+		);
+
+		std::vector<uint32_t> nulls(m_capacity, 0);
+		D3D12_SUBRESOURCE_DATA subresData{
+			.pData{ nulls.data() },
+			.RowPitch{ static_cast<UINT>(nulls.size()) * sizeof(uint32_t) },
+			.SlicePitch{ subresData.RowPitch }
+		};
+
+		std::shared_ptr<GPUResource> pIntermediate{};
+		std::shared_ptr<CommandList> pCommandListCopy{
+			pCommandQueueCopy->GetCommandList(pDevice)
+		};
+		m_pVisibilityBuffer->UpdateSubresource(
+			pAllocator,
+			pCommandListCopy,
+			0,
+			1,
+			&subresData,
+			pIntermediate
+		);
+		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+
+		std::shared_ptr<CommandList> pCommandListDirect{ pCommandQueueDirect->GetCommandList(pDevice) };
+		ResourceTransition(
+			pCommandListDirect->m_pCommandList,
+			m_pVisibilityBuffer->GetResource(),
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	}
+
+private:
+	static size_t ElementsToCapacity(size_t numElements) {
+		numElements = std::max<size_t>(BITS_PER_UINT4, std::bit_ceil(numElements));
+		return numElements >> LOG2_BITS_PER_UINT4;
+	}
+
+	static size_t CapacityToElements(size_t numElements) {
+		return numElements << LOG2_BITS_PER_UINT4;
+	}
+};
