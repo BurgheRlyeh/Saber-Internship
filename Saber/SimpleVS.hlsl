@@ -2,8 +2,10 @@
 #include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+uint4 modelCbId : register(b2);
+
+ConstantBuffer<ModelBuffer> ModelCBs[] : register(b3);
 
 struct VSOutput
 {

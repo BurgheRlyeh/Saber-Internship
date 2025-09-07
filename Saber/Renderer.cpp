@@ -41,6 +41,7 @@ void Renderer::Initialize(HWND hWnd) {
 
 #if defined(_DEBUG)
     EnableDebugLayer();
+    //EnableGPUBasedValidation();
 #endif
 
     // device and allocator
@@ -91,7 +92,7 @@ void Renderer::Initialize(HWND hWnd) {
         L"DescHeapManagerCbvSrvUav",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        4096,
+        8192,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     );
 
@@ -129,7 +130,8 @@ void Renderer::Initialize(HWND hWnd) {
         L"../../Resources/Textures/",
         m_pDevice,
         m_pAllocator,
-        m_pResourceDescHeapManager, 1024
+        m_pResourceDescHeapManager,
+        1024
     );
 
     const size_t RingBufferDefaultSize{ 1024 };
@@ -153,44 +155,43 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_isInitialized = true;
 
-    // CreateCbMeshUpdater scenes
     {
-        m_pScenes.resize(4);
+        constexpr size_t ScenesCount{ 4 };
+        m_pScenes.resize(ScenesCount);
 
-        // 0
-        m_pScenes[0] = std::make_unique<Scene>(
-            L"0",
-            m_pAllocator,
-            m_pRingBuffers[RingBufferId::Cpu],
-            m_pRingBuffers[RingBufferId::Gpu],
-            m_pDepthBuffers[0],
-            m_pGBuffers[0]
-        );
-
-        // 1
-        {
-            std::unique_ptr<Scene>& pScene{ m_pScenes[1] };
+        auto copyPostProcess{ CopyPostProcessing::Create(
+            m_pDevice,
+            m_pMeshAtlas,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ) };
+        auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(
+            m_pDevice,
+            m_pShaderAtlas,
+            m_pRootSignatureAtlas,
+            m_pPSOLibrary
+        ) };
+        for (size_t i{}; i < ScenesCount; ++i) {
+            std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
             pScene = std::make_unique<Scene>(
-                L"1",
+                L"Scene" + std::to_wstring(i),
+                m_pDevice,
                 m_pAllocator,
                 m_pRingBuffers[RingBufferId::Cpu],
                 m_pRingBuffers[RingBufferId::Gpu],
+                m_pResourceDescHeapManager,
                 m_pDepthBuffers[0],
                 m_pGBuffers[0]
             );
-            pScene->SetPostProcessing(CopyPostProcessing::Create(
-                m_pDevice,
-                m_pMeshAtlas,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
-            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-                m_pDevice,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
+            pScene->SetPostProcessing(copyPostProcess);
+            pScene->SetDeferredShadingComputeObject(deferredShading);
+        }
+        
+        std::vector<std::function<void(std::unique_ptr<Scene>&)>> sceneObjectAdders;
+        sceneObjectAdders.resize(ScenesCount);
+        sceneObjectAdders[0] = [&](std::unique_ptr<Scene>& pScene) {};
+        sceneObjectAdders[1] = [&](std::unique_ptr<Scene>& pScene) {
             pScene->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
                 m_pDevice,
                 m_pAllocator,
@@ -204,41 +205,9 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pMaterialManager,
                 DirectX::XMMatrixIdentity()
             ));
-
-            pScene->InitializeRenderSubsystems(
-                m_pDevice,
-                m_pAllocator,
-                m_pResourceDescHeapManager,
-                m_pRingBuffers[RingBufferId::Cpu],
-                IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
-            );
-        }
-
-        // 2
-        {
-            std::unique_ptr<Scene>& pScene{ m_pScenes[2] };
-            pScene = std::make_unique<Scene>(
-                L"2",
-                m_pAllocator,
-                m_pRingBuffers[RingBufferId::Cpu],
-                m_pRingBuffers[RingBufferId::Gpu],
-                m_pDepthBuffers[0],
-                m_pGBuffers[0]
-            );
+        };
+        sceneObjectAdders[2] = [&](std::unique_ptr<Scene>& pScene) {
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->SetPostProcessing(CopyPostProcessing::Create(
-                m_pDevice,
-                m_pMeshAtlas,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
-            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-                m_pDevice,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
             pScene->AddDynamicObject(TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDevice,
                 m_pAllocator,
@@ -268,77 +237,38 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pMaterialManager,
                 DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
             ));
+        };
+        sceneObjectAdders[3] = [&](std::unique_ptr<Scene>& pScene) {
+            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
+            DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
 
-            pScene->InitializeRenderSubsystems(
-                m_pDevice,
-                m_pAllocator,
-                m_pResourceDescHeapManager,
-                m_pRingBuffers[RingBufferId::Cpu],
-                IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
-            );
-        }
-
-        // 3
-        {
-            std::unique_ptr<Scene>& pScene{ m_pScenes[3] };
-            pScene = std::make_unique<Scene>(
-                L"3",
-                m_pAllocator,
-                m_pRingBuffers[RingBufferId::Cpu],
-                m_pRingBuffers[RingBufferId::Gpu],
-                m_pDepthBuffers[0],
-                m_pGBuffers[0]
-            );
-            pScene->SetPostProcessing(CopyPostProcessing::Create(
-                m_pDevice,
-                m_pMeshAtlas,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
-            pScene->SetDeferredShadingComputeObject(DeferredShading::CreateDefferedShadingComputeObject(
-                m_pDevice,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary
-            ));
-            m_pJobSystem->AddJob([&] {
-                std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-                DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
-
-                std::random_device rd;
-                std::mt19937 gen(rd());
-                std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-                for (size_t i{}; i < 100; ++i) {
-                    pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                        m_pDevice,
-                        m_pAllocator,
-                        m_pCommandQueueCopy,
-                        m_pCommandQueueDirect,
-                        m_pMeshAtlas,
-                        filepathGrass,
-                        m_pShaderAtlas,
-                        m_pRootSignatureAtlas,
-                        m_pPSOLibrary,
-                        m_pGBuffers[0],
-                        m_pMaterialManager,
-                        scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
-                    ));
-                }
-
-                pScene->InitializeRenderSubsystems(
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+            for (size_t i{}; i < 100; ++i) {
+                pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                     m_pDevice,
                     m_pAllocator,
-                    m_pResourceDescHeapManager,
-                    m_pRingBuffers[RingBufferId::Cpu],
-                    IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
-                );
-                });
-        }
+                    m_pCommandQueueCopy,
+                    m_pCommandQueueDirect,
+                    m_pMeshAtlas,
+                    filepathGrass,
+                    m_pShaderAtlas,
+                    m_pRootSignatureAtlas,
+                    m_pPSOLibrary,
+                    m_pGBuffers[0],
+                    m_pMaterialManager,
+                    scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
+                ));
+            }
+        };
 
-        // cameras for all scenes
-        for (std::unique_ptr<Scene>& pScene : m_pScenes) {
-            m_pJobSystem->AddJob([&]() {
+        // cameras and lights for all scenes
+        for (size_t i{}; i < ScenesCount; ++i) {
+            std::function<void(std::unique_ptr<Scene>&)> addObjects{ sceneObjectAdders[i] };
+            m_pJobSystem->AddJob([&, i, addObjects]() {
+                std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
+
                 // dynamic camera
                 pScene->AddCamera(std::make_shared<DynamicCamera>());
 
@@ -369,8 +299,17 @@ void Renderer::Initialize(HWND hWnd) {
                     );
                 }
 
+                addObjects(pScene);
+                pScene->InitializeRenderSubsystems(
+                    m_pDevice,
+                    m_pAllocator,
+                    m_pResourceDescHeapManager,
+                    m_pRingBuffers[RingBufferId::Cpu],
+                    IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
+                );
+
                 pScene->SetSceneReadiness(true);
-                });
+            });
         }
     }
     m_pPSOLibrary->FlushCacheToFile();
@@ -575,7 +514,8 @@ void Renderer::Render() {
             commandListForStaticObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
-            rtv
+            rtv,
+            m_pResourceDescHeapManager
         );
         PIXEndEvent(commandListForStaticObjects->m_pCommandList.Get());
         commandListForStaticObjects->SetReadyForExection();
@@ -618,14 +558,15 @@ void Renderer::Render() {
             commandListForDynamicObjects->m_pCommandList,
             m_viewport,
             m_scissorRect,
-            rtv
+            rtv,
+            m_pResourceDescHeapManager
         );
         PIXEndEvent(commandListForDynamicObjects->m_pCommandList.Get());
         commandListForDynamicObjects->SetReadyForExection();
         });
 
 
-    uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
+    uint64_t fenceValueAfterHZB{ /*static_cast<uint64_t>(-1)*/ };
     std::shared_ptr<CommandList> commandListForHZB{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterRender); },
@@ -633,7 +574,7 @@ void Renderer::Render() {
         )
     };
 
-    uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
+    uint64_t fenceValueAfterDeferredShading{ /*static_cast<uint64_t>(-1)*/ };
     std::shared_ptr<CommandList> commandListForDeferredShading{
         m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterHZB); },
@@ -767,6 +708,15 @@ void Renderer::EnableDebugLayer() {
     //ThrowIfFailed(D3D12GetInterface(CLSID_D3D12Debug, IID_PPV_ARGS(&debugInterface))); // TODO
     ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
     pDebugInterface->EnableDebugLayer();
+}
+
+void Renderer::EnableGPUBasedValidation()
+{
+    Microsoft::WRL::ComPtr<ID3D12Debug> spDebugController0;
+    Microsoft::WRL::ComPtr<ID3D12Debug1> spDebugController1;
+    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&spDebugController0)));
+    ThrowIfFailed(spDebugController0->QueryInterface(IID_PPV_ARGS(&spDebugController1)));
+    spDebugController1->SetEnableGPUBasedValidation(true);
 }
 
 void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {

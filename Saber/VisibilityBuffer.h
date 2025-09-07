@@ -49,10 +49,12 @@ public:
 			}
 		);
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
+			//.Format{ DXGI_FORMAT_R32_TYPELESS },	// ?
 			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
 			.Buffer{
 				.NumElements{ m_capacity },
-				.StructureByteStride{ 4 * sizeof(uint32_t) }
+				.StructureByteStride{ 4 * sizeof(uint32_t) },
+				//.Flags{ D3D12_BUFFER_UAV_FLAG_RAW }	// ?
 			}
 		};
 		m_pVisibilityBuffer->CreateUnorderedAccessView(

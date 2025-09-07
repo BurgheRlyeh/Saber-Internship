@@ -1,6 +1,6 @@
 #include "IndirectCommand.h"
 
-#define CommandType CbMeshIndirectCommand
+#define CommandType ConstMesh4IndirectCommand
 #include "IndirectCommandUpdater.hlsli"
 
 [numthreads(threadBlockSize, 1, 1)]

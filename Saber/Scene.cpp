@@ -4,9 +4,11 @@
 
 Scene::Scene(
     const std::wstring& name,
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
     std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
+    std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
 ) : m_name(name),
@@ -16,14 +18,11 @@ Scene::Scene(
 	m_pGBuffer(pGBuffer)
 {
     m_pRenderSubsystems.resize(RenderSubsystemId::Count);
-    m_pRenderSubsystems[RenderSubsystemId::Static] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static");
-    m_pRenderSubsystems[RenderSubsystemId::Dynamic] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic");
-    m_pRenderSubsystems[RenderSubsystemId::StaticAlphaKill] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static/AlphaKill");
-    m_pRenderSubsystems[RenderSubsystemId::DynamicAlphaKill] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic/AlphaKill");
+    for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
+        m_pRenderSubsystems[i] =
+            std::make_shared<RenderSubsystem<CbConstMesh4IndirectCommand>>(m_name + L"/RenderSubsystem" + std::to_wstring(i + 1), pDevice);
+        m_pRenderSubsystems[i]->CreateModelBuffersRange(pDescHeapManagerCbvSrvUav);
+    }
 	
     m_pSceneCb = std::make_shared<ConstantBuffer>(
         pAllocator,
@@ -203,7 +202,8 @@ void Scene::RenderStaticObjects(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
@@ -233,6 +233,7 @@ void Scene::RenderStaticObjects(
             0,
             m_sceneCBDynamicAllocation.gpuAddress
         );
+        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
     };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
@@ -246,7 +247,8 @@ void Scene::RenderDynamicObjects(
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
@@ -276,6 +278,7 @@ void Scene::RenderDynamicObjects(
             0,
             m_sceneCBDynamicAllocation.gpuAddress
         );
+        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
@@ -322,14 +325,14 @@ void Scene::RenderStaticAlphaKillObjects(
             m_sceneCBDynamicAllocation.gpuAddress
         );
         pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-        pCommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+        pCommandList->SetGraphicsRootDescriptorTable(5, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pRenderSubsystems[StaticAlphaKill]->Render(
         pCommandList,
-        commandListPrepare
+        commandListPrepare, 1
     );
 }
 

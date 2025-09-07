@@ -6,8 +6,12 @@
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
 
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+uint4 modelCbId : register(b2);
 
-ConstantBuffer<MaterialCB> Materials : register(b2);
+ConstantBuffer<MaterialCB> Materials : register(b3);
+
+ConstantBuffer<ModelBuffer> ModelCBs[] : register(b4);
+
 Texture2D<float4> MaterialsTextures[] : register(t0);
 
 SamplerState s1 : register(s0);

@@ -3,10 +3,10 @@
 #include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+uint4 modelCbId : register(b2);
 
-SamplerState s1 : register(s0);
+ConstantBuffer<ModelBuffer> ModelCBs[] : register(b3);
 
 struct PSInput
 {

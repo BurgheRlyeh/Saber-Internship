@@ -51,6 +51,8 @@ public:
 
     virtual void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) {}
     virtual void FillIndirectCommand(CbMesh4IndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(ConstMesh4IndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) {}
 
 	virtual void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,

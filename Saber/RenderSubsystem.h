@@ -11,23 +11,39 @@
 template <typename IndirectCommand>
 class RenderSubsystem {
 	std::wstring m_name{};
+
+	Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
+
+	size_t m_capacity{};
+
 	std::vector<std::shared_ptr<RenderObject>> m_objects{};
 	std::mutex m_objectsMutex{};
 
 	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
-	std::shared_ptr<DescHeapRange> m_pVisibilityBufferUavRange{};
-	std::shared_ptr<GPUResource> m_pVisibilityBuffer{};
+	std::shared_ptr<DescHeapRange> m_pModelBuffersCbvRange{};
 
 public:
-	RenderSubsystem(const std::wstring& name) : m_name(name) {
+	RenderSubsystem(
+		const std::wstring& name,
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		size_t capacity = 128
+	) : m_name(name),
+		m_pDevice(pDevice),
+		m_capacity(capacity)
+	{
 		IndirectCommandBase<IndirectCommand>::Assert();
+
+		m_objects.reserve(m_capacity);
 	}
 
-	void Add(std::shared_ptr<RenderObject> pObject) {
+	bool Add(std::shared_ptr<RenderObject> pObject) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
+		if (m_objects.size() == m_capacity) {
+			return false;
+		}
 		if (!m_objects.empty()) {
-			//assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
+			assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
 		}
 		m_objects.push_back(pObject);
 		if (m_pIndirectCommandBuffer) {
@@ -35,59 +51,36 @@ public:
 			pObject->FillIndirectCommand(indirectCommand);
 			m_pIndirectCommandBuffer->SetUpdateAt(m_objects.size() - 1, indirectCommand);
 		}
+		if (m_pModelBuffersCbvRange) {
+			// TODO fix ModelBuffer struct specification
+			std::shared_ptr<MeshRenderObject<ModelBuffer>> pMeshObject{
+				std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(pObject)
+			};
+			pMeshObject->AllocateModelBufferCbv(m_pDevice, m_pModelBuffersCbvRange);
+		}
 	}
 
 	void Render(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-		const std::function<void()>& commandListPrepare
+		const std::function<void()>& commandListPrepare,
+		bool offset = false
 	) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
 		if (m_objects.empty()) {
 			return;
 		}
-
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
+		pCommandList->SetGraphicsRootDescriptorTable(3 + offset, m_pModelBuffersCbvRange->GetGpuHandle());
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
 
-	void CreateVisibilityBuffer(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	void CreateModelBuffersRange(
 		std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
 	) {
-		uint32_t bufferSize{ (m_objects.size() + 31) / 32 };
-
-		m_pVisibilityBuffer = std::make_shared<GPUResource>(
-			pAllocator,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			GPUResource::ResourceData{
-				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
-					bufferSize,
-					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-				) },
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-			}
-		);
-
-
-		m_pVisibilityBufferUavRange = pResDescHeapManager->AllocateRange(
-			m_name + L"/VisibilityBufferUavRange",
-			1
-		);
-
-		D3D12_UNORDERED_ACCESS_VIEW_DESC desc{
-			.Format{ DXGI_FORMAT_R32_TYPELESS },
-			.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
-			.Buffer{
-				.NumElements{ bufferSize },
-				.Flags{ D3D12_BUFFER_UAV_FLAG_RAW }
-			}
-		};
-		m_pVisibilityBuffer->CreateUnorderedAccessView(
-			pDevice,
-			m_pVisibilityBufferUavRange->GetNextCpuHandle(),
-			&desc
+		m_pModelBuffersCbvRange = pResDescHeapManager->AllocateRange(
+			m_name + L"/ModelBuffersCbvRange",
+			m_capacity
 		);
 	}
 

@@ -28,6 +28,7 @@ protected:
 
     ModelBuffer m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCb{};
+    size_t m_modelBufferId{ static_cast<size_t>(-1) };
 
 public:
     MeshRenderObject(
@@ -64,6 +65,13 @@ public:
         );
     }
 
+    void AllocateModelBufferCbv(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<DescHeapRange> pModelCBVsRange
+    ) {
+        m_modelBufferId = pModelCBVsRange->GetNextId();
+        m_pModelCb->CreateConstantBufferView(pDevice, pModelCBVsRange->GetCpuHandle(m_modelBufferId));
+    }
     ModelBuffer& GetModelBuffer() {
         return m_modelBuffer;
     }
@@ -112,6 +120,57 @@ public:
         };
     }
 
+    void FillIndirectCommand(ConstMesh4IndirectCommand& indirectCommand) override {
+        indirectCommand = ConstMesh4IndirectCommand{
+            .rootConstant{ static_cast<uint32_t>(m_modelBufferId) },
+            .indexBufferView{
+                *m_pMesh->GetIndexBufferView()
+            },
+            .vertexBufferView{ *m_pMesh->GetVertexBufferView() },
+            .vertexBufferView1{ *m_pMesh->GetVertexBufferView(1) },
+            .vertexBufferView2{ *m_pMesh->GetVertexBufferView(2) },
+            .vertexBufferView3{ *m_pMesh->GetVertexBufferView(3) },
+            .drawArguments{
+                .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
+                .InstanceCount{ 1 }
+            },
+        };
+    }
+
+    void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) override {
+        indirectCommand = CbConstMesh4IndirectCommand{
+            .constantBufferView{
+                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+            },
+            .rootConstant{ DirectX::XMUINT4{ static_cast<uint32_t>(m_modelBufferId), 0, 0, 0 } },
+            .indexBufferView{
+                *m_pMesh->GetIndexBufferView()
+            },
+            .vertexBufferView{ *m_pMesh->GetVertexBufferView() },
+            .vertexBufferView1{ *m_pMesh->GetVertexBufferView(1) },
+            .vertexBufferView2{ *m_pMesh->GetVertexBufferView(2) },
+            .vertexBufferView3{ *m_pMesh->GetVertexBufferView(3) },
+            .drawArguments{
+                .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
+                .InstanceCount{ 1 }
+            },
+        };
+    }
+
+    std::function<void(void*, size_t)> VerticesPositionsBBHandler() {
+        return [&](void* data, size_t size) {
+            const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
+            for (size_t i{}; i < size; ++i) {
+                m_modelBuffer.bbmin.x = std::min(m_modelBuffer.bbmin.x, positions[i].x);
+                m_modelBuffer.bbmin.y = std::min(m_modelBuffer.bbmin.y, positions[i].y);
+                m_modelBuffer.bbmin.z = std::min(m_modelBuffer.bbmin.z, positions[i].z);
+                m_modelBuffer.bbmax.x = std::max(m_modelBuffer.bbmax.x, positions[i].x);
+                m_modelBuffer.bbmax.y = std::max(m_modelBuffer.bbmax.y, positions[i].y);
+                m_modelBuffer.bbmax.z = std::max(m_modelBuffer.bbmax.z, positions[i].z);
+            }
+        };
+    }
+
 protected:
     void RenderJob(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
@@ -131,10 +190,15 @@ protected:
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         UINT& rootParamId
     ) const override {
-        pCommandListDirect->SetGraphicsRootConstantBufferView(
-            rootParamId++,
-            m_pModelCb->GetResource()->GetGPUVirtualAddress()
-        );
+        if (m_modelBufferId == static_cast<size_t>(-1)) {
+            pCommandListDirect->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+            );
+        }
+        else {
+            pCommandListDirect->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
+        }
     }
 
     void DrawCall(
@@ -152,9 +216,9 @@ class TestRenderObject : protected MeshRenderObject<ModelBuffer> {
 protected:
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        {   "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {  "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0,    DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 };
 
@@ -214,18 +278,10 @@ public:
             20, 22, 21, 20, 23, 22
         };
 
-        DirectX::XMFLOAT4 bbmin{
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            0.f
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        DirectX::XMFLOAT4 bbmax{
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            0.f
-        };
+
         Mesh::MeshDataIndicesVertices meshData{
             // indices data
             .indices{ indices },
@@ -238,26 +294,12 @@ public:
 				{
 					.data{ positions },
 					.size{ sizeof(*positions) },
-                    .handler{ [&](void* data, size_t size) {
-                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
-                        for (size_t i{}; i < size; ++i) {
-                            bbmin.x = std::min(bbmin.x, positions[i].x);
-                            bbmin.y = std::min(bbmin.y, positions[i].y);
-                            bbmin.z = std::min(bbmin.z, positions[i].z);
-                            bbmax.x = std::max(bbmax.x, positions[i].x);
-                            bbmax.y = std::max(bbmax.y, positions[i].y);
-                            bbmax.z = std::max(bbmax.z, positions[i].z);
-                        }
-                    }}
+                    .handler{ pObj->VerticesPositionsBBHandler() }
 				},
 				{ .data{ normals }, .size{ sizeof(*normals) } },
 				{ .data{ tangents }, .size{ sizeof(*tangents) } },
 				{ .data{ uvs }, .size{ sizeof(*uvs) } }
 			}
-        };
-
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
         pObj->InitMaterial(
@@ -269,8 +311,8 @@ public:
             },
             ShaderData{
                 pShaderAtlas,
-                L"SimpleUVVertexShader.cso",
-                L"SimpleUVPixelShader.cso"
+                L"SimpleVS.cso",
+                L"SimplePS.cso"
             },
             PipelineStateData{
                 pPSOLibrary,
@@ -307,35 +349,17 @@ public:
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
-        DirectX::XMFLOAT4 bbmin{
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            0.f
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        DirectX::XMFLOAT4 bbmax{
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            0.f
-        };
+
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
                     .size{ sizeof(DirectX::XMFLOAT3) },
-                    .handler{ [&](void* data, size_t size) {
-                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
-                        for (size_t i{}; i < size; ++i) {
-                            bbmin.x = std::min(bbmin.x, positions[i].x);
-                            bbmin.y = std::min(bbmin.y, positions[i].y);
-                            bbmin.z = std::min(bbmin.z, positions[i].z);
-                            bbmax.x = std::max(bbmax.x, positions[i].x);
-                            bbmax.y = std::max(bbmax.y, positions[i].y);
-                            bbmax.z = std::max(bbmax.z, positions[i].z);
-                        }
-                    }}
+                    .handler{ pObj->VerticesPositionsBBHandler() }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -352,9 +376,6 @@ public:
             }
         };
 
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
-        };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
         pObj->InitMaterial(
             pDevice,
@@ -365,8 +386,8 @@ public:
             },
             ShaderData{
                 pShaderAtlas,
-                L"SimpleUVVertexShader.cso",
-                L"SimpleUVPixelShader.cso"
+                L"SimpleVS.cso",
+                L"SimplePS.cso"
             },
             PipelineStateData{
                 pPSOLibrary,
@@ -402,9 +423,15 @@ private:
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
         };
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // model CB
+        size_t rp{}, spCbv{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
+        rootParameters[rp++].InitAsConstantBufferView(spCbv++); // scene CB
+        rootParameters[rp++].InitAsConstantBufferView(spCbv++); // model CB
+        rootParameters[rp++].InitAsConstants(4, spCbv++);       // model CB ID
+
+        CD3DX12_DESCRIPTOR_RANGE1 rangeCbvs[1]{};
+        rangeCbvs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, spCbv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvs), rangeCbvs);
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -465,35 +492,17 @@ public:
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
-        DirectX::XMFLOAT4 bbmin{
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            std::numeric_limits<float>::max(),
-            0.f
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
         };
-        DirectX::XMFLOAT4 bbmax{
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            0.f
-        };
+
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
                     .size{ sizeof(DirectX::XMFLOAT3) },
-                    .handler{ [&](void* data, size_t size) {
-                        const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
-                        for (size_t i{}; i < size; ++i) {
-                            bbmin.x = std::min(bbmin.x, positions[i].x);
-                            bbmin.y = std::min(bbmin.y, positions[i].y);
-                            bbmin.z = std::min(bbmin.z, positions[i].z);
-                            bbmax.x = std::max(bbmax.x, positions[i].x);
-                            bbmax.y = std::max(bbmax.y, positions[i].y);
-                            bbmax.z = std::max(bbmax.z, positions[i].z);
-                        }
-                    }}
+                    .handler{ pObj->VerticesPositionsBBHandler() }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -510,9 +519,6 @@ public:
             }
         };
 
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
-        };
         pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
         pObj->InitMaterial(
             pDevice,
@@ -523,8 +529,8 @@ public:
             },
             ShaderData{
                 pShaderAtlas,
-                L"AlphaVS.cso",
-                L"AlphaPS.cso"
+                L"AlphaKillVS.cso",
+                L"AlphaKillPS.cso"
             },
             PipelineStateData{
                 pPSOLibrary,
@@ -560,17 +566,24 @@ protected:
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
         };
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // model CB
+        size_t rp{}, srCbv{}, srSrv{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[6]{};
+        rootParameters[rp++].InitAsConstantBufferView(srCbv++); // scene CB
+
+        rootParameters[rp++].InitAsConstantBufferView(srCbv++); // model CB
+        rootParameters[rp++].InitAsConstants(4, srCbv++);       // model CB id
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeCbvsMaterials[1]{};
-        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);
-        rootParameters[2].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials, D3D12_SHADER_VISIBILITY_PIXEL);
+        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, srCbv++);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials/*, D3D12_SHADER_VISIBILITY_PIXEL*/);
+
+        CD3DX12_DESCRIPTOR_RANGE1 rangeCbvs[1]{};
+        rangeCbvs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, srCbv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvs), rangeCbvs);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
-        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
-        rootParameters[3].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial, D3D12_SHADER_VISIBILITY_PIXEL);
+        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, srSrv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
             .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },

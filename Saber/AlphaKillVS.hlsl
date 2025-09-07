@@ -1,10 +1,15 @@
+#include "Math.hlsli"
+#include "MaterialCB.h"
 #include "ModelBuffer.h"
 #include "SceneBuffer.h"
 
-
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-
 ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+uint4 modelCbId : register(b2);
+
+ConstantBuffer<MaterialCB> Materials : register(b3);
+
+ConstantBuffer<ModelBuffer> ModelCBs[] : register(b4);
 
 struct VSOutput
 {

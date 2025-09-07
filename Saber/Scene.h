@@ -41,7 +41,7 @@ class Scene {
         DynamicAlphaKill = 3,
         Count = 4
     };
-    std::vector<std::shared_ptr<RenderSubsystem<CbMesh4IndirectCommand>>> m_pRenderSubsystems{};
+    std::vector<std::shared_ptr<RenderSubsystem<CbConstMesh4IndirectCommand>>> m_pRenderSubsystems{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -61,9 +61,11 @@ public:
     Scene() = delete;
     Scene(
         const std::wstring& name,
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
         std::shared_ptr<GBuffer> m_pGBuffer
     );
@@ -126,13 +128,15 @@ public:
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
     );
     void RenderDynamicObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
+        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
     );
     void RenderStaticAlphaKillObjects(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,

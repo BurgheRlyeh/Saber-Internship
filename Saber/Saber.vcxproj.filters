@@ -165,10 +165,10 @@
     <ClInclude Include="LightBuffer.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="Vertices.h">
+    <ClInclude Include="VisibilityBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="VisibilityBuffer.h">
+    <ClInclude Include="Vertices.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -264,10 +264,10 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="SimpleUVVertexShader.hlsl">
+    <FxCompile Include="SimpleVS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="SimpleUVPixelShader.hlsl">
+    <FxCompile Include="SimplePS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="CopyPostProcessingVS.hlsl">
@@ -279,23 +279,26 @@
     <FxCompile Include="DeferredShadingComputeShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="AlphaVS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="AlphaPS.hlsl">
+    <FxCompile Include="AlphaKillPS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">
       <Filter>Shaders\FidelityFX</Filter>
     </FxCompile>
-    <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
+    <FxCompile Include="IndirectUpdaterCbMesh4.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="OcclusionCullingFirstPass.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="CbMeshIndirectUpdater.hlsl">
-      <Filter>Shaders\Includes</Filter>
+    <FxCompile Include="IndirectUpdaterConstMesh4.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="AlphaKillVS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="IndirectUpdaterCbConstMesh4.hlsl">
+      <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
