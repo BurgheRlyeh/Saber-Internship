@@ -35,43 +35,33 @@ void GBuffer::Resize(
 		std::shared_ptr<Texture> pTex{ std::make_shared<Texture>(
 			pAllocator,
 			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			GPUResource::ResourceData{
-				m_resDescs[i],
-				m_resDescs[i].Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET ?
-				D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-			}
+			GPUResource::ResourceData{ m_resDescs[i] }
 		) };
 
 		if (pTex->IsRtv()) {
 			pTex->CreateRenderTargetView(pDevice, m_pRtvsRange->GetNextCpuHandle());
 		}
 		if (pTex->IsSrv()) {
-			pTex->CreateShaderResourceView(pDevice, m_pSrvsRange->GetNextCpuHandle() );
+			pTex->CreateShaderResourceView(pDevice, m_pSrvsRange->GetNextCpuHandle());
 		}
 		if (pTex->IsUav()) {
 			pTex->CreateUnorderedAccessView(pDevice, m_pUavsRange->GetNextCpuHandle());
 		}
-
+		
 		m_pTextures[i] = pTex;
 	}
 }
 
 void GBuffer::Clear(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	std::shared_ptr<CommandList> pCommandList,
 	const float* pClearValue
 ) {
 	for (size_t i{}; i < m_pRtvsRange->GetSize(); ++i) {
-		ResourceTransition(
-			pCommandList,
-			m_pTextures[i]->GetResource().Get(),
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		);
+		m_pTextures[i]->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 
-	ClearRenderTarget(
+	m_pTextures[0]->ClearRenderTarget(
 		pCommandList,
-		m_pTextures[0]->GetResource(),
 		m_pRtvsRange->GetCpuHandle(0),
 		pClearValue
 	);

@@ -11,7 +11,7 @@
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
-#include "GBuffer.h"
+#include "TexturePack.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
 #include "ModelBuffer.h"
@@ -173,38 +173,40 @@ public:
 
 protected:
     void RenderJob(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
+        std::shared_ptr<CommandList> pCommandListDirect
     ) const override {
         assert(m_pMesh);
+        auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
         if (m_pMesh) {
-            pCommandListDirect->IASetVertexBuffers(
+            pD3D12CommandList->IASetVertexBuffers(
                 0,
                 static_cast<UINT>(m_pMesh->GetVertexBuffersCount()),
                 m_pMesh->GetVertexBufferViews()
             );
-            pCommandListDirect->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
+            pD3D12CommandList->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
         }
     }
 
     void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         UINT& rootParamId
     ) const override {
+        auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
         if (m_modelBufferId == static_cast<size_t>(-1)) {
-            pCommandListDirect->SetGraphicsRootConstantBufferView(
+            pD3D12CommandList->SetGraphicsRootConstantBufferView(
                 rootParamId++,
                 m_pModelCb->GetResource()->GetGPUVirtualAddress()
             );
         }
         else {
-            pCommandListDirect->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
+            pD3D12CommandList->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
         }
     }
 
     void DrawCall(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
     ) const override {
-        pCommandList->DrawIndexedInstanced(
+        pCommandList->GetD3D12CommandList()->DrawIndexedInstanced(
             static_cast<UINT>(m_pMesh->GetIndicesCount()),
             1,
             0, 0, 0
@@ -233,7 +235,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
+        std::shared_ptr<TexturePack> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -345,7 +347,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
+        std::shared_ptr<TexturePack> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -488,7 +490,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
+        std::shared_ptr<TexturePack> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {

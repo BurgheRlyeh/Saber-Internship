@@ -47,7 +47,7 @@ public:
     };
 
     struct Attribute {
-        const std::string& name{};
+        const std::string name{};
         const size_t& size{};
         std::function<void(void*, size_t)> handler{};
     };

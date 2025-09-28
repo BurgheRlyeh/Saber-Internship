@@ -61,7 +61,7 @@ public:
 	}
 
 	void Render(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+		std::shared_ptr<CommandList> pCommandList,
 		const std::function<void()>& commandListPrepare,
 		bool offset = false
 	) {
@@ -71,7 +71,7 @@ public:
 		}
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
-		pCommandList->SetGraphicsRootDescriptorTable(3 + offset, m_pModelBuffersCbvRange->GetGpuHandle());
+		pCommandList->GetD3D12CommandList()->SetGraphicsRootDescriptorTable(3 + offset, m_pModelBuffersCbvRange->GetGpuHandle());
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
 

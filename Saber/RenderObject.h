@@ -55,7 +55,7 @@ public:
     virtual void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) {}
 
 	virtual void Render(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
 		UINT rootParameterIndex
     ) const;
 
@@ -63,20 +63,20 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature() const;
 
 	void SetPipelineStateAndRootSignature(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
 	) const;
 
 protected:
     virtual void RenderJob(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
+        std::shared_ptr<CommandList> pCommandListDirect
     ) const;
 
     virtual void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+        std::shared_ptr<CommandList> pCommandList,
         UINT& rootParamId
     ) const;
 
     virtual void DrawCall(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
     ) const = 0;
 };

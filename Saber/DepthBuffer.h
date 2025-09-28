@@ -59,7 +59,7 @@ public:
 		UINT height
 	);
 
-	void Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
+	void Clear(std::shared_ptr<CommandList> pCommandList);
 
 	void SetSinglePassDownsampler(
 		std::shared_ptr<SinglePassDownsampler> pSPD,
@@ -70,7 +70,7 @@ public:
 	);
 
 	void CreateHierarchicalDepthBuffer(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+		std::shared_ptr<CommandList> pCommandList,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
 	);
 

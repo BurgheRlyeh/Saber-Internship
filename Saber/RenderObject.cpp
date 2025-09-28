@@ -29,7 +29,7 @@ void RenderObject::InitMaterial(
 }
 
 void RenderObject::Render(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    std::shared_ptr<CommandList> pCommandListDirect,
     UINT rootParameterIndex
 ) const {
     RenderJob(pCommandListDirect);
@@ -46,12 +46,13 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> RenderObject::GetRootSignature() con
     return m_pRootSignatureResource->pRootSignature;
 }
 
-void RenderObject::SetPipelineStateAndRootSignature(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) const {
-    pCommandList->SetPipelineState(m_pPipelineState.Get());
-    pCommandList->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
+void RenderObject::SetPipelineStateAndRootSignature(std::shared_ptr<CommandList> pCommandList) const {
+    auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+    pD3D12CommandList->SetPipelineState(m_pPipelineState.Get());
+    pD3D12CommandList->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 }
 
-void RenderObject::RenderJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}
+void RenderObject::RenderJob(std::shared_ptr<CommandList> pCommandListDirect) const {}
 
-void RenderObject::InnerRootParametersSetter(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect, UINT& rootParamId) const {}
+void RenderObject::InnerRootParametersSetter(std::shared_ptr<CommandList> pCommandListDirect, UINT& rootParamId) const {}
 

@@ -10,10 +10,10 @@
 
 class GBuffer {
 	static inline D3D12_RESOURCE_DESC m_resDescs[]{
-		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),	// uvMaterial
-		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),    // tbn
-		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),    // ddxddy
-		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)	// resulting ua
+		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0,    D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),	// uvMaterial
+		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0,    D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET), // tbn
+		CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, 1, 0, 1, 0,    D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET), // ddxddy
+		CD3DX12_RESOURCE_DESC::Tex2D(    DXGI_FORMAT_R8G8B8A8_UNORM, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)	// resulting uav
 	};
 
 	std::vector<std::shared_ptr<Texture>> m_pTextures{};
@@ -44,9 +44,42 @@ public:
 	);
 
 	void Clear(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+		std::shared_ptr<CommandList> pCommandList,
 		const float* pClearValue = nullptr
 	);
+
+	enum class State : size_t {
+		RENDERING,
+		DEFERRED_SHADING,
+		POST_PROCESSING
+	};
+	void ChangeState(
+		std::shared_ptr<CommandList> pCommandList,
+		const State& state
+	) {
+		switch (state) {
+		case State::RENDERING: {
+			for (size_t i{}; i < m_pRtvsRange->GetSize(); ++i) {
+				m_pTextures[i]->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			}
+			break;
+		}
+		case State::DEFERRED_SHADING: {
+			for (size_t i{}; i < m_pSrvsRange->GetSize(); ++i) {
+				m_pTextures[i]->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			}
+			for (size_t i{}; i < m_pUavsRange->GetSize(); ++i) {
+				m_pTextures[i]->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			}
+			break;
+		}
+		case State::POST_PROCESSING: {
+			for (size_t i{}; i < m_pSrvsRange->GetSize(); ++i) {
+				m_pTextures[i]->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			}
+		}
+		}
+	}
 
 	std::shared_ptr<Texture> GetTexture(size_t id) const;
 

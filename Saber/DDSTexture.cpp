@@ -63,11 +63,6 @@ void DDSTexture::LoadFromDDS(
 	std::shared_ptr<CommandList> pCommandListDirect{
 		pCommandQueueDirect->GetCommandList(pDevice)
 	};
-	ResourceTransition(
-		pCommandListDirect->m_pCommandList,
-		GetResource(),
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-	);
+	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 }

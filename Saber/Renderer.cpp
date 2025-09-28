@@ -69,11 +69,13 @@ void Renderer::Initialize(HWND hWnd) {
     m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
+    constexpr size_t GBUFFER_SIZE{ 3 };
+
     m_pRtvDescHeapManager = std::make_shared<DescriptorHeapManager>(
         L"DescHeapManagerRtv",
         m_pDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        m_numFrames + GBuffer::GetSize() - 1
+        m_numFrames + GBUFFER_SIZE
     );
     m_pBackBuffersDescHeapRange = m_pRtvDescHeapManager->AllocateRange(L"BackBuffersRange", m_numFrames);
 
@@ -117,13 +119,18 @@ void Renderer::Initialize(HWND hWnd) {
     );
 
     m_pGBuffers.resize(1);
-    m_pGBuffers[0] = std::make_shared<GBuffer>(
+    m_pGBuffers[0] = std::make_shared<TexturePack>(
+        L"GBuffer",
         m_pDevice,
         m_pAllocator,
-        m_pRtvDescHeapManager,
+        CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            m_clientWidth, m_clientHeight, 1, 0, 1, 0,
+            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        ),
+        GBUFFER_SIZE,
         m_pResourceDescHeapManager,
-        m_clientWidth,
-        m_clientHeight
+        m_pRtvDescHeapManager
     );
 
     m_pMaterialManager = std::make_shared<MaterialManager>(
@@ -392,7 +399,7 @@ void Renderer::PerformResize() {
     // Any references to the back buffers must be released
     // before the swap chain can be resized.
     for (int i{}; i < m_numFrames; ++i) {
-        m_pBackBuffers[i].Reset();
+        m_pBackBuffers[i] = nullptr;
         m_frameFenceValues[i] = m_frameFenceValues[m_currBackBufferId];
     }
 
@@ -414,7 +421,8 @@ void Renderer::PerformResize() {
 
     // TODO update during switch
     for (auto& pScene : m_pScenes) {
-        pScene->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+        //pScene->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
+        pScene->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
     }
     for (auto& pDepthBuffer : m_pDepthBuffers) {
         pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
@@ -474,29 +482,26 @@ void Renderer::Render() {
     // Some small work doesn't need to be moved to jobs, just as example
     {
         PIXBeginEvent(
-            commandListBeforeFrame->m_pCommandList.Get(),
+            commandListBeforeFrame->GetD3D12CommandList().Get(),
             PIX_COLOR(0, 0, 0),
             L"Before frame part"
         );
-        scene->BeforeFrameJob(commandListBeforeFrame->m_pCommandList);
+        scene->BeforeFrameJob(commandListBeforeFrame);
 
-        ResourceTransition(
-            commandListBeforeFrame->m_pCommandList,
-            backBuffer,
-            D3D12_RESOURCE_STATE_PRESENT,
+        backBuffer->ResourceTransition(
+            commandListBeforeFrame,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
         if (!scene->GetGBuffer()) {
             float clearColor[]{ 0.6f, 0.4f, 0.4f, 1.0f };
-            ClearRenderTarget(
-                commandListBeforeFrame->m_pCommandList,
-                backBuffer,
+            backBuffer->ClearRenderTarget(
+                commandListBeforeFrame,
                 rtv,
                 clearColor
             );
         }
 
-        PIXEndEvent(commandListBeforeFrame->m_pCommandList.Get());
+        PIXEndEvent(commandListBeforeFrame->GetD3D12CommandList().Get());
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
     }
 
@@ -506,18 +511,18 @@ void Renderer::Render() {
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
-            commandListForStaticObjects->m_pCommandList.Get(),
+            commandListForStaticObjects->GetD3D12CommandList().Get(),
             PIX_COLOR(0, 0, 0),
             L"Static Objects rendering"
         );
         scene->RenderStaticObjects(
-            commandListForStaticObjects->m_pCommandList,
+            commandListForStaticObjects,
             m_viewport,
             m_scissorRect,
             rtv,
             m_pResourceDescHeapManager
         );
-        PIXEndEvent(commandListForStaticObjects->m_pCommandList.Get());
+        PIXEndEvent(commandListForStaticObjects->GetD3D12CommandList().Get());
         commandListForStaticObjects->SetReadyForExection();
         });
 
@@ -526,19 +531,19 @@ void Renderer::Render() {
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
-            commandListForAlphaObjects->m_pCommandList.Get(),
+            commandListForAlphaObjects->GetD3D12CommandList().Get(),
             PIX_COLOR(0, 0, 0),
             L"Alpha Objects rendering"
         );
         scene->RenderStaticAlphaKillObjects(
-            commandListForAlphaObjects->m_pCommandList,
+            commandListForAlphaObjects,
             m_viewport,
             m_scissorRect,
             rtv,
             m_pResourceDescHeapManager,
             m_pMaterialManager
         );
-        PIXEndEvent(commandListForAlphaObjects->m_pCommandList.Get());
+        PIXEndEvent(commandListForAlphaObjects->GetD3D12CommandList().Get());
         commandListForAlphaObjects->SetReadyForExection();
         });
 
@@ -550,18 +555,18 @@ void Renderer::Render() {
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
-            commandListForDynamicObjects->m_pCommandList.Get(),
+            commandListForDynamicObjects->GetD3D12CommandList().Get(),
             PIX_COLOR(0, 0, 0),
             L"Dynamic Objects rendering"
         );
         scene->RenderDynamicObjects(
-            commandListForDynamicObjects->m_pCommandList,
+            commandListForDynamicObjects,
             m_viewport,
             m_scissorRect,
             rtv,
             m_pResourceDescHeapManager
         );
-        PIXEndEvent(commandListForDynamicObjects->m_pCommandList.Get());
+        PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
         commandListForDynamicObjects->SetReadyForExection();
         });
 
@@ -589,56 +594,54 @@ void Renderer::Render() {
     m_pJobSystem->AddJob([&]() {
         {
             PIXBeginEvent(
-                commandListForHZB->m_pCommandList.Get(),
+                commandListForHZB->GetD3D12CommandList().Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Building HZB"
             );
             scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
-                commandListForHZB->m_pCommandList,
+                commandListForHZB,
                 m_pResourceDescHeapManager->GetDescriptorHeap()
             );
-            PIXEndEvent(commandListForHZB->m_pCommandList.Get());
+            PIXEndEvent(commandListForHZB->GetD3D12CommandList().Get());
             commandListForHZB->SetReadyForExection();
         }
 
         {
             PIXBeginEvent(
-                commandListForDeferredShading->m_pCommandList.Get(),
+                commandListForDeferredShading->GetD3D12CommandList().Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Deferred shading"
             );
             scene->RunDeferredShading(
-                commandListForDeferredShading->m_pCommandList,
+                commandListForDeferredShading,
                 m_pResourceDescHeapManager,
                 m_pMaterialManager,
                 m_clientWidth,
                 m_clientHeight
             );
-            PIXEndEvent(commandListForDeferredShading->m_pCommandList.Get());
+            PIXEndEvent(commandListForDeferredShading->GetD3D12CommandList().Get());
             commandListForDeferredShading->SetReadyForExection();
         }
 
         {
             PIXBeginEvent(
-                commandListAfterFrame->m_pCommandList.Get(),
+                commandListAfterFrame->GetD3D12CommandList().Get(),
                 PIX_COLOR(0, 0, 0),
                 L"Post Processing"
             );
             scene->RenderPostProcessing(
-                commandListAfterFrame->m_pCommandList,
+                commandListAfterFrame,
                 m_pResourceDescHeapManager,
                 m_viewport,
                 m_scissorRect,
                 rtv
             );
-            ResourceTransition(
-                commandListAfterFrame->m_pCommandList,
-                backBuffer,
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
+            backBuffer->ResourceTransition(
+                commandListAfterFrame,
                 D3D12_RESOURCE_STATE_PRESENT
             );
 
-            PIXEndEvent(commandListAfterFrame->m_pCommandList.Get());
+            PIXEndEvent(commandListAfterFrame->GetD3D12CommandList().Get());
             commandListAfterFrame->SetReadyForExection();
         }
         });
@@ -904,7 +907,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
     return pDXGISwapChain4;
 }
 
-std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> Renderer::CreateBackBuffers(
+std::vector<std::shared_ptr<Texture>> Renderer::CreateBackBuffers(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
     std::shared_ptr<DescHeapRange> pDescHeapRange
@@ -913,16 +916,15 @@ std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> Renderer::CreateBackBuffers(
     ThrowIfFailed(pSwapChain->GetDesc(&desc));
     ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> backBuffers{ desc.BufferCount };
+    std::vector<std::shared_ptr<Texture>> backBuffers{ desc.BufferCount };
 
     pDescHeapRange->Clear();
     for (size_t i{}; i < desc.BufferCount; ++i) {
-        ThrowIfFailed(pSwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffers[i])));
-
-        pDevice->CreateRenderTargetView(
-            backBuffers[i].Get(),               // ID3D12Resource that represents a render target
-            nullptr,                            // RTV desc
-            pDescHeapRange->GetNextCpuHandle()  // new RTV dest
+        //backBuffers[i] = Texture::InitFromSwapChain(pSwapChain, i);
+        backBuffers[i] = std::make_shared<Texture>(pSwapChain, i);
+        backBuffers[i]->CreateRenderTargetView(
+            pDevice,
+            pDescHeapRange->GetNextCpuHandle()
         );
     }
 

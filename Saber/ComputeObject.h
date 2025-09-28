@@ -66,20 +66,20 @@ public:
     }
 
     virtual void Dispatch(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+        std::shared_ptr<CommandList> pCommandListCompute,
         UINT threadGroupsCountX,
         UINT threadGroupsCountY,
         UINT threadGroupsCountZ,
         std::function<void(
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+            std::shared_ptr<CommandList> pCommandList,
             UINT& rootParamId
         )> outerRootParametersSetter = [](
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+            std::shared_ptr<CommandList> pCommandListDirect,
             UINT& rootParamId
         ) {}
     ) {
-        pCommandListCompute->SetPipelineState(m_pPipelineState.Get());
-        pCommandListCompute->SetComputeRootSignature(m_pRootSignatureResource->pRootSignature.Get());
+        pCommandListCompute->GetD3D12CommandList()->SetPipelineState(m_pPipelineState.Get());
+        pCommandListCompute->GetD3D12CommandList()->SetComputeRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
         DispatchJob(pCommandListCompute);
 
@@ -87,13 +87,13 @@ public:
         outerRootParametersSetter(pCommandListCompute, rootParamId);
         InnerRootParametersSetter(pCommandListCompute, rootParamId);
 
-        pCommandListCompute->Dispatch(threadGroupsCountX, threadGroupsCountY, threadGroupsCountZ);
+        pCommandListCompute->GetD3D12CommandList()->Dispatch(threadGroupsCountX, threadGroupsCountY, threadGroupsCountZ);
     }
     
 protected:
-    virtual void DispatchJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect) const {}
+    virtual void DispatchJob(std::shared_ptr<CommandList> pCommandListDirect) const {}
     virtual void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         UINT& rootParamId
     ) const {}
 };

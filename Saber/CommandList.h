@@ -10,9 +10,9 @@ class CommandList {
 	std::function<void(void)> m_afterExec{};
 	std::atomic<bool> m_isReadyForExecution{};
 
-public:
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pCommandList{};
 
+public:
 	CommandList(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
 		uint8_t priority = 0,
@@ -20,12 +20,7 @@ public:
 		std::function<void(void)> afterExec = [=]() { return; }
 	);
 
-	template <typename T>
-	inline T operator->() const {
-		return m_pCommandList;
-	}
-
-	inline operator Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>() const {
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList() const {
 		return m_pCommandList;
 	}
 

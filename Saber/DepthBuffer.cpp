@@ -123,15 +123,8 @@ bool DepthBuffer::ResizeHZB(
 	return true;
 }
 
-void DepthBuffer::Clear(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-	pCommandList->ClearDepthStencilView(
-		GetDsvCpuDescHandle(),
-		D3D12_CLEAR_FLAG_DEPTH,
-		0.f,
-		0,
-		0,
-		nullptr
-	);
+void DepthBuffer::Clear(std::shared_ptr<CommandList> pCommandList) {
+	m_pDepthBuffer->ClearDepthTarget(pCommandList, GetDsvCpuDescHandle());
 }
 
 void DepthBuffer::SetSinglePassDownsampler(std::shared_ptr<SinglePassDownsampler> pSPD, Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
@@ -140,7 +133,7 @@ void DepthBuffer::SetSinglePassDownsampler(std::shared_ptr<SinglePassDownsampler
 }
 
 void DepthBuffer::CreateHierarchicalDepthBuffer(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	std::shared_ptr<CommandList> pCommandList,
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
 ) {
 	if (!m_pSinglePassDownsampler) {
@@ -148,7 +141,7 @@ void DepthBuffer::CreateHierarchicalDepthBuffer(
 	}
 
 	// copy original depth-buffer as mip 0
-	pCommandList->CopyTextureRegion(
+	pCommandList->GetD3D12CommandList()->CopyTextureRegion(
 		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
 		0, 0, 0,
 		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),

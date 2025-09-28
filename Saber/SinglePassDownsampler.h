@@ -56,7 +56,7 @@ public:
     );
 
     void Dispatch(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+        std::shared_ptr<CommandList> pCommandListCompute,
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
         D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
@@ -65,7 +65,7 @@ public:
 
 protected:
     virtual void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         UINT& rootParamId
     ) const override;
 

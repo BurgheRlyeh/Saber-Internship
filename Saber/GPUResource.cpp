@@ -17,7 +17,7 @@ void GPUResource::ResetCounter(
 ) const {
 	assert(m_pCounterResetter);
 
-	pCommandList->m_pCommandList->CopyBufferRegion(
+	pCommandList->GetD3D12CommandList()->CopyBufferRegion(
 		GetResource().Get(),
 		counterOffset,
 		m_pCounterResetter->GetResource().Get(),
@@ -27,7 +27,7 @@ void GPUResource::ResetCounter(
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> GPUResource::GetResource() const {
-	return m_pAllocation->GetResource();
+	return m_pResource;
 }
 
 std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
@@ -63,7 +63,7 @@ void GPUResource::UpdateSubresource(
 ) {
 	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
 	UpdateSubresources(
-		pCommandList->m_pCommandList.Get(),
+		pCommandList->GetD3D12CommandList().Get(),
 		GetResource().Get(),
 		pIntermediate->GetResource().Get(),
 		0,
@@ -84,7 +84,7 @@ void GPUResource::UpdateSubresource(
 ) {
 	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
 	UpdateSubresources(
-		pCommandList->m_pCommandList.Get(),
+		pCommandList->GetD3D12CommandList().Get(),
 		GetResource().Get(),
 		pIntermediate->GetResource().Get(),
 		0,
@@ -97,7 +97,7 @@ void GPUResource::UpdateSubresource(
 
 
 bool GPUResource::IsSrv() const {
-	return !(GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+	return IsSrvDesc(GetResource()->GetDesc());
 }
 const D3D12_SHADER_RESOURCE_VIEW_DESC* GPUResource::GetSrvDesc() const {
 	return nullptr;
@@ -116,7 +116,7 @@ void GPUResource::CreateShaderResourceView(
 }
 
 bool GPUResource::IsUav() const {
-	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	return IsUavDesc(GetResource()->GetDesc());
 }
 const D3D12_UNORDERED_ACCESS_VIEW_DESC* GPUResource::GetUavDesc() const {
 	return nullptr;
@@ -137,7 +137,7 @@ void GPUResource::CreateUnorderedAccessView(
 }
 
 bool GPUResource::IsRtv() const {
-	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	return IsRtvDesc(GetResource()->GetDesc());
 }
 const D3D12_RENDER_TARGET_VIEW_DESC* GPUResource::GetRtvDesc() const {
 	return nullptr;
@@ -173,7 +173,7 @@ void GPUResource::CreateResource(
 		resData.resInitState,
 		resData.pResClearValue,
 		&m_pAllocation,
-		IID_NULL,
-		nullptr
+		IID_PPV_ARGS(&m_pResource)
 	));
+	m_state = resData.resInitState;
 }

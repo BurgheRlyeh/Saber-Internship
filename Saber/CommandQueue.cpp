@@ -103,13 +103,15 @@ std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 // Execute a command list.
 // Returns the fence value to wait for for this command list.
 uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandList) {
- 	ThrowIfFailed(commandList->m_pCommandList->Close());
+	auto pD3D12CommandList{ commandList->GetD3D12CommandList() };
+
+ 	ThrowIfFailed(pD3D12CommandList->Close());
 	
 	ID3D12CommandAllocator* pCommandAllocator{};
 	uint32_t dataSize{ sizeof(pCommandAllocator) };
-	ThrowIfFailed(commandList->m_pCommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
+	ThrowIfFailed(pD3D12CommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
 
-	ID3D12CommandList* const pCommandLists[]{ commandList->m_pCommandList.Get() };
+	ID3D12CommandList* const pCommandLists[]{ pD3D12CommandList.Get() };
 	commandList->BeforeExecute();
 	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
 	commandList->AfterExecute();
@@ -120,7 +122,7 @@ uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandLi
 	allocatorListQueueLock.unlock();
 
 	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
-	m_commandListQueue.push(commandList->m_pCommandList);
+	m_commandListQueue.push(pD3D12CommandList);
 	commandListQueueLock.unlock();
 
 	// The ownership of the command allocator has been transferred to the ComPtr

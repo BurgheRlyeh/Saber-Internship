@@ -89,7 +89,7 @@ void SinglePassDownsampler::Resize(
 }
 
 void SinglePassDownsampler::Dispatch(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+    std::shared_ptr<CommandList> pCommandListCompute,
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
     D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
@@ -100,21 +100,23 @@ void SinglePassDownsampler::Dispatch(
         m_dispatchX,
         m_dispatchY,
         1,
-        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
-            pCommandListCompute->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(1, srvHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(3, midMipUavHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(4, mipsUavsHandle);
+        [&](std::shared_ptr<CommandList> pCommandListCompute, UINT& rootParamId) {
+            auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
+            pD3D12CommandList->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
+            pD3D12CommandList->SetComputeRootDescriptorTable(1, srvHandle);
+            pD3D12CommandList->SetComputeRootDescriptorTable(3, midMipUavHandle);
+            pD3D12CommandList->SetComputeRootDescriptorTable(4, mipsUavsHandle);
         }
     );
 }
 
 void SinglePassDownsampler::InnerRootParametersSetter(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    std::shared_ptr<CommandList> pCommandListDirect,
     UINT& rootParamId
 ) const {
-    pCommandListDirect->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
-    pCommandListDirect->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
+    auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
+    pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
+    pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
 Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {

@@ -12,7 +12,7 @@
 class PostProcessing : public RenderObject {
 protected:
     virtual void DrawCall(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
     ) const override;
 };
 

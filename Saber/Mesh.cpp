@@ -215,7 +215,7 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
     };
 
     UpdateSubresources(
-        pCommandList->m_pCommandList.Get(),
+        pCommandList->GetD3D12CommandList().Get(),
         pBuffer->GetResource().Get(),
         intermediateBuffer.GetResource().Get(),
         0,

@@ -6,24 +6,21 @@
 
 #include "CommandQueue.h"
 
-static void ResourceTransition(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-	Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
-	const D3D12_RESOURCE_STATES& stateBefore,
-	const D3D12_RESOURCE_STATES& stateAfter
-);
-
 class GPUResource {
+	static std::shared_ptr<GPUResource> m_pCounterResetter;
+
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 
-	static std::shared_ptr<GPUResource> m_pCounterResetter;
+protected:
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_pResource{};
+	D3D12_RESOURCE_STATES m_state{};
 
 public:
 	GPUResource() = default;
 	virtual ~GPUResource() = default;
 
 	struct HeapData {
-		D3D12_HEAP_TYPE heapType{};
+		D3D12_HEAP_TYPE heapType{ D3D12_HEAP_TYPE_DEFAULT };
 		D3D12_HEAP_FLAGS heapFlags{};
 	};
 	struct ResourceData {
@@ -37,6 +34,24 @@ public:
 		const ResourceData& resData,
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
 	);
+
+	D3D12_RESOURCE_STATES GetState() const {
+		return m_state;
+	}
+	void ResourceTransition(
+		std::shared_ptr<CommandList> pCommandList,
+		const D3D12_RESOURCE_STATES& toState
+	) {
+		pCommandList->GetD3D12CommandList()->ResourceBarrier(
+			1,
+			&CD3DX12_RESOURCE_BARRIER::Transition(
+				GetResource().Get(),
+				m_state,
+				toState
+			)
+		);
+		m_state = toState;
+	}
 
 	static void InitCounterResetter(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -71,7 +86,7 @@ public:
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
-		pCommandListCopy->m_pCommandList->CopyBufferRegion(
+		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
 			m_pCounterResetter->GetResource().Get(),
 			0,
 			pIntermediate->GetResource().Get(),
@@ -83,12 +98,7 @@ public:
 		std::shared_ptr<CommandList> pCommandListDirect{
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pCounterResetter->GetResource(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			D3D12_RESOURCE_STATE_COPY_SOURCE
-		);
+		m_pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 	}
 
@@ -158,41 +168,36 @@ public:
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
 	);
+
+	void ClearRenderTarget(
+		std::shared_ptr<CommandList> pCommandList,
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+		const float* clearColor = nullptr
+	) {
+		assert(IsRtv());
+
+		static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
+		pCommandList->GetD3D12CommandList()->ClearRenderTargetView(
+			cpuDescHandle,
+			clearColor ? clearColor : defaultColor,
+			0,
+			nullptr
+		);
+	}
 };
-
-static void ResourceTransition(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-	Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
-	const D3D12_RESOURCE_STATES& stateBefore,
-	const D3D12_RESOURCE_STATES& stateAfter
-) {
-	pCommandList->ResourceBarrier(
-		1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			pResource.Get(),
-			stateBefore,
-			stateAfter
-		)
-	);
-}
-
-static void ClearRenderTarget(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-	Microsoft::WRL::ComPtr<ID3D12Resource> pResource,
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
-	const float* clearColor = nullptr
-) {
-	assert(pResource->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-
-	static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
-	pCommandList->ClearRenderTargetView(
-		cpuDescHandle,
-		clearColor ? clearColor : defaultColor,
-		0,
-		nullptr
-	);
-}
 
 static UINT AlignSize(UINT size, UINT alignment) {
 	return (size + (alignment - 1)) & ~(alignment - 1);
+}
+
+static bool IsSrvDesc(const D3D12_RESOURCE_DESC& desc) {
+	return !(desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+}
+
+static bool IsUavDesc(const D3D12_RESOURCE_DESC& desc) {
+	return desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+}
+
+static bool IsRtvDesc(const D3D12_RESOURCE_DESC& desc) {
+	return desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 }

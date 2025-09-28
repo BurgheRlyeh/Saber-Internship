@@ -67,8 +67,8 @@ public:
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) = 0;
 
-	void Execute(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-		pCommandList->ExecuteIndirect(
+	void Execute(std::shared_ptr<CommandList> pCommandList) {
+		pCommandList->GetD3D12CommandList()->ExecuteIndirect(
 			m_pCommandSignature.Get(),
 			m_capacity,
 			m_pIndirectCommandBuffer->GetResource().Get(),
@@ -182,10 +182,8 @@ protected:
 		std::shared_ptr<CommandList> pCommandListDirect{
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pIndirectCommandBuffer->GetResource(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		m_pIndirectCommandBuffer->ResourceTransition(
+			pCommandListDirect,
 			D3D12_RESOURCE_STATE_COPY_SOURCE
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
@@ -193,7 +191,7 @@ protected:
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
-		pCommandListCopy->m_pCommandList->CopyBufferRegion(
+		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
 			m_pIndirectCommandBuffer->GetResource().Get(),
 			0,
 			pOldIndirectCommandBuffer->GetResource().Get(),
@@ -203,10 +201,8 @@ protected:
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
 		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pIndirectCommandBuffer->GetResource(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
+		m_pIndirectCommandBuffer->ResourceTransition(
+			pCommandListDirect,
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
@@ -284,10 +280,8 @@ public:
 		std::shared_ptr<CommandList> pCommandListDirect{
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pIndirectCommandBuffer->GetResource(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		m_pIndirectCommandBuffer->ResourceTransition(
+			pCommandListDirect,
 			D3D12_RESOURCE_STATE_COPY_DEST
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
@@ -300,7 +294,7 @@ public:
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
 		UpdateSubresources(
-			pCommandListCopy->m_pCommandList.Get(),
+			pCommandListCopy->GetD3D12CommandList().Get(),
 			m_pIndirectCommandBuffer->GetResource().Get(),
 			intermediateAllocation.pBuffer->GetResource().Get(),
 			intermediateAllocation.offset,
@@ -311,10 +305,8 @@ public:
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
 		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pIndirectCommandBuffer->GetResource(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
+		m_pIndirectCommandBuffer->ResourceTransition(
+			pCommandListDirect,
 			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
@@ -422,13 +414,14 @@ public:
 		};
 		static const size_t threadBlockSize{ 128 };
 		m_pIndirectUpdater->Dispatch(
-			pCommandListDirect->m_pCommandList,
+			pCommandListDirect,
 			(updCnt + threadBlockSize - 1) / threadBlockSize, 1, 1,
-			[&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, UINT& rootParamId) {
-				pCommandList->SetComputeRoot32BitConstant(rootParamId++, updCnt, 0);
-				pCommandList->SetComputeRootShaderResourceView(rootParamId++, updBufIdsAllocation.gpuAddress);
-				pCommandList->SetComputeRootShaderResourceView(rootParamId++, updBufAllocation.gpuAddress);
-				pCommandList->SetComputeRootUnorderedAccessView(
+			[&](std::shared_ptr<CommandList> pCommandList, UINT& rootParamId) {
+				auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+				pD3D12CommandList->SetComputeRoot32BitConstant(rootParamId++, updCnt, 0);
+				pD3D12CommandList->SetComputeRootShaderResourceView(rootParamId++, updBufIdsAllocation.gpuAddress);
+				pD3D12CommandList->SetComputeRootShaderResourceView(rootParamId++, updBufAllocation.gpuAddress);
+				pD3D12CommandList->SetComputeRootUnorderedAccessView(
 					rootParamId++,
 					m_pIndirectCommandBuffer->GetResource()->GetGPUVirtualAddress()
 				);

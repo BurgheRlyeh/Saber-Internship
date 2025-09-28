@@ -11,27 +11,29 @@
 #include "ComputeObject.h"
 #include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
-#include "GBuffer.h"
+#include "TexturePack.h"
 #include "LightBuffer.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "RenderSubsystem.h"
 #include "SceneBuffer.h"
+#include "TexturePack.h"
 
 class Scene {
     std::wstring m_name{};
 
-    SceneBuffer m_sceneBuffer;
-    std::mutex m_sceneBufferMutex{};
     std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapCpu{};
     std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapGpu{};
-    DynamicAllocation m_sceneCBDynamicAllocation{};
-    std::atomic<bool> m_isUpdSceneCb{ true };
+
+    SceneBuffer m_sceneBuffer;
     std::shared_ptr<ConstantBuffer> m_pSceneCb{};
+    std::mutex m_sceneBufferMutex{};
+    std::atomic<bool> m_isUpdSceneCb{ true };
+    DynamicAllocation m_sceneCBDynamicAllocation{};
 
     LightBuffer m_lightBuffer;
-    std::mutex m_lightBufferMutex{};
     std::shared_ptr<ConstantBuffer> m_pLightCB{};
+    std::mutex m_lightBufferMutex{};
     std::atomic<bool> m_isUpdateLightCB{};
 
     enum RenderSubsystemId {
@@ -50,12 +52,13 @@ class Scene {
 
     std::atomic<bool> m_isSceneReady{};
 
+    std::shared_ptr<TexturePack> m_pTargetTexture{};
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
-    std::shared_ptr<GBuffer> m_pGBuffer{};
-
-    std::shared_ptr<PostProcessing> m_pPostProcessing{};
+    std::shared_ptr<TexturePack> m_pGBuffer{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
+
+    std::shared_ptr<PostProcessing> m_pPostProcessing{};
 
 public:
     Scene() = delete;
@@ -67,8 +70,27 @@ public:
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
         std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
-        std::shared_ptr<GBuffer> m_pGBuffer
+        std::shared_ptr<TexturePack> m_pGBuffer
     );
+
+    void Resize(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        uint64_t width,
+        uint32_t height
+    ) {
+        ResizeTargetTexture(pDevice, pAllocator, width, height);
+        UpdateCamerasAspectRatio(static_cast<float>(width) / height);
+    }
+
+    void ResizeTargetTexture(
+        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        uint64_t width,
+        uint32_t height
+    ) {
+        m_pTargetTexture->Resize(pDevice, pAllocator, width, height);
+    }
 
     void InitializeRenderSubsystems(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -90,13 +112,14 @@ public:
     void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
     std::shared_ptr<DepthBuffer> GetDepthBuffer();
 
-    std::shared_ptr<GBuffer> GetGBuffer();
-    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
+    std::shared_ptr<TexturePack> GetGBuffer();
+    void SetGBuffer(std::shared_ptr<TexturePack> pGBuffer);
 
     void Update(float deltaTime, std::shared_ptr<CommandList> pCommandList);
-    void BeforeFrameJob(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
+    void BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
         m_pDepthBuffer->Clear(pCommandList);
         if (m_pGBuffer) {
+            m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
             m_pGBuffer->Clear(pCommandList);
         }
     }
@@ -125,21 +148,21 @@ public:
     void AddStaticAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
     void AddDynamicAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
     void RenderStaticObjects(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
     );
     void RenderDynamicObjects(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
     );
     void RenderStaticAlphaKillObjects(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
@@ -147,7 +170,7 @@ public:
         std::shared_ptr<MaterialManager> pMaterialManager
     );
     void RenderDynamicAlphaKillObjects(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
@@ -157,7 +180,7 @@ public:
 
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+        std::shared_ptr<CommandList> pCommandListCompute,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         UINT width,
@@ -166,7 +189,7 @@ public:
 
     void SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing);
     void RenderPostProcessing(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
@@ -176,6 +199,6 @@ public:
 private:
     bool TryUpdateCamera(float deltaTime);
 
-    void UpdateSceneBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList);
+    void UpdateSceneBuffer(std::shared_ptr<CommandList> pCommandList);
     void UpdateLightBuffer();
 };

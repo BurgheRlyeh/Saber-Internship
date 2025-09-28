@@ -85,10 +85,8 @@ public:
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
 		std::shared_ptr<CommandList> pCommandListDirect{ pCommandQueueDirect->GetCommandList(pDevice) };
-		ResourceTransition(
-			pCommandListDirect->m_pCommandList,
-			m_pVisibilityBuffer->GetResource(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
+		m_pVisibilityBuffer->ResourceTransition(
+			pCommandListDirect,
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);

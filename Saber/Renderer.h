@@ -25,7 +25,7 @@
 #include "CommandList.h"
 #include "DepthBuffer.h"
 #include "GPUResource.h"
-#include "GBuffer.h"
+#include "TexturePack.h"
 #include "IndirectUpdater.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
@@ -58,7 +58,7 @@ class Renderer {
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{};
+    std::vector<std::shared_ptr<Texture>> m_pBackBuffers{};
     std::shared_ptr<DescHeapRange> m_pBackBuffersDescHeapRange{};
     UINT m_currBackBufferId{};
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
@@ -94,12 +94,12 @@ class Renderer {
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
-    size_t m_currSceneId{ 2 };
+    size_t m_currSceneId{ 0 };
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
 
-    std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
+    std::vector<std::shared_ptr<TexturePack>> m_pGBuffers{};
 
     std::shared_ptr<DescriptorHeapManager> m_pDsvDescHeapManager{};
     std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
@@ -180,7 +180,7 @@ private:
         uint32_t height,
         uint32_t bufferCount
     );
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> CreateBackBuffers(
+    std::vector<std::shared_ptr<Texture>> CreateBackBuffers(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
         std::shared_ptr<DescHeapRange> pDescHeapRange
