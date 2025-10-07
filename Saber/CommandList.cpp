@@ -3,13 +3,17 @@
 CommandList::CommandList(
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
 	uint8_t priority,
-	std::function<void(void)> beforeExec,
-	std::function<void(void)> afterExec
-) : m_pCommandList(pCommandList)
-	, m_priority(priority)
-	, m_beforeExec(beforeExec)
-	, m_afterExec(afterExec)
+	std::function<void()> beforeExec,
+	std::function<void()> afterExec
+) : m_pCommandList(pCommandList),
+	m_priority(priority),
+	m_beforeExec(beforeExec),
+	m_afterExec(afterExec)
 {}
+
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandList::GetD3D12CommandList() const {
+	return m_pCommandList;
+}
 
 inline uint16_t CommandList::GetPriority() const {
 	return m_priority;

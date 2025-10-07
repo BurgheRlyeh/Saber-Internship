@@ -11,7 +11,7 @@
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
-#include "TexturePack.h"
+#include "Texture.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
 #include "ModelBuffer.h"
@@ -24,6 +24,8 @@
 template <typename ModelBuffer>
 class MeshRenderObject : public RenderObject {
 protected:
+    std::wstring m_name{};
+
     std::shared_ptr<Mesh> m_pMesh{};
 
     ModelBuffer m_modelBuffer{};
@@ -32,13 +34,15 @@ protected:
 
 public:
     MeshRenderObject(
+        const std::wstring& name,
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         ModelBuffer* pModelBuffer = nullptr
-    ) {
+    ) : m_name(name) {
         if (pModelBuffer) {
             m_modelBuffer = *pModelBuffer;
         }
         m_pModelCb = std::make_shared<ConstantBuffer>(
+            m_name + L"/ModelCb",
             pAllocator,
             sizeof(ModelBuffer),
             &m_modelBuffer
@@ -48,7 +52,6 @@ public:
     struct MeshInitData {
         std::shared_ptr<Atlas<Mesh>> pMeshAtlas;
         Mesh::MeshData meshData;
-        std::wstring meshFilename;
     };
     void InitMesh(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -57,7 +60,7 @@ public:
         const MeshInitData& meshInitData
     ) {
         m_pMesh = meshInitData.pMeshAtlas->Assign(
-            meshInitData.meshFilename,
+            m_name + L"/Mesh",
             pDevice,
             pAllocator,
             pCommandQueueCopy,
@@ -235,7 +238,7 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<TexturePack> pGBuffer,
+        std::shared_ptr<Texture> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -281,7 +284,7 @@ public:
         };
 
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"SimpleTextureCube", pAllocator)
         };
 
         Mesh::MeshDataIndicesVertices meshData{
@@ -303,7 +306,7 @@ public:
 				{ .data{ uvs }, .size{ sizeof(*uvs) } }
 			}
         };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData));
         pObj->InitMaterial(
             pDevice,
             RootSignatureData{
@@ -347,12 +350,12 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<TexturePack> pGBuffer,
+        std::shared_ptr<Texture> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"MeshGLTF", pAllocator)
         };
 
         Mesh::MeshDataGLTF data{
@@ -378,7 +381,7 @@ public:
             }
         };
 
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data));
         pObj->InitMaterial(
             pDevice,
             RootSignatureData{
@@ -490,12 +493,12 @@ public:
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
         std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<TexturePack> pGBuffer,
+        std::shared_ptr<Texture> pGBuffer,
         std::shared_ptr<MaterialManager> pMaterialManager,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"AlphaGrassGLTF", pAllocator)
         };
 
         Mesh::MeshDataGLTF data{
@@ -521,7 +524,7 @@ public:
             }
         };
 
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
+        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data));
         pObj->InitMaterial(
             pDevice,
             RootSignatureData{

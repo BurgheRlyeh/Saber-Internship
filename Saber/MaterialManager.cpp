@@ -1,5 +1,7 @@
 #include "MaterialManager.h"
 
+const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
+
 MaterialManager::MaterialManager(
 	const std::wstring& resourceFolder,
 	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
@@ -11,17 +13,22 @@ MaterialManager::MaterialManager(
 	m_pDescHeap = pDescHeapManager->GetDescriptorHeap();
 
 	m_pCBVsRange = pDescHeapManager->AllocateRange(
-		L"Materials/CBV",
+		BASE_NAME + L"/Ranges/Cbv",
 		1,
 		D3D12_DESCRIPTOR_RANGE_TYPE_CBV
 	);
 	m_pSRVsRange = pDescHeapManager->AllocateRange(
-		L"Materials/SRVs",
+		BASE_NAME + L"/Ranges/Srv",
 		2 * capacity,	// (albedo + normal) * count
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 	);
 
-	m_pMaterialCB = std::make_shared<ConstantBuffer>(pAllocator, sizeof(MaterialCB), &m_materialCB);
+	m_pMaterialCB = std::make_shared<ConstantBuffer>(
+		BASE_NAME + L"/MaterialCB",
+		pAllocator,
+		sizeof(MaterialCB),
+		&m_materialCB
+	);
 	m_pMaterialCB->CreateConstantBufferView(pDevice, m_pCBVsRange->GetNextCpuHandle());
 
 	m_pMaterials.reserve(capacity);
@@ -50,7 +57,7 @@ size_t MaterialManager::AddMaterial(
 	const std::wstring& albedoFilepath,
 	const std::wstring& normalFilepath
 ) {
-	std::shared_ptr<Texture> pAlbedo{
+	std::shared_ptr<TextureResource> pAlbedo{
 		m_pTextureAtlas->Assign(albedoFilepath, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect)
 	};
 	std::shared_ptr<DDSTexture> pNormal{
@@ -70,7 +77,7 @@ size_t MaterialManager::AddMaterial(
 	return materialId;
 }
 
-size_t MaterialManager::AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Texture> pTex) {
+size_t MaterialManager::AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<TextureResource> pTex) {
 	size_t id{ m_pSRVsRange->GetNextId() };
 
 	auto handle = m_pSRVsRange->GetCpuHandle(id);

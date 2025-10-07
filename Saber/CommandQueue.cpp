@@ -1,8 +1,11 @@
 #include "CommandQueue.h"
 
-CommandQueue::CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_COMMAND_LIST_TYPE type) 
-	: m_commandListType(type)
-{
+const std::wstring CommandQueue::BASE_NAME = L"CommandQueue";
+
+CommandQueue::CommandQueue(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	D3D12_COMMAND_LIST_TYPE type
+) : m_commandListType(type) {
 	D3D12_COMMAND_QUEUE_DESC desc{
 		.Type{ m_commandListType },
 		.Priority{ D3D12_COMMAND_QUEUE_PRIORITY_NORMAL },
@@ -14,11 +17,14 @@ CommandQueue::CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_
 		&desc,
 		IID_PPV_ARGS(&m_pCommandQueue)
 	));
+	m_pCommandQueue->SetName((BASE_NAME + std::to_wstring(type)).c_str());
+
 	ThrowIfFailed(pDevice->CreateFence(
 		m_fenceValue,
 		D3D12_FENCE_FLAG_NONE,
 		IID_PPV_ARGS(&m_pFence)
 	));
+	m_pFence->SetName((BASE_NAME + std::to_wstring(type) + L"/Fence").c_str());
 
 	m_fenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 	assert(m_fenceEvent && "Failed to create fence event handle.");

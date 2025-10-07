@@ -11,13 +11,12 @@
 #include "ComputeObject.h"
 #include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
-#include "TexturePack.h"
+#include "Texture.h"
 #include "LightBuffer.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "RenderSubsystem.h"
 #include "SceneBuffer.h"
-#include "TexturePack.h"
 
 class Scene {
     std::wstring m_name{};
@@ -52,9 +51,9 @@ class Scene {
 
     std::atomic<bool> m_isSceneReady{};
 
-    std::shared_ptr<TexturePack> m_pTargetTexture{};
+    std::shared_ptr<Texture> m_pTargetTexture{};
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
-    std::shared_ptr<TexturePack> m_pGBuffer{};
+    std::shared_ptr<Texture> m_pGBuffer{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
@@ -70,7 +69,7 @@ public:
         std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
         std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
-        std::shared_ptr<TexturePack> m_pGBuffer
+        std::shared_ptr<Texture> m_pGBuffer
     );
 
     void Resize(
@@ -112,8 +111,8 @@ public:
     void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
     std::shared_ptr<DepthBuffer> GetDepthBuffer();
 
-    std::shared_ptr<TexturePack> GetGBuffer();
-    void SetGBuffer(std::shared_ptr<TexturePack> pGBuffer);
+    std::shared_ptr<Texture> GetGBuffer();
+    void SetGBuffer(std::shared_ptr<Texture> pGBuffer);
 
     void Update(float deltaTime, std::shared_ptr<CommandList> pCommandList);
     void BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {

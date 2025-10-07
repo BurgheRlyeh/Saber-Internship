@@ -10,7 +10,7 @@ Scene::Scene(
     std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
     std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
-    std::shared_ptr<TexturePack> pGBuffer
+    std::shared_ptr<Texture> pGBuffer
 ) : m_name(name),
 	m_pDynamicUploadHeapCpu(pDynamicUploadHeapCpu),
 	m_pDynamicUploadHeapGpu(pDynamicUploadHeapGpu),
@@ -25,6 +25,7 @@ Scene::Scene(
     }
 	
     m_pSceneCb = std::make_shared<ConstantBuffer>(
+        m_name + L"/SceneCb",
         pAllocator,
         sizeof(SceneBuffer),
         nullptr,
@@ -32,13 +33,14 @@ Scene::Scene(
     );
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
     m_pLightCB = std::make_shared<ConstantBuffer>(
+        m_name + L"/LightCB",
         pAllocator,
         sizeof(LightBuffer),
         &m_lightBuffer
     );
 
-    m_pTargetTexture = std::make_shared<TexturePack>(
-        name + L"/TargetTexture",
+    m_pTargetTexture = std::make_shared<Texture>(
+        m_name + L"/TargetTexture",
         pDevice,
         pAllocator,
         CD3DX12_RESOURCE_DESC::Tex2D(
@@ -102,10 +104,10 @@ std::shared_ptr<DepthBuffer> Scene::GetDepthBuffer() {
 }
 
 /* g-buffer */
-void Scene::SetGBuffer(std::shared_ptr<TexturePack> pGBuffer) {
+void Scene::SetGBuffer(std::shared_ptr<Texture> pGBuffer) {
     m_pGBuffer = pGBuffer;
 }
-std::shared_ptr<TexturePack> Scene::GetGBuffer() {
+std::shared_ptr<Texture> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 

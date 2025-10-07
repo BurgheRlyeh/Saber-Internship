@@ -10,10 +10,10 @@ Mesh::Mesh(
     std::visit([&](const auto& data) {
         using T = std::decay_t<decltype(data)>;
         if constexpr (std::is_same_v<T, MeshDataIndicesVertices>) {
-            InitFromVerticesIndices(pDevice, pAllocator, pCommandQueueCopy, data);
+            InitFromVerticesIndices(filename, pDevice, pAllocator, pCommandQueueCopy, data);
         }
         else if constexpr (std::is_same_v<T, MeshDataGLTF>) {
-            InitFromGLTF(pDevice, pAllocator, pCommandQueueCopy, data);
+            InitFromGLTF(filename, pDevice, pAllocator, pCommandQueueCopy, data);
         }
     }, meshData.data);
 }
@@ -40,12 +40,14 @@ size_t Mesh::GetIndicesCount() const {
 }
 
 void Mesh::InitFromVerticesIndices(
+    const std::wstring& name,
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
     const MeshDataIndicesVertices& meshData
 ) {
     AddIndexBuffer(
+        name + L"/IndexBuffer",
         pDevice,
         pAllocator,
         pCommandQueueCopy,
@@ -57,11 +59,13 @@ void Mesh::InitFromVerticesIndices(
         meshData.indexFormat
     );
 
+    size_t i{};
     for (const VertexData& vertexData : meshData.verticesData) {
         if (vertexData.handler) {
             vertexData.handler(vertexData.data, vertexData.size);
         }
         AddVertexBuffer(
+            name + L"/VertexBuffer" + std::to_wstring(i++),
             pDevice,
             pAllocator,
             pCommandQueueCopy,
@@ -75,6 +79,7 @@ void Mesh::InitFromVerticesIndices(
 }
 
 void Mesh::InitFromGLTF(
+    const std::wstring& name,
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -94,7 +99,7 @@ void Mesh::InitFromGLTF(
             .count{ indices.size() },
             .size{ sizeof(indices.front())}
         };
-        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+        AddIndexBuffer(name + L"/IndexBuffer", pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
     }
     break;
     case DXGI_FORMAT_R16_UINT:
@@ -107,7 +112,7 @@ void Mesh::InitFromGLTF(
             .count{ indices.size() },
             .size{ sizeof(indices.front())}
         };
-        AddIndexBuffer(pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
+        AddIndexBuffer(name + L"/IndexBuffer", pDevice, pAllocator, pCommandQueueCopy, indexBufferData, format);
     }
     break;
     default:
@@ -134,31 +139,13 @@ void Mesh::InitFromGLTF(
             .count{ verticesCnt },
             .size{ attribute.size }
         };
-        AddVertexBuffer(pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
+        std::wstring attributeName(attribute.name.begin(), attribute.name.end());
+        AddVertexBuffer(name + L"/VertexBuffer/" + attributeName, pDevice, pAllocator, pCommandQueueCopy, vertexBufferData);
     }
 }
 
-void Mesh::AddVertexBuffer(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-    const BufferData& bufferData
-) {
-    m_pBuffers.push_back(CreateBuffer(
-        pDevice,
-        pAllocator,
-        pCommandQueueCopy,
-        bufferData
-    ));
-
-    m_bufferViews.push_back(D3D12_VERTEX_BUFFER_VIEW{
-        .BufferLocation{ m_pBuffers.back()->GetResource().Get()->GetGPUVirtualAddress() },
-        .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
-        .StrideInBytes{ static_cast<UINT>(bufferData.size) }
-        });
-}
-
 void Mesh::AddIndexBuffer(
+    const std::wstring& indexBufferName,
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -168,6 +155,7 @@ void Mesh::AddIndexBuffer(
     m_indicesCount = bufferData.count;
 
     m_pIndexBuffer = CreateBuffer(
+        indexBufferName,
         pDevice,
         pAllocator,
         pCommandQueueCopy,
@@ -181,7 +169,30 @@ void Mesh::AddIndexBuffer(
     };
 }
 
+void Mesh::AddVertexBuffer(
+    const std::wstring& vertexBufferName,
+    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const BufferData& bufferData
+) {
+    m_pBuffers.push_back(CreateBuffer(
+        vertexBufferName,
+        pDevice,
+        pAllocator,
+        pCommandQueueCopy,
+        bufferData
+    ));
+
+    m_bufferViews.push_back(D3D12_VERTEX_BUFFER_VIEW{
+        .BufferLocation{ m_pBuffers.back()->GetResource().Get()->GetGPUVirtualAddress() },
+        .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
+        .StrideInBytes{ static_cast<UINT>(bufferData.size) }
+        });
+}
+
 std::shared_ptr<GPUResource> Mesh::CreateBuffer(
+    const std::wstring& bufferName,
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
     std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
@@ -190,19 +201,11 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
     size_t bufferSize{ bufferData.count * bufferData.size };
 
     std::shared_ptr<GPUResource> pBuffer{ std::make_shared<GPUResource>(
+        bufferName,
         pAllocator,
         GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
         GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(bufferSize), D3D12_RESOURCE_STATE_COPY_DEST }
     ) };
-
-    GPUResource intermediateBuffer{
-        pAllocator,
-        GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-        GPUResource::ResourceData{
-            CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ
-        }
-    };
 
     D3D12_SUBRESOURCE_DATA subresourceData{
         .pData{ bufferData.data },
@@ -214,14 +217,14 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
         pCommandQueueCopy->GetCommandList(pDevice)
     };
 
-    UpdateSubresources(
-        pCommandList->GetD3D12CommandList().Get(),
-        pBuffer->GetResource().Get(),
-        intermediateBuffer.GetResource().Get(),
-        0,
+    std::shared_ptr<GPUResource> pIntermediate = pBuffer->CreateIntermediate(pAllocator);
+    pBuffer->UpdateSubresource(
+        pAllocator,
+        pCommandList,
         0,
         1,
-        &subresourceData
+        &subresourceData,
+        pIntermediate
     );
 
     pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);

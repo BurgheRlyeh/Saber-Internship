@@ -70,9 +70,9 @@ GPURingBuffer::GPURingBuffer(
     m_cpuVirtualAddress(nullptr),
     m_gpuVirtualAddress(0)
 {
-
     if (isCPUAccessable) {
         m_pBuffer = std::make_shared<GPUResource>(
+            L"RingBuffer/Upload",
             pAllocator,
             GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
             GPUResource::ResourceData{
@@ -85,6 +85,7 @@ GPURingBuffer::GPURingBuffer(
     }
     else if (isGPUWritable) {
         m_pBuffer = std::make_shared<GPUResource>(
+            L"RingBuffer/Default/UnorderedAccess",
             pAllocator,
             GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
             GPUResource::ResourceData{
@@ -98,6 +99,7 @@ GPURingBuffer::GPURingBuffer(
     }
     else {
         m_pBuffer = std::make_shared<GPUResource>(
+            L"RingBuffer/Default",
             pAllocator,
             GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
             GPUResource::ResourceData{

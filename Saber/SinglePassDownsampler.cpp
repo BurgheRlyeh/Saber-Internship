@@ -1,5 +1,7 @@
 #include "SinglePassDownsampler.h"
 
+const std::wstring SinglePassDownsampler::BASE_NAME = L"SinglePassDownsampler";
+
 SinglePassDownsampler::SinglePassDownsampler(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
@@ -25,10 +27,10 @@ SinglePassDownsampler::SinglePassDownsampler(
     );
 
     m_pSpdCounterBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
-        L"SPDCounterBuffer", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+        BASE_NAME + L"/SpdCounterBuffer/Uav", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
     );
     m_pSpdConstantBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
-        L"SPDConstantBuffer", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+        BASE_NAME + L"/SpdConstantBuffer/Cbv", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
     );
 
     Resize(pDevice, pAllocator, width, height);
@@ -45,6 +47,7 @@ void SinglePassDownsampler::Resize(
 
     // global atomic counter buffer
     m_pSpdCounterBuffer = std::make_shared<GPUResource>(
+        BASE_NAME + L"/SpdCounterBuffer",
         pAllocator,
         GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
         GPUResource::ResourceData{
@@ -57,7 +60,7 @@ void SinglePassDownsampler::Resize(
     );
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
         .ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
-        .Buffer{ .NumElements{ 6 }, .StructureByteStride{ sizeof(FfxUInt32) }, }
+        .Buffer{ .NumElements{ 1 }, .StructureByteStride{ 6 * sizeof(FfxUInt32) }, }
     };
     m_pSpdCounterBuffer->CreateUnorderedAccessView(
         pDevice,
@@ -81,6 +84,7 @@ void SinglePassDownsampler::Resize(
     m_spdConstantBuffer.workGroupOffset[0] = workGroupOffset[0];
     m_spdConstantBuffer.workGroupOffset[1] = workGroupOffset[1];
     m_pSpdConstantBuffer = std::make_shared<ConstantBuffer>(
+        BASE_NAME + L"/SpdConstantBuffer",
         pAllocator,
         sizeof(SPDConstantBuffer),
         &m_spdConstantBuffer

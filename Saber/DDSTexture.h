@@ -5,11 +5,11 @@
 #include "DirectXTex.h"
 
 #include "CommandQueue.h"
-#include "Texture.h"
+#include "TextureResource.h"
 
-class DDSTexture : public Texture {
+class DDSTexture : public TextureResource {
 public:
-	using Texture::Texture;
+	using TextureResource::TextureResource;
 	DDSTexture(
 		const std::wstring& filename,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,

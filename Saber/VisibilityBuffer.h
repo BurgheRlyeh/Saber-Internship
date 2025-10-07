@@ -13,6 +13,8 @@ class VisibilityBuffer {
 	static constexpr size_t BITS_PER_UINT4{ 4 * sizeof(uint32_t) * CHAR_BIT };
 	static constexpr size_t LOG2_BITS_PER_UINT4{ std::bit_width(BITS_PER_UINT4) - 1 };
 
+	std::wstring m_name{};
+
 	std::shared_ptr<GPUResource> m_pVisibilityBuffer{};
 	std::shared_ptr<DescHeapRange> m_pDescHeapRangeUav{};
 
@@ -20,16 +22,16 @@ class VisibilityBuffer {
 
 public:
 	VisibilityBuffer(
-		const std::wstring& renderObjectName,
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		size_t& numElements
-	) {
+	) : m_name(name + L"/VisibilityBuffer") {
 		m_pDescHeapRangeUav = pDescHeapManagerCbvSrvUav->AllocateRange(
-			(renderObjectName + L"/VisibilityBuffer/Uav").c_str(),
+			(m_name + L"/Ranges/Uav").c_str(),
 			1,
 			D3D12_DESCRIPTOR_RANGE_TYPE_UAV
 		);
@@ -38,6 +40,7 @@ public:
 		numElements = CapacityToElements(m_capacity);
 
 		m_pVisibilityBuffer = std::make_shared<GPUResource>(
+			m_name,
 			pAllocator,
 			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
 			GPUResource::ResourceData{

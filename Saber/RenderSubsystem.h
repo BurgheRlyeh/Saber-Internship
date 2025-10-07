@@ -100,12 +100,12 @@ public:
 			m_pIndirectCommandBuffer = std::make_shared<
 				DynamicIndirectCommandBuffer<IndirectCommand>
 			>(
+				m_name,
 				pDevice,
 				pAllocator,
 				IndirectCommand::GetCommandSignatureDesc(),
 				m_objects.front()->GetRootSignature(),
 				pDescHeapManagerCbvSrvUav,
-				m_name + L"IndirectBuffer",
 				m_objects.size(),
 				pDynamicUploadHeap,
 				pIndirectUpdater
@@ -115,12 +115,12 @@ public:
 			m_pIndirectCommandBuffer = std::make_shared<
 				StaticIndirectCommandBuffer<IndirectCommand>
 			>(
+				m_name,
 				pDevice,
 				pAllocator,
 				IndirectCommand::GetCommandSignatureDesc(),
 				m_objects.front()->GetRootSignature(),
 				pDescHeapManagerCbvSrvUav,
-				m_name + L"IndirectBuffer",
 				m_objects.size(),
 				pDynamicUploadHeap
 			);

@@ -23,6 +23,7 @@ void DDSTexture::LoadFromDDS(
 	
 	// create texture resource
 	CreateResource(
+		filename,
 		pAllocator,
 		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		ResourceData{
@@ -63,6 +64,6 @@ void DDSTexture::LoadFromDDS(
 	std::shared_ptr<CommandList> pCommandListDirect{
 		pCommandQueueDirect->GetCommandList(pDevice)
 	};
-	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 }

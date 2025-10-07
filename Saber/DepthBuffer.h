@@ -7,7 +7,7 @@
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "SinglePassDownsampler.h"
-#include "Texture.h"
+#include "TextureResource.h"
 
 class DepthBuffer {
 	static inline D3D12_RESOURCE_DESC m_depthBufferDesc{
@@ -18,8 +18,10 @@ class DepthBuffer {
 		.DepthStencil{ 0.0f, 0 }
 	};
 
-	std::shared_ptr<Texture> m_pDepthBuffer{};
-	std::shared_ptr<Texture> m_pHZBuffer{};
+	std::wstring m_name{};
+
+	std::shared_ptr<TextureResource> m_pDepthBuffer{};
+	std::shared_ptr<TextureResource> m_pHZBuffer{};
 
 	std::shared_ptr<DescHeapRange> m_pDsvsRange{};
 	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
@@ -29,14 +31,15 @@ class DepthBuffer {
 
 	std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
 
-	const size_t m_hzbSize{ 12 };
-	const size_t m_hzbMidMipId{ 5 };
+	static const size_t m_hzbSize{ 12 };
+	static const size_t m_hzbMidMipId{ 5 };
 
 	size_t m_width{};
 	size_t m_height{};
 
 public:
 	DepthBuffer(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerDsv,
@@ -74,7 +77,7 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
 	);
 
-	std::shared_ptr<Texture> GetTexture() const;
+	std::shared_ptr<TextureResource> GetTexture() const;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCpuDescHandle() const;
 

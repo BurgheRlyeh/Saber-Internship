@@ -15,10 +15,9 @@ protected:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_pResource{};
 	D3D12_RESOURCE_STATES m_state{};
 
-public:
 	GPUResource() = default;
-	virtual ~GPUResource() = default;
 
+public:
 	struct HeapData {
 		D3D12_HEAP_TYPE heapType{ D3D12_HEAP_TYPE_DEFAULT };
 		D3D12_HEAP_FLAGS heapFlags{};
@@ -29,6 +28,7 @@ public:
 		const D3D12_CLEAR_VALUE* pResClearValue{};
 	};
 	GPUResource(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const HeapData& heapData,
 		const ResourceData& resData,
@@ -60,6 +60,7 @@ public:
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) {
 		m_pCounterResetter = std::make_shared<GPUResource>(
+			L"GPUResource/CounterResetter",
 			pAllocator,
 			HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 			ResourceData{
@@ -68,30 +69,25 @@ public:
 			}
 		);
 
-		std::shared_ptr<GPUResource> pIntermediate{ std::make_shared<GPUResource>(
-			pAllocator,
-			HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-			ResourceData{
-				CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)),
-				D3D12_RESOURCE_STATE_GENERIC_READ
-			}
-		) };
-
-		void* data{};
-		pIntermediate->GetResource()->Map(0, nullptr, &data);
-
 		UINT zero{};
-		memcpy(data, &zero, sizeof(UINT));
+		D3D12_SUBRESOURCE_DATA subresData{
+			.pData{ &zero },
+			.RowPitch{ sizeof(UINT) },
+			.SlicePitch{ subresData.RowPitch }
+		};
+
+		std::shared_ptr<GPUResource> pIntermediate{};
 
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
-		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
-			m_pCounterResetter->GetResource().Get(),
+		m_pCounterResetter->UpdateSubresource(
+			pAllocator,
+			pCommandListCopy,
 			0,
-			pIntermediate->GetResource().Get(),
-			0,
-			sizeof(UINT)
+			1,
+			&subresData,
+			pIntermediate
 		);
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
@@ -112,6 +108,7 @@ public:
 	) const;
 
 	void CreateResource(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const HeapData& heapData,
 		const ResourceData& resData,
@@ -122,8 +119,8 @@ public:
 
 	std::shared_ptr<GPUResource> CreateIntermediate(
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		UINT firstSubresource,
-		UINT numSubresources
+		UINT firstSubresource = 0,
+		UINT numSubresources = 1
 	);
 
 	void UpdateSubresource(

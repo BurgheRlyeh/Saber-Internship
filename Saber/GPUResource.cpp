@@ -3,12 +3,13 @@
 std::shared_ptr<GPUResource> GPUResource::m_pCounterResetter = nullptr;
 
 GPUResource::GPUResource(
+	const std::wstring& name,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	const HeapData& heapData,
 	const ResourceData& resData,
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) {
-	CreateResource(pAllocator, heapData, resData, allocationFlags);
+	CreateResource(name, pAllocator, heapData, resData, allocationFlags);
 }
 
 void GPUResource::ResetCounter(
@@ -44,6 +45,7 @@ std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
 	}
 
 	return std::make_shared<GPUResource>(
+		L"Intermediate",
 		pAllocator,
 		HeapData{ D3D12_HEAP_TYPE_UPLOAD },
 		ResourceData{
@@ -156,6 +158,7 @@ void GPUResource::CreateRenderTargetView(
 }
 
 void GPUResource::CreateResource(
+	const std::wstring& name,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	const HeapData& heapData,
 	const ResourceData& resData,
@@ -175,5 +178,6 @@ void GPUResource::CreateResource(
 		&m_pAllocation,
 		IID_PPV_ARGS(&m_pResource)
 	));
+	m_pResource->SetName(name.c_str());
 	m_state = resData.resInitState;
 }

@@ -7,6 +7,7 @@
 class ConstantBuffer : public GPUResource {
 public:
 	ConstantBuffer(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const UINT64& size,
 		void* initData = nullptr,

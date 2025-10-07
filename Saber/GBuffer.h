@@ -6,7 +6,7 @@
 
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
-#include "Texture.h"
+#include "TextureResource.h"
 
 class GBuffer {
 	static inline D3D12_RESOURCE_DESC m_resDescs[]{
@@ -16,7 +16,7 @@ class GBuffer {
 		CD3DX12_RESOURCE_DESC::Tex2D(    DXGI_FORMAT_R8G8B8A8_UNORM, 0, 0, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)	// resulting uav
 	};
 
-	std::vector<std::shared_ptr<Texture>> m_pTextures{};
+	std::vector<std::shared_ptr<TextureResource>> m_pTextures{};
 
 	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
 	std::shared_ptr<DescHeapRange> m_pUavsRange{};
@@ -81,7 +81,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<Texture> GetTexture(size_t id) const;
+	std::shared_ptr<TextureResource> GetTexture(size_t id) const;
 
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> GetRtvs() const;
 	D3D12_RT_FORMAT_ARRAY GetRtFormatArray() const;

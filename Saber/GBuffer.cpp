@@ -32,7 +32,8 @@ void GBuffer::Resize(
 		m_resDescs[i].Width = width;
 		m_resDescs[i].Height = height;
 
-		std::shared_ptr<Texture> pTex{ std::make_shared<Texture>(
+		std::shared_ptr<TextureResource> pTex{ std::make_shared<TextureResource>(
+			L"GBuffer",
 			pAllocator,
 			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 			GPUResource::ResourceData{ m_resDescs[i] }
@@ -67,7 +68,7 @@ void GBuffer::Clear(
 	);
 }
 
-std::shared_ptr<Texture> GBuffer::GetTexture(size_t id) const {
+std::shared_ptr<TextureResource> GBuffer::GetTexture(size_t id) const {
 	return m_pTextures[id];
 }
 

@@ -1,12 +1,14 @@
 #include "ConstantBuffer.h"
 
 ConstantBuffer::ConstantBuffer(
+	const std::wstring& name,
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 	const UINT64& size,
 	void* initData,
 	const HeapData& heapData,
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) : GPUResource(
+		name,
 		pAllocator,
 		heapData,
 		ResourceData{
@@ -27,7 +29,10 @@ void ConstantBuffer::CreateConstantBufferView(
 ) {
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
 		.BufferLocation{ GetResource()->GetGPUVirtualAddress() },
-		.SizeInBytes{ static_cast<UINT>((GetResource()->GetDesc().Width + 255) & ~255) }
+		.SizeInBytes{ AlignSize(
+			GetResource()->GetDesc().Width,
+			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+		) }
 	};
 	pDevice->CreateConstantBufferView(&cbvDesc, cpuDescHandle);
 }

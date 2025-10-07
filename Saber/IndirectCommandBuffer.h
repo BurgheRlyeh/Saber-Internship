@@ -16,6 +16,8 @@
 template <typename IndirectCommand>
 class IndirectCommandBuffer {
 protected:
+	std::wstring m_name{};
+
 	Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_pCommandSignature{};
 
 	std::shared_ptr<GPUResource> m_pIndirectCommandBuffer{};
@@ -30,14 +32,14 @@ protected:
 
 public:
 	IndirectCommandBuffer(
+		const std::wstring& renderSubsystemName,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		const std::wstring& renderObjectName,
 		uint32_t capacity
-	) {
+	) : m_name(renderSubsystemName + L"IndirectCommandBuffer") {
 		m_pCommandSignature = CreateCommandSignature(
 			pDevice,
 			commandSignatureDesc,
@@ -45,12 +47,12 @@ public:
 		);
 
 		m_pDescHeapRangeSrv = pDescHeapManagerCbvSrvUav->AllocateRange(
-			(renderObjectName + L"/IndirectCommandBuffer/Srv").c_str(),
+			(m_name + L"/Ranges/Srv").c_str(),
 			1,
 			D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 		);
 		m_pDescHeapRangeUav = pDescHeapManagerCbvSrvUav->AllocateRange(
-			(renderObjectName + L"/IndirectCommandBuffer/Uav").c_str(),
+			(m_name + L"/Ranges/Uav").c_str(),
 			1,
 			D3D12_DESCRIPTOR_RANGE_TYPE_UAV
 		);
@@ -112,6 +114,7 @@ protected:
 		m_counterOffset = bufferSize;
 
 		m_pIndirectCommandBuffer = std::make_shared<GPUResource>(
+			(m_name + L"/IndirectCommandBuffer"),
 			pAllocator,
 			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
 			GPUResource::ResourceData{
@@ -137,6 +140,7 @@ protected:
 		);
 
 		m_pAppendIndirectCommandBuffer = std::make_shared<GPUResource>(
+			(m_name + L"/AppendIndirectCommandBuffer"),
 			pAllocator,
 			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
 			GPUResource::ResourceData{
@@ -219,21 +223,21 @@ class StaticIndirectCommandBuffer : public IndirectCommandBuffer<IndirectCommand
 
 public:
 	StaticIndirectCommandBuffer(
+		const std::wstring& renderSubsystemName,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		const std::wstring& renderObjectName,
 		size_t capacity,
 		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
 	) : IndirectCommandBuffer<IndirectCommand>(
+		renderSubsystemName + L"/Static",
 		pDevice,
 		pAllocator,
 		commandSignatureDesc,
 		pRootSignature,
 		pDescHeapManagerCbvSrvUav,
-		renderObjectName + L"Static",
 		capacity
 	), m_pDynamicUploadHeap(pDynamicUploadHeap) {
 		m_indirectCommands.resize(m_capacity);
@@ -324,22 +328,22 @@ class DynamicIndirectCommandBuffer : public IndirectCommandBuffer<IndirectComman
 
 public:
 	DynamicIndirectCommandBuffer(
+		const std::wstring& renderSubsystemName,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		const std::wstring& renderObjectName,
 		size_t capacity,
 		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
 		std::shared_ptr<ComputeObject> pIndirectUpdater
 	) : IndirectCommandBuffer<IndirectCommand>(
+			renderSubsystemName + L"/Dynamic",
 			pDevice,
 			pAllocator,
 			commandSignatureDesc,
 			pRootSignature,
 			pDescHeapManagerCbvSrvUav,
-			renderObjectName + L"Dynamic",
 			capacity
 		),
 		m_pDynamicUploadHeap(pDynamicUploadHeap),

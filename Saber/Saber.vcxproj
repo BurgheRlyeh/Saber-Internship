@@ -184,7 +184,7 @@
     <ClInclude Include="JobSystem.h" />
     <ClInclude Include="LightBuffer.h" />
     <ClInclude Include="LockFreeQueue.h" />
-    <ClInclude Include="TexturePack.h" />
+    <ClInclude Include="Texture.h" />
     <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
     <ClInclude Include="Mesh.h" />
@@ -204,7 +204,7 @@
     <ClInclude Include="SeparateChainingMap.h" />
     <ClInclude Include="SinglePassDownsampler.h" />
     <ClInclude Include="targetver.h" />
-    <ClInclude Include="Texture.h" />
+    <ClInclude Include="TextureResource.h" />
     <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Vertices.h" />
     <ClInclude Include="VisibilityBuffer.h" />
@@ -234,7 +234,7 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SinglePassDownsampler.cpp" />
-    <ClCompile Include="Texture.cpp" />
+    <ClCompile Include="TextureResource.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc" />

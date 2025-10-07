@@ -41,7 +41,7 @@ void Renderer::Initialize(HWND hWnd) {
 
 #if defined(_DEBUG)
     EnableDebugLayer();
-    //EnableGPUBasedValidation();
+    EnableGPUBasedValidation();
 #endif
 
     // device and allocator
@@ -100,6 +100,7 @@ void Renderer::Initialize(HWND hWnd) {
 
     m_pDepthBuffers.resize(1);
     m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
+        L"DepthBuffer",
         m_pDevice,
         m_pAllocator,
         m_pDsvDescHeapManager,
@@ -119,7 +120,7 @@ void Renderer::Initialize(HWND hWnd) {
     );
 
     m_pGBuffers.resize(1);
-    m_pGBuffers[0] = std::make_shared<TexturePack>(
+    m_pGBuffers[0] = std::make_shared<Texture>(
         L"GBuffer",
         m_pDevice,
         m_pAllocator,
@@ -708,7 +709,6 @@ bool Renderer::CheckTearingSupport() {
 #if defined(_DEBUG)
 void Renderer::EnableDebugLayer() {
     Microsoft::WRL::ComPtr<ID3D12Debug> pDebugInterface;
-    //ThrowIfFailed(D3D12GetInterface(CLSID_D3D12Debug, IID_PPV_ARGS(&debugInterface))); // TODO
     ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
     pDebugInterface->EnableDebugLayer();
 }
@@ -748,8 +748,7 @@ void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice
 
         D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
 
-        D3D12_MESSAGE_ID_RESOURCE_BARRIER_BEFORE_AFTER_MISMATCH,
-        D3D12_MESSAGE_ID_INVALID_SUBRESOURCE_STATE
+        D3D12_MESSAGE_ID_GPU_BASED_VALIDATION_RESOURCE_STATE_IMPRECISE, // Occured by GBV when ExecuteIndirect is used
     };
     D3D12_INFO_QUEUE_FILTER NewFilter{
         .DenyList{
@@ -907,7 +906,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
     return pDXGISwapChain4;
 }
 
-std::vector<std::shared_ptr<Texture>> Renderer::CreateBackBuffers(
+std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
     Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
     std::shared_ptr<DescHeapRange> pDescHeapRange
@@ -916,12 +915,11 @@ std::vector<std::shared_ptr<Texture>> Renderer::CreateBackBuffers(
     ThrowIfFailed(pSwapChain->GetDesc(&desc));
     ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
-    std::vector<std::shared_ptr<Texture>> backBuffers{ desc.BufferCount };
+    std::vector<std::shared_ptr<TextureResource>> backBuffers{ desc.BufferCount };
 
     pDescHeapRange->Clear();
     for (size_t i{}; i < desc.BufferCount; ++i) {
-        //backBuffers[i] = Texture::InitFromSwapChain(pSwapChain, i);
-        backBuffers[i] = std::make_shared<Texture>(pSwapChain, i);
+        backBuffers[i] = TextureResource::FromSwapChain(pSwapChain, i);
         backBuffers[i]->CreateRenderTargetView(
             pDevice,
             pDescHeapRange->GetNextCpuHandle()

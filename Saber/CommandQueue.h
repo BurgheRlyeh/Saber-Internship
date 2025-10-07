@@ -19,6 +19,8 @@
 #include "CommandList.h"
 
 class CommandQueue {
+	static const std::wstring BASE_NAME;
+
 	struct CommandAllocatorEntry {
 		uint64_t fenceValue{};
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
@@ -31,9 +33,9 @@ class CommandQueue {
 	uint64_t m_fenceValue{};
 	
 	std::queue<CommandAllocatorEntry> m_commandAllocatorQueue{};
-	std::mutex m_commandAllocatorQueueMutex{};
+	std::mutex m_commandAllocatorQueueMutex{};	// TODO: change to lock free queue
 	std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
-	std::mutex m_commandListQueueMutex{};
+	std::mutex m_commandListQueueMutex{};		// TODO: change to lock free queue
 
 	struct PrioritySet {
 		std::mutex mutex{};
@@ -56,8 +58,8 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		bool isDeffered = false,
 		uint8_t priority = 0,
-		std::function<void(void)> beforeExecuteTask = [=]() { return; },
-		std::function<void(void)> afterExecuteTask = [=]() { return; }
+		std::function<void()> beforeExecuteTask = []{},
+		std::function<void()> afterExecuteTask = []{}
 	);
 
 	// Execute a command list.

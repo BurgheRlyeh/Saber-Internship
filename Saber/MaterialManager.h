@@ -6,11 +6,13 @@
 #include "ConstantBuffer.h"
 #include "DDSTexture.h"
 #include "DescriptorHeapManager.h"
-#include "Texture.h"
+#include "TextureResource.h"
 
 #include "MaterialCB.h"
 
 class MaterialManager {
+	static const std::wstring BASE_NAME;
+
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
 	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
 	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
@@ -19,8 +21,8 @@ class MaterialManager {
 	std::shared_ptr<ConstantBuffer> m_pMaterialCB{};
 
 	struct RenderMaterial {
-		std::shared_ptr<Texture> pAlbedo{};
-		std::shared_ptr<Texture> pNormal{};
+		std::shared_ptr<TextureResource> pAlbedo{};
+		std::shared_ptr<TextureResource> pNormal{};
 	};
 	std::vector<std::shared_ptr<RenderMaterial>> m_pMaterials{};
 
@@ -52,5 +54,5 @@ public:
 	);
 
 private:
-	size_t AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Texture> pTex);
+	size_t AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<TextureResource> pTex);
 };

@@ -10,13 +10,15 @@
 #include "PSOLibrary.h"
 #include "RenderObject.h"
 #include "Resources.h"
-#include "Texture.h"
+#include "TextureResource.h"
 
 #define FFX_CPU
 #include "FidelityFX/gpu/ffx_core.h"
 #include "FidelityFX/gpu/spd/ffx_spd.h"
 
 class SinglePassDownsampler : public ComputeObject {
+    static const std::wstring BASE_NAME;
+
     struct SpdGlobalAtomicBuffer {
         FfxUInt32 counter[6];
     };
