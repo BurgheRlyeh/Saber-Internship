@@ -17,6 +17,7 @@
 #include <mutex>
 
 #include "CommandList.h"
+#include "LockFreeQueue.h"
 
 class CommandQueue {
 	static const std::wstring BASE_NAME;
@@ -31,11 +32,9 @@ class CommandQueue {
 	Microsoft::WRL::ComPtr<ID3D12Fence> m_pFence{};
 	HANDLE m_fenceEvent{};
 	uint64_t m_fenceValue{};
-	
-	std::queue<CommandAllocatorEntry> m_commandAllocatorQueue{};
-	std::mutex m_commandAllocatorQueueMutex{};	// TODO: change to lock free queue
-	std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
-	std::mutex m_commandListQueueMutex{};		// TODO: change to lock free queue
+
+	ArrayLockFreeQueue<CommandAllocatorEntry> m_commandAllocatorQueue{};
+	ArrayLockFreeQueue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
 
 	struct PrioritySet {
 		std::mutex mutex{};

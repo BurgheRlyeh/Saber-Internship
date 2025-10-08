@@ -48,40 +48,28 @@ std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 	std::function<void(void)> beforeExecuteTask,
 	std::function<void(void)> afterExecuteTask
 ) {
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
+	CommandAllocatorEntry allocatorEntry;
+	if (m_commandAllocatorQueue.Dequeue(allocatorEntry) && IsFenceComplete(allocatorEntry.fenceValue)) {
+		allocatorEntry.pCommandAllocator = allocatorEntry.pCommandAllocator;
+		ThrowIfFailed(allocatorEntry.pCommandAllocator->Reset());
+	}
+	else {
+		allocatorEntry.pCommandAllocator = CreateCommandAllocator(pDevice);
+	}
+
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList{};
-
-	std::unique_lock commandAllocatorQueueLock{ m_commandAllocatorQueueMutex };
-	if (!m_commandAllocatorQueue.empty() && IsFenceComplete(m_commandAllocatorQueue.front().fenceValue)) {
-		pCommandAllocator = m_commandAllocatorQueue.front().pCommandAllocator;
-		m_commandAllocatorQueue.pop();
-		commandAllocatorQueueLock.unlock();
-
-		ThrowIfFailed(pCommandAllocator->Reset());
+	if (m_commandListQueue.Dequeue(pD3D12CommandList)) {
+		ThrowIfFailed(pD3D12CommandList->Reset(allocatorEntry.pCommandAllocator.Get(), nullptr));
 	}
 	else {
-		commandAllocatorQueueLock.unlock();
-		pCommandAllocator = CreateCommandAllocator(pDevice);
-	}
-
-	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
-	if (!m_commandListQueue.empty()) {
-		pD3D12CommandList = m_commandListQueue.front();
-		m_commandListQueue.pop();
-		commandListQueueLock.unlock();
-
-		ThrowIfFailed(pD3D12CommandList->Reset(pCommandAllocator.Get(), nullptr));
-	}
-	else {
-		commandListQueueLock.unlock();
-		pD3D12CommandList = CreateCommandList(pDevice, pCommandAllocator);
+		pD3D12CommandList = CreateCommandList(pDevice, allocatorEntry.pCommandAllocator);
 	}
 
 	// Associate the command allocator with the command list so that it can be
 	// retrieved when the command list is executed.
 	ThrowIfFailed(pD3D12CommandList->SetPrivateDataInterface(
 		__uuidof(ID3D12CommandAllocator),
-		pCommandAllocator.Get()
+		allocatorEntry.pCommandAllocator.Get()
 	));
 
 	std::shared_ptr<CommandList> pCommandList{ std::make_shared<CommandList>(
@@ -123,13 +111,16 @@ uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandLi
 	commandList->AfterExecute();
 	uint64_t fenceValue{ Signal() };
 
-	std::unique_lock allocatorListQueueLock{ m_commandAllocatorQueueMutex };
-	m_commandAllocatorQueue.emplace(CommandAllocatorEntry{ fenceValue, pCommandAllocator });
-	allocatorListQueueLock.unlock();
+	CommandAllocatorEntry commandAllocEntry{ fenceValue, pCommandAllocator };
+	if (!m_commandAllocatorQueue.Enqueue(commandAllocEntry)) {
+		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
+		throw std::runtime_error("CommandAllocator Queue of CommandQueue with type " + commandQueueType + " is full" );
+	}
 
-	std::unique_lock commandListQueueLock{ m_commandListQueueMutex };
-	m_commandListQueue.push(pD3D12CommandList);
-	commandListQueueLock.unlock();
+	if (!m_commandListQueue.Enqueue(pD3D12CommandList)) {
+		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
+		throw std::runtime_error("CommandList Queue of CommandQueue with type " + commandQueueType + " is full");
+	}
 
 	// The ownership of the command allocator has been transferred to the ComPtr
 	// in the command allocator queue. It is safe to release the reference 
