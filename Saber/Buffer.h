@@ -1,0 +1,230 @@
+#pragma once
+
+#include "Headers.h"
+
+#include <optional>
+
+#include "BufferUpdater.h"
+#include "ComputeObject.h"
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "DynamicUploadRingBuffer.h"
+#include "GPUResource.h"
+
+template <typename T>
+class Buffer {
+	friend class BufferUpdater<T>;
+	friend class StaticBufferUpdater<T>;
+	friend class DynamicBufferUpdater<T>;
+	friend class InstUploadBufferUpdater<T>;
+
+protected:
+	std::wstring m_name{};
+
+	std::shared_ptr<GPUResource> m_pResource{};
+
+	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
+	std::shared_ptr<DescHeapRange> m_pRtvsRange{};
+	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+
+	size_t m_capacity{};
+	std::vector<T> m_data{};
+
+	std::unique_ptr<BufferUpdater<T>> m_pUpdater{};
+
+	GPUResource::HeapData m_heapData{};
+	GPUResource::ResourceData m_resData{};
+	D3D12MA::ALLOCATION_FLAGS m_allocFlags{};
+
+public:
+	Buffer(
+		const std::wstring& name,
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerRtv,
+		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+		size_t capacity,
+		const GPUResource::HeapData& heapData = GPUResource::HeapData{},
+		const GPUResource::ResourceData& resData = GPUResource::ResourceData{},
+		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+	) : m_name(name),
+		m_capacity(capacity),
+		m_heapData(heapData),
+		m_resData(resData),
+		m_allocFlags(allocationFlags)
+	{
+		if (pDescHeapManagerCbvSrvUav && IsSrvDesc(resData.resDesc)) {
+			m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+				m_name + L"/Ranges/Srv",
+				1,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+			);
+		}
+		if (pDescHeapManagerCbvSrvUav && IsUavDesc(resData.resDesc)) {
+			m_pUavsRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+				m_name + L"/Ranges/Uav",
+				1,
+				D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+			);
+		}
+		if (pDescHeapManagerRtv && IsRtvDesc(resData.resDesc)) {
+			m_pRtvsRange = pDescHeapManagerRtv->AllocateRange(
+				m_name + L"/Ranges/Rtv",
+				1
+			);
+		}
+
+		CreateBuffersAndViews(pDevice, pAllocator, capacity);
+	}
+
+	virtual ~Buffer() = default;
+
+	std::shared_ptr<GPUResource> GetResource() const {
+		return m_pResource;
+	}
+
+	template<std::derived_from<BufferUpdater<T>> Updater, typename... Args>
+	void CreateUpdater(Args&&... args) {
+		m_pUpdater = std::make_unique<Updater>(*this, std::forward<Args>(args)...);
+	}
+
+	virtual void SetUpdateAll(T* pData, size_t count) {
+		assert(m_pUpdater);
+		m_pUpdater->SetUpdateAll(pData, count);
+	}
+	virtual void SetUpdateAt(size_t id, const T& data) {
+		assert(m_pUpdater);
+		m_pUpdater->SetUpdateAt(id, data);
+	}
+	virtual void PerformUpdate(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect
+	) {
+		assert(m_pUpdater);
+		m_pUpdater->PerformUpdate(
+			pDevice,
+			pAllocator,
+			pCommandQueueCopy,
+			pCommandQueueDirect
+		);
+	}
+
+	bool Expand(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+		uint32_t numElements
+	) {
+		if (numElements <= m_capacity) {
+			return false;
+		}
+
+		std::shared_ptr<GPUResource> pOldResource{ m_pResource };
+		uint32_t oldCapacity{ static_cast<uint32_t>(m_capacity) };
+
+		CreateBuffersAndViews(pDevice, pAllocator, numElements);
+
+		std::shared_ptr<CommandList> pCommandListDirect{
+			pCommandQueueDirect->GetCommandList(pDevice)
+		};
+		pOldResource->ResourceTransition(
+			pCommandListDirect,
+			D3D12_RESOURCE_STATE_COPY_SOURCE
+		);
+		m_pResource->ResourceTransition(
+			pCommandListDirect,
+			D3D12_RESOURCE_STATE_COPY_DEST
+		);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+
+		std::shared_ptr<CommandList> pCommandListCopy{
+			pCommandQueueCopy->GetCommandList(pDevice)
+		};
+		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
+			m_pResource->GetResource().Get(),
+			0,
+			pOldResource->GetResource().Get(),
+			0,
+			oldCapacity * sizeof(T)
+		);
+		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+
+		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
+		m_pResource->ResourceTransition(
+			pCommandListDirect,
+			m_resData.resInitState
+		);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+
+		return true;
+	}
+
+protected:
+	void CreateBuffersAndViews(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		uint32_t numElements
+	) {
+		m_capacity = numElements;
+		
+		m_resData.resDesc.Width = m_capacity * sizeof(T);
+		m_pResource = std::make_shared<GPUResource>(
+			m_name,
+			pAllocator,
+			m_heapData,
+			m_resData,
+			m_allocFlags
+		);
+
+		if (m_pSrvsRange) {
+			m_pSrvsRange->Clear();
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+				.ViewDimension{ D3D12_SRV_DIMENSION_BUFFER },
+				.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
+				.Buffer{
+					.NumElements{ static_cast<uint32_t>(m_capacity) },
+					.StructureByteStride{ sizeof(T) }
+				}
+			};
+			m_pResource->CreateShaderResourceView(
+				pDevice,
+				m_pSrvsRange->GetNextCpuHandle(),
+				&srvDesc
+			);
+		}
+
+		if (m_pUavsRange) {
+			m_pUavsRange->Clear();
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
+				.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
+				.Buffer{
+					.NumElements{ static_cast<uint32_t>(m_capacity) },
+					.StructureByteStride{ sizeof(T) }
+				}
+			};
+			m_pResource->CreateUnorderedAccessView(
+				pDevice,
+				m_pUavsRange->GetNextCpuHandle(),
+				&uavDesc
+			);
+		}
+
+		if (m_pRtvsRange) {
+			m_pRtvsRange->Clear();
+			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{
+				.ViewDimension{ D3D12_RTV_DIMENSION_BUFFER },
+				.Buffer{
+					.NumElements{ static_cast<uint32_t>(m_capacity) }
+				}
+			};
+			m_pResource->CreateRenderTargetView(
+				pDevice,
+				m_pRtvsRange->GetNextCpuHandle(),
+				&rtvDesc
+			);
+		}
+	}
+};

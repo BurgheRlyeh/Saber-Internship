@@ -24,6 +24,10 @@ struct IndirectCommandBase {
         };
     }
 };
+
+template <typename Impl>
+concept IndirectCommandConcept = std::derived_from<Impl, IndirectCommandBase<Impl>>;
+
 #define DEFINE_INDIRECT_COMMAND(IndirectCommand) \
 	struct IndirectCommand : IndirectCommandBase<IndirectCommand>
 #else

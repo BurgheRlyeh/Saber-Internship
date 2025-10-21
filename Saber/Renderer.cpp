@@ -25,6 +25,7 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
 }
 
 Renderer::~Renderer() {
+    Flush();
     GPUResource::DestroyCounterResetter();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
@@ -32,7 +33,6 @@ Renderer::~Renderer() {
     m_pDepthBuffers.clear();
     m_pMaterialManager.reset();
     m_pResourceDescHeapManager.reset();
-    Flush();
 }
 
 void Renderer::Initialize(HWND hWnd) {

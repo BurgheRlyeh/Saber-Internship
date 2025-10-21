@@ -8,7 +8,7 @@
 #include "MeshRenderObject.h"
 #include "SeparateChainingMap.h"
 
-template <typename IndirectCommand>
+template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem {
 	std::wstring m_name{};
 
@@ -96,32 +96,25 @@ public:
 			return false;
 		}
 
+		m_pIndirectCommandBuffer = std::make_shared<
+			IndirectCommandBuffer<IndirectCommand>
+		>(
+			m_name,
+			pDevice,
+			pAllocator,
+			IndirectCommand::GetCommandSignatureDesc(),
+			m_objects.front()->GetRootSignature(),
+			pDescHeapManagerCbvSrvUav,
+			m_objects.size()
+		);
 		if (pIndirectUpdater) {
-			m_pIndirectCommandBuffer = std::make_shared<
-				DynamicIndirectCommandBuffer<IndirectCommand>
-			>(
-				m_name,
-				pDevice,
-				pAllocator,
-				IndirectCommand::GetCommandSignatureDesc(),
-				m_objects.front()->GetRootSignature(),
-				pDescHeapManagerCbvSrvUav,
-				m_objects.size(),
+			m_pIndirectCommandBuffer->CreateUpdater<DynamicBufferUpdater<IndirectCommand>>(
 				pDynamicUploadHeap,
 				pIndirectUpdater
 			);
 		}
 		else {
-			m_pIndirectCommandBuffer = std::make_shared<
-				StaticIndirectCommandBuffer<IndirectCommand>
-			>(
-				m_name,
-				pDevice,
-				pAllocator,
-				IndirectCommand::GetCommandSignatureDesc(),
-				m_objects.front()->GetRootSignature(),
-				pDescHeapManagerCbvSrvUav,
-				m_objects.size(),
+			m_pIndirectCommandBuffer->CreateUpdater<StaticBufferUpdater<IndirectCommand>>(
 				pDynamicUploadHeap
 			);
 		}
