@@ -75,8 +75,7 @@ public:
     GPURingBuffer(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         size_t capacity,
-        bool isCPUAccessable,
-        bool isGPUWritable
+        bool isCpuAccessable
     );
 
     ~GPURingBuffer();
@@ -90,7 +89,6 @@ private:
 class DynamicUploadHeap {
     Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
     const bool m_isCPUAccessible;
-    const bool m_isGPUWritable;
     std::list<GPURingBuffer> m_ringBuffers{};
 
 public:
@@ -98,8 +96,7 @@ public:
     DynamicUploadHeap(
         Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
         size_t initialCapacity,
-        bool isCPUAccessible,
-        bool isGPUWritable = false
+        bool isCPUAccessible
     );
 
     DynamicAllocation Allocate(size_t size, size_t alignment = DEFAULT_ALIGN);

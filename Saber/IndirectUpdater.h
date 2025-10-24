@@ -51,7 +51,7 @@ private:
     ) {
         size_t rpId{};
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
-        rootParameters[rpId++].InitAsConstants(1, 0);
+        rootParameters[rpId++].InitAsConstants(4, 0);
         rootParameters[rpId++].InitAsShaderResourceView(0);
         rootParameters[rpId++].InitAsShaderResourceView(1);
         rootParameters[rpId++].InitAsUnorderedAccessView(0);

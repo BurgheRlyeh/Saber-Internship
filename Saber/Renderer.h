@@ -108,8 +108,7 @@ class Renderer {
     enum RingBufferId {
         Cpu = 0,
         Gpu = 1,
-        GpuWritable = 2,
-        Count = 3
+        Count = 2
     };
     std::vector<std::shared_ptr<DynamicUploadHeap>> m_pRingBuffers{};
 

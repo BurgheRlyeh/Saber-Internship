@@ -86,7 +86,7 @@ void SinglePassDownsampler::Resize(
     m_pSpdConstantBuffer = std::make_shared<ConstantBuffer>(
         BASE_NAME + L"/SpdConstantBuffer",
         pAllocator,
-        sizeof(SPDConstantBuffer),
+		sizeof(SPDConstantBuffer),
         &m_spdConstantBuffer
     );
     m_pSpdConstantBuffer->CreateConstantBufferView(pDevice, m_pSpdConstantBufferRange->GetNextCpuHandle());
@@ -120,7 +120,7 @@ void SinglePassDownsampler::InnerRootParametersSetter(
 ) const {
     auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
     pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
-    pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
+	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
 Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
@@ -128,9 +128,9 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
 
     // SPD ConstantBuffer
-    CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
-    rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
+	CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
+	rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+	rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
 
     // input texture
     CD3DX12_DESCRIPTOR_RANGE1 rangeSrvInput[1]{};
@@ -138,9 +138,9 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvInput), rangeSrvInput);
 
     // global atomic counter
-    CD3DX12_DESCRIPTOR_RANGE1 rangeUavCounter[1]{};
-    rangeUavCounter[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavCounter), rangeUavCounter);
+	CD3DX12_DESCRIPTOR_RANGE1 rangeUavCounter[1]{};
+	rangeUavCounter[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavCounter), rangeUavCounter);
 
     // mid mipmap
     CD3DX12_DESCRIPTOR_RANGE1 rangeUavMidMipmap[1]{};

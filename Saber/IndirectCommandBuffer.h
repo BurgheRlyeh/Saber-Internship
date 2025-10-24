@@ -39,8 +39,7 @@ public:
 				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
 					capacity * sizeof(IndirectCommand),
 					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-				) },
-				.resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
+				) }
 			}
 		) {
 		m_pCommandSignature = CreateCommandSignature(
@@ -51,6 +50,9 @@ public:
 	}
 
 	void Execute(std::shared_ptr<CommandList> pCommandList) {
+		if (m_pResource->GetState() != D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT) {
+			m_pResource->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		}
 		pCommandList->GetD3D12CommandList()->ExecuteIndirect(
 			m_pCommandSignature.Get(),
 			m_capacity,

@@ -12,7 +12,10 @@ ConstantBuffer::ConstantBuffer(
 		pAllocator,
 		heapData,
 		ResourceData{
-			CD3DX12_RESOURCE_DESC::Buffer(size),
+			CD3DX12_RESOURCE_DESC::Buffer(AlignSize(
+				size,
+				D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+			)),
 			D3D12_RESOURCE_STATE_GENERIC_READ
 		},
 		allocationFlags
@@ -29,10 +32,7 @@ void ConstantBuffer::CreateConstantBufferView(
 ) {
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
 		.BufferLocation{ GetResource()->GetGPUVirtualAddress() },
-		.SizeInBytes{ AlignSize(
-			GetResource()->GetDesc().Width,
-			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
-		) }
+		.SizeInBytes{ static_cast<UINT>(GetResource()->GetDesc().Width) }
 	};
 	pDevice->CreateConstantBufferView(&cbvDesc, cpuDescHandle);
 }

@@ -33,8 +33,7 @@ void DDSTexture::LoadFromDDS(
 				image.GetMetadata().height,
 				static_cast<UINT16>(image.GetMetadata().arraySize),
 				static_cast<UINT16>(image.GetMetadata().mipLevels)
-			),
-			D3D12_RESOURCE_STATE_COPY_DEST
+			)
 		}
 	);
 	

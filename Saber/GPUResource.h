@@ -63,10 +63,7 @@ public:
 			L"GPUResource/CounterResetter",
 			pAllocator,
 			HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			ResourceData{
-				CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)),
-				D3D12_RESOURCE_STATE_COPY_DEST
-			}
+			ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
 		);
 
 		UINT zero{};

@@ -182,6 +182,7 @@ public:
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
 		static const size_t threadBlockSize{ 128 };
+		m_buffer.GetResource()->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pUpdater->Dispatch(
 			pCommandListDirect,
 			(updCnt + threadBlockSize - 1) / threadBlockSize, 1, 1,

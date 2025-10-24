@@ -96,28 +96,28 @@ void Renderer::Initialize(HWND hWnd) {
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         8192,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-    );
+	);
 
-    m_pDepthBuffers.resize(1);
-    m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
-        L"DepthBuffer",
-        m_pDevice,
-        m_pAllocator,
-        m_pDsvDescHeapManager,
-        m_pResourceDescHeapManager,
-        m_clientWidth,
-        m_clientHeight,
-        std::make_shared<SinglePassDownsampler>(
-            m_pDevice,
-            m_pAllocator,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary,
-            m_pResourceDescHeapManager,
-            m_clientWidth,
-            m_clientHeight
-        )
-    );
+	m_pDepthBuffers.resize(1);
+	m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
+		L"DepthBuffer",
+		m_pDevice,
+		m_pAllocator,
+		m_pDsvDescHeapManager,
+		m_pResourceDescHeapManager,
+		m_clientWidth,
+		m_clientHeight,
+		std::make_shared<SinglePassDownsampler>(
+			m_pDevice,
+			m_pAllocator,
+			m_pShaderAtlas,
+			m_pRootSignatureAtlas,
+			m_pPSOLibrary,
+			m_pResourceDescHeapManager,
+			m_clientWidth,
+			m_clientHeight
+		)
+	);
 
     m_pGBuffers.resize(1);
     m_pGBuffers[0] = std::make_shared<Texture>(
@@ -132,15 +132,15 @@ void Renderer::Initialize(HWND hWnd) {
         GBUFFER_SIZE,
         m_pResourceDescHeapManager,
         m_pRtvDescHeapManager
-    );
+	);
 
-    m_pMaterialManager = std::make_shared<MaterialManager>(
-        L"../../Resources/Textures/",
-        m_pDevice,
-        m_pAllocator,
-        m_pResourceDescHeapManager,
-        1024
-    );
+	m_pMaterialManager = std::make_shared<MaterialManager>(
+		L"../../Resources/Textures/",
+		m_pDevice,
+		m_pAllocator,
+		m_pResourceDescHeapManager,
+		1024
+	);
 
     const size_t RingBufferDefaultSize{ 1024 };
     m_pRingBuffers.resize(RingBufferId::Count);
@@ -153,12 +153,6 @@ void Renderer::Initialize(HWND hWnd) {
         m_pAllocator,
         RingBufferDefaultSize,
         false
-    );
-    m_pRingBuffers[RingBufferId::GpuWritable] = std::make_shared<DynamicUploadHeap>(
-        m_pAllocator,
-        RingBufferDefaultSize,
-        false,
-        true
     );
 
     m_isInitialized = true;
