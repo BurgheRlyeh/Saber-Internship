@@ -43,7 +43,7 @@ public:
 	{}
 
 	virtual void SetUpdateAll(T* pData, size_t count) override {
-		if (count > m_buffer.m_capacity) {
+		if (count > m_buffer.GetCapacity()) {
 			m_buffer.m_data.resize(count);
 		}
 		for (size_t i{}; i < count; ++i) {
@@ -62,21 +62,21 @@ public:
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) override {
-		if (m_buffer.m_data.size() > m_buffer.m_capacity) {
+		if (m_buffer.m_data.size() > m_buffer.GetCapacity()) {
 			m_buffer.CreateBuffersAndViews(pDevice, pAllocator, m_buffer.m_data.size());
 		}
 
 		std::shared_ptr<CommandList> pCommandListDirect{
 			pCommandQueueDirect->GetCommandList(pDevice)
 		};
-		m_buffer.m_pResource->ResourceTransition(
+		m_buffer.GetResource()->ResourceTransition(
 			pCommandListDirect,
 			D3D12_RESOURCE_STATE_COPY_DEST
 		);
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 
 		DynamicAllocation intermediateAllocation{
-			m_pDynamicUploadHeap->Allocate(m_buffer.m_capacity * sizeof(T))
+			m_pDynamicUploadHeap->Allocate(m_buffer.m_data.size() * sizeof(T))
 		};
 		D3D12_SUBRESOURCE_DATA subresData{
 			.pData{ m_buffer.m_data.data() },
@@ -89,7 +89,7 @@ public:
 		};
 		UpdateSubresources(
 			pCommandListCopy->GetD3D12CommandList().Get(),
-			m_buffer.m_pResource->GetResource().Get(),
+			m_buffer.GetResource()->GetResource().Get(),
 			intermediateAllocation.pBuffer->GetResource().Get(),
 			intermediateAllocation.offset,
 			0,
@@ -99,7 +99,7 @@ public:
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
 		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
-		m_buffer.m_pResource->ResourceTransition(
+		m_buffer.GetResource()->ResourceTransition(
 			pCommandListDirect,
 			m_buffer.m_resData.resInitState
 		);
@@ -125,9 +125,9 @@ public:
 		m_pDynamicUploadHeap(pDynamicUploadHeap),
 		m_pUpdater(pUpdater)
 	{
-		assert(m_buffer.m_pResource->IsUav());
-		m_updBufIds.reserve(m_buffer.m_capacity);
-		m_updBuf.reserve(m_buffer.m_capacity);
+		assert(m_buffer.GetResource()->IsUav());
+		m_updBufIds.reserve(m_buffer.GetCapacity());
+		m_updBuf.reserve(m_buffer.GetCapacity());
 	}
 
 	virtual void SetUpdateAll(T* pData, size_t count) override {
@@ -158,7 +158,7 @@ public:
 			return;
 		}
 
-		if (m_updMaxId + 1 > m_buffer.m_capacity) {
+		if (m_updMaxId + 1 > m_buffer.GetCapacity()) {
 			m_buffer.Expand(
 				pDevice,
 				pAllocator,
@@ -193,7 +193,7 @@ public:
 				pD3D12CommandList->SetComputeRootShaderResourceView(rootParamId++, updBufAllocation.gpuAddress);
 				pD3D12CommandList->SetComputeRootUnorderedAccessView(
 					rootParamId++,
-					m_buffer.m_pResource->GetResource()->GetGPUVirtualAddress()
+					m_buffer.GetResource()->GetResource()->GetGPUVirtualAddress()
 				);
 			}
 		);
@@ -207,18 +207,20 @@ public:
 	InstUploadBufferUpdater(
 		Buffer<T>& buffer
 	) : BufferUpdater<T>(buffer) {
-		assert(m_buffer.m_heapData.heapType == D3D12_HEAP_TYPE_UPLOAD);
+		assert(m_buffer.GetResource()->GetHeapProperties().Type == D3D12_HEAP_TYPE_UPLOAD);
 	}
 
 	virtual void SetUpdateAll(T* pData, size_t count) override {
-		void* pDst{};
-		ThrowIfFailed(m_buffer.m_pResource->GetResource()->Map(0, nullptr, &pDst));
-		memcpy(static_cast<std::byte*>(pDst), pData, count * sizeof(T));
+		T* pDst{};
+		ThrowIfFailed(m_buffer.GetResource()->GetResource()->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		memcpy(pDst, pData, count * sizeof(T));
+		m_buffer.GetResource()->GetResource()->Unmap(0, &CD3DX12_RANGE(0, count));
 	}
 	virtual void SetUpdateAt(size_t id, const T& data) override {
-		void* pDst{};
-		ThrowIfFailed(m_buffer.m_pResource->GetResource()->Map(0, &CD3DX12_RANGE(id, id + 1), &pDst));
-		memcpy(static_cast<std::byte*>(pDst), &data, sizeof(T));
+		T* pDst{};
+		ThrowIfFailed(m_buffer.GetResource()->GetResource()->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		pDst[id] = data;
+		m_buffer.GetResource()->GetResource()->Unmap(0, &CD3DX12_RANGE(id, id + 1));
 	}
 	virtual void PerformUpdate(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,

@@ -21,7 +21,7 @@ class RenderSubsystem {
 
 	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
-	std::shared_ptr<DescHeapRange> m_pModelBuffersCbvRange{};
+	std::shared_ptr<Buffer<ModelBuffer>> m_pModelBuffers{};
 
 public:
 	RenderSubsystem(
@@ -38,25 +38,26 @@ public:
 	}
 
 	bool Add(std::shared_ptr<RenderObject> pObject) {
-		std::scoped_lock<std::mutex> lock(m_objectsMutex);
+		std::unique_lock<std::mutex> lock(m_objectsMutex);
+		assert(m_objects.empty() || pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
 		if (m_objects.size() == m_capacity) {
 			return false;
 		}
-		if (!m_objects.empty()) {
-			assert(pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
-		}
 		m_objects.push_back(pObject);
+		size_t id{ m_objects.size() - 1 };
+		lock.unlock();
+
+		auto pMeshObject{ std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(pObject) };
+		pMeshObject->SetModelBufferId(id);
+
 		if (m_pIndirectCommandBuffer) {
 			IndirectCommand indirectCommand;
-			pObject->FillIndirectCommand(indirectCommand);
-			m_pIndirectCommandBuffer->SetUpdateAt(m_objects.size() - 1, indirectCommand);
+			pMeshObject->FillIndirectCommand(indirectCommand);
+			m_pIndirectCommandBuffer->SetUpdateAt(id, indirectCommand);
 		}
-		if (m_pModelBuffersCbvRange) {
-			// TODO fix ModelBuffer struct specification
-			std::shared_ptr<MeshRenderObject<ModelBuffer>> pMeshObject{
-				std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(pObject)
-			};
-			pMeshObject->AllocateModelBufferCbv(m_pDevice, m_pModelBuffersCbvRange);
+		if (m_pModelBuffers) {
+			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
+			m_pModelBuffers->SetUpdateAt(id, modelBuffer);
 		}
 	}
 
@@ -71,17 +72,38 @@ public:
 		}
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
-		pCommandList->GetD3D12CommandList()->SetGraphicsRootDescriptorTable(3 + offset, m_pModelBuffersCbvRange->GetGpuHandle());
+		pCommandList->GetD3D12CommandList()->SetGraphicsRootShaderResourceView(
+			2,
+			m_pModelBuffers->GetResource()->GetResource()->GetGPUVirtualAddress()
+		);
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
 
-	void CreateModelBuffersRange(
-		std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
+	bool InitializeModelBuffer(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
 	) {
-		m_pModelBuffersCbvRange = pResDescHeapManager->AllocateRange(
-			m_name + L"/ModelBuffersCbvRange",
-			m_capacity
+		m_pModelBuffers = std::make_shared<Buffer<ModelBuffer>>(
+			m_name + L"/ModelBuffers",
+			pDevice,
+			pAllocator,
+			nullptr,
+			pDescHeapManagerCbvSrvUav,
+			m_capacity,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD }
 		);
+		m_pModelBuffers->CreateUpdater<InstUploadBufferUpdater<ModelBuffer>>();
+
+		for (size_t i{}; i < m_objects.size(); ++i) {
+			auto pMeshObject = std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(m_objects[i]);
+			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
+			m_pModelBuffers->SetUpdateAt(i, modelBuffer);
+		}
+
+		return true;
 	}
 
 	bool InitializeIndirectCommandBuffer(
@@ -99,7 +121,7 @@ public:
 		m_pIndirectCommandBuffer = std::make_shared<
 			IndirectCommandBuffer<IndirectCommand>
 		>(
-			m_name,
+			m_name + L"/IndirectCommandBuffer",
 			pDevice,
 			pAllocator,
 			IndirectCommand::GetCommandSignatureDesc(),
@@ -138,6 +160,24 @@ public:
 			return false;
 		}
 		m_pIndirectCommandBuffer->PerformUpdate(
+			pDevice,
+			pAllocator,
+			pCommandQueueCopy,
+			pCommandQueueDirect
+		);
+		return true;
+	}
+
+	bool PerformModelBufferUpdate(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect
+	) {
+		if (!m_pModelBuffers) {
+			return false;
+		}
+		m_pModelBuffers->PerformUpdate(
 			pDevice,
 			pAllocator,
 			pCommandQueueCopy,

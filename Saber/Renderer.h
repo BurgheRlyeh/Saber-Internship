@@ -162,6 +162,7 @@ private:
 #if defined(_DEBUG)
     void EnableDebugLayer();
     void EnableGPUBasedValidation();
+    void EnableDRED();
     void SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice);
 #endif
 

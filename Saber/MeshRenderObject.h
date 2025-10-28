@@ -68,6 +68,9 @@ public:
         );
     }
 
+    void SetModelBufferId(size_t id) {
+        m_modelBufferId = id;
+    }
     void AllocateModelBufferCbv(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<DescHeapRange> pModelCBVsRange
@@ -125,7 +128,7 @@ public:
 
     void FillIndirectCommand(ConstMesh4IndirectCommand& indirectCommand) override {
         indirectCommand = ConstMesh4IndirectCommand{
-            .rootConstant{ static_cast<uint32_t>(m_modelBufferId) },
+            .rootConstant{ DirectX::XMUINT4{ static_cast<uint32_t>(m_modelBufferId), 0, 0, 0 } },
             .indexBufferView{
                 *m_pMesh->GetIndexBufferView()
             },
@@ -325,17 +328,16 @@ public:
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"Brick.dds",
-                L"BrickNM.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pMaterialManager->AddMaterial(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect,
+            L"Brick.dds",
+            L"BrickNM.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
@@ -400,17 +402,16 @@ public:
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"barbarian_diffuse.dds",
-                L"barb2_n.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pMaterialManager->AddMaterial(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect,
+            L"barbarian_diffuse.dds",
+            L"barb2_n.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
@@ -427,15 +428,12 @@ private:
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
         };
 
-        size_t rp{}, spCbv{};
-        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
+        size_t rp{}, spCbv{}, srSrv{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
         rootParameters[rp++].InitAsConstantBufferView(spCbv++); // scene CB
-        rootParameters[rp++].InitAsConstantBufferView(spCbv++); // model CB
-        rootParameters[rp++].InitAsConstants(4, spCbv++);       // model CB ID
 
-        CD3DX12_DESCRIPTOR_RANGE1 rangeCbvs[1]{};
-        rangeCbvs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, spCbv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
-        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvs), rangeCbvs);
+        rootParameters[rp++].InitAsConstants(4, spCbv++);       // model CB ID
+        rootParameters[rp++].InitAsShaderResourceView(srSrv++); // model CBs
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -542,17 +540,16 @@ public:
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"grassAlbedo.dds",
-                L"grassNormal.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pMaterialManager->AddMaterial(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect,
+            L"grassAlbedo.dds",
+            L"grassNormal.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
@@ -570,19 +567,16 @@ protected:
         };
 
         size_t rp{}, srCbv{}, srSrv{};
-        CD3DX12_ROOT_PARAMETER1 rootParameters[6]{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
         rootParameters[rp++].InitAsConstantBufferView(srCbv++); // scene CB
 
-        rootParameters[rp++].InitAsConstantBufferView(srCbv++); // model CB
         rootParameters[rp++].InitAsConstants(4, srCbv++);       // model CB id
+        rootParameters[rp++].InitAsShaderResourceView(srSrv++); // model CBs id
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeCbvsMaterials[1]{};
         rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, srCbv++);
         rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials/*, D3D12_SHADER_VISIBILITY_PIXEL*/);
 
-        CD3DX12_DESCRIPTOR_RANGE1 rangeCbvs[1]{};
-        rangeCbvs[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, -1, srCbv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
-        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvs), rangeCbvs);
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
         rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, srSrv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);

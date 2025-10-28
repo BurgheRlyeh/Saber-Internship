@@ -5,14 +5,14 @@
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
 
-ConstantBuffer<ModelBuffer> ModelCB : register(b1);
-uint4 modelCbId : register(b2);
+cbuffer RootConstants : register(b1)
+{
+    uint modelCbId;
+}
+StructuredBuffer<ModelBuffer> ModelCBs : register(t0);
 
-ConstantBuffer<MaterialCB> Materials : register(b3);
-
-ConstantBuffer<ModelBuffer> ModelCBs[] : register(b4);
-
-Texture2D<float4> MaterialsTextures[] : register(t0);
+ConstantBuffer<MaterialCB> Materials : register(b2);
+Texture2D<float4> MaterialsTextures[] : register(t1);
 
 SamplerState s1 : register(s0);
 
@@ -32,7 +32,8 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    if (MaterialsTextures[Materials.materials[ModelCB.materialId.x].x].Sample(s1, input.uv).w == 0.f)
+    uint materialId = ModelCBs[modelCbId].materialId.x;
+    if (MaterialsTextures[Materials.materials[materialId].x].Sample(s1, input.uv).w == 0.f)
     {
         discard;
     }
@@ -50,7 +51,7 @@ PSOutput main(PSInput input)
     float4 tbnQuat = matrix_to_quaternion(tbnMatrix);
     
     PSOutput output;
-    output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
+    output.uvMaterialId = float4(input.uv, materialId, 0.f);
     output.tbn = tbnQuat;
     
     return output;

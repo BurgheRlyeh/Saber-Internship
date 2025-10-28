@@ -42,6 +42,7 @@ void Renderer::Initialize(HWND hWnd) {
 #if defined(_DEBUG)
     EnableDebugLayer();
     EnableGPUBasedValidation();
+    EnableDRED();
 #endif
 
     // device and allocator
@@ -307,7 +308,7 @@ void Renderer::Initialize(HWND hWnd) {
                     m_pAllocator,
                     m_pResourceDescHeapManager,
                     m_pRingBuffers[RingBufferId::Cpu],
-                    IndirectUpdater::CreateCbMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
+                    IndirectUpdater::CreateConstMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
                 );
 
                 pScene->SetSceneReadiness(true);
@@ -561,6 +562,14 @@ void Renderer::Render() {
             rtv,
             m_pResourceDescHeapManager
         );
+        scene->RenderDynamicAlphaKillObjects(
+            commandListForDynamicObjects,
+            m_viewport,
+            m_scissorRect,
+            rtv,
+            m_pResourceDescHeapManager,
+            m_pMaterialManager
+        );
         PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
         commandListForDynamicObjects->SetReadyForExection();
         });
@@ -714,6 +723,15 @@ void Renderer::EnableGPUBasedValidation()
     ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&spDebugController0)));
     ThrowIfFailed(spDebugController0->QueryInterface(IID_PPV_ARGS(&spDebugController1)));
     spDebugController1->SetEnableGPUBasedValidation(true);
+}
+
+void Renderer::EnableDRED() {
+    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
+    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings)));
+
+    // Turn on auto-breadcrumbs and page fault reporting.
+    pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 }
 
 void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {

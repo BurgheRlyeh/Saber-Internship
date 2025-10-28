@@ -3,10 +3,12 @@
 #include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
-ConstantBuffer<ModelBuffer> ModelCB : register(b1);
-uint4 modelCbId : register(b2);
 
-ConstantBuffer<ModelBuffer> ModelCBs[] : register(b3);
+cbuffer RootConstants : register(b1)
+{
+    uint modelCbId;
+}
+StructuredBuffer<ModelBuffer> ModelCBs : register(t0);
 
 struct PSInput
 {
@@ -37,7 +39,7 @@ PSOutput main(PSInput input)
     float4 tbnQuat = matrix_to_quaternion(tbnMatrix);
     
     PSOutput output;
-    output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
+    output.uvMaterialId = float4(input.uv, ModelCBs[modelCbId].materialId.x, 0.f);
     output.tbn = tbnQuat;
     
     return output;

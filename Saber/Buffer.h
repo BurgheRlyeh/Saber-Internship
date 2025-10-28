@@ -13,10 +13,7 @@
 
 template <typename T>
 class Buffer {
-	friend class BufferUpdater<T>;
 	friend class StaticBufferUpdater<T>;
-	friend class DynamicBufferUpdater<T>;
-	friend class InstUploadBufferUpdater<T>;
 
 protected:
 	std::wstring m_name{};
@@ -45,7 +42,7 @@ public:
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		size_t capacity,
 		const GPUResource::HeapData& heapData = GPUResource::HeapData{},
-		const GPUResource::ResourceData& resData = GPUResource::ResourceData{},
+		const GPUResource::ResourceData& resData = GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0) },
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
 	) : m_name(name),
 		m_capacity(capacity),
@@ -81,6 +78,10 @@ public:
 
 	std::shared_ptr<GPUResource> GetResource() const {
 		return m_pResource;
+	}
+
+	size_t GetCapacity() const {
+		return m_capacity;
 	}
 
 	template<std::derived_from<BufferUpdater<T>> Updater, typename... Args>

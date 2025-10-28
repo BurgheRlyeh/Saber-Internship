@@ -8,7 +8,7 @@
 
 class IndirectUpdater : ComputeObject {
 public:
-    static std::shared_ptr<ComputeObject> CreateCbMesh4Updater(
+    static std::shared_ptr<ComputeObject> CreateConstMesh4Updater(
         Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
         std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
         std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
@@ -19,7 +19,7 @@ public:
             pShaderAtlas,
             pRootSignatureAtlas,
             pPSOLibrary,
-            L"IndirectUpdaterCbConstMesh4.cso"
+            L"IndirectUpdaterConstMesh4.cso"
         );
     }
 

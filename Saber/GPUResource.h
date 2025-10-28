@@ -114,6 +114,22 @@ public:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
 
+	D3D12_RESOURCE_DESC GetResourceDesc() const {
+		return GetResource()->GetDesc();
+	}
+
+	D3D12_HEAP_PROPERTIES GetHeapProperties() const {
+		D3D12_HEAP_PROPERTIES heapProps;
+		GetResource()->GetHeapProperties(&heapProps, nullptr);
+		return heapProps;
+	}
+
+	D3D12_HEAP_FLAGS GetHeapFlags() const {
+		D3D12_HEAP_FLAGS heapFlags;
+		GetResource()->GetHeapProperties(nullptr, &heapFlags);
+		return heapFlags;
+	}
+
 	std::shared_ptr<GPUResource> CreateIntermediate(
 		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
 		UINT firstSubresource = 0,

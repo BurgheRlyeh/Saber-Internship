@@ -20,8 +20,7 @@ Scene::Scene(
     m_pRenderSubsystems.resize(RenderSubsystemId::Count);
     for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
         m_pRenderSubsystems[i] =
-            std::make_shared<RenderSubsystem<CbConstMesh4IndirectCommand>>(m_name + L"/RenderSubsystem" + std::to_wstring(i + 1), pDevice);
-        m_pRenderSubsystems[i]->CreateModelBuffersRange(pDescHeapManagerCbvSrvUav);
+            std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(m_name + L"/RenderSubsystem" + std::to_wstring(i + 1), pDevice);
     }
 	
     m_pSceneCb = std::make_shared<ConstantBuffer>(
@@ -68,6 +67,13 @@ void Scene::InitializeRenderSubsystems(
 			pDynamicUploadHeap,
 			i == Static || i == StaticAlphaKill ? nullptr : pIndirectUpdater
 		);
+        m_pRenderSubsystems[i]->InitializeModelBuffer(
+            pDevice,
+            pAllocator,
+            pDescHeapManagerCbvSrvUav,
+            pDynamicUploadHeap,
+            nullptr
+        );
 	}
 }
 
@@ -84,6 +90,12 @@ void Scene::UpdateRenderSubsystems(
 			pCommandQueueCopy,
 			pCommandQueueDirect
 		);
+        pRenderSubsystem->PerformModelBufferUpdate(
+            pDevice,
+            pAllocator,
+            pCommandQueueCopy,
+            pCommandQueueDirect
+        );
 	}
 }
 
@@ -345,13 +357,13 @@ void Scene::RenderStaticAlphaKillObjects(
         );
         pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
         pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-        pD3D12CommandList->SetGraphicsRootDescriptorTable(5, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pRenderSubsystems[StaticAlphaKill]->Render(
         pCommandList,
-        commandListPrepare, 1
+        commandListPrepare
     );
 }
 
@@ -393,8 +405,8 @@ void Scene::RenderDynamicAlphaKillObjects(
             m_sceneCBDynamicAllocation.gpuAddress
         );
         pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-        pD3D12CommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-        pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+        pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+        pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);

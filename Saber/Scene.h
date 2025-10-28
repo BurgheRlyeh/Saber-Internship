@@ -42,7 +42,7 @@ class Scene {
         DynamicAlphaKill = 3,
         Count = 4
     };
-    std::vector<std::shared_ptr<RenderSubsystem<CbConstMesh4IndirectCommand>>> m_pRenderSubsystems{};
+    std::vector<std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>> m_pRenderSubsystems{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};

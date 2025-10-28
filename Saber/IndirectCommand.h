@@ -6,6 +6,8 @@
 #ifdef __cplusplus
 #include <type_traits>
 
+#pragma pack(push, 1)   // todo is it needed
+
 template <typename IndirectCommand>
 struct IndirectCommandBase {
     static void Assert() {
@@ -95,7 +97,7 @@ DEFINE_INDIRECT_COMMAND(CbConstMesh4IndirectCommand) {
 };
 
 DEFINE_INDIRECT_COMMAND(ConstMesh4IndirectCommand) {
-    uint32_t rootConstant;
+    DirectX::XMUINT4 rootConstant;
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView1;
@@ -104,7 +106,7 @@ DEFINE_INDIRECT_COMMAND(ConstMesh4IndirectCommand) {
     D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
 #ifdef __cplusplus
     static inline D3D12_INDIRECT_ARGUMENT_DESC indirectArgumentDescs[7]{
-        {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT }, .Constant{ 1, 0, 1 } },
+        {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT }, .Constant{ 1, 0, 4 } },
         {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW } },
         {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW }, .VertexBuffer{} },
         {.Type{ D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW }, .VertexBuffer{ 1 } },
@@ -114,5 +116,9 @@ DEFINE_INDIRECT_COMMAND(ConstMesh4IndirectCommand) {
     };
 #endif
 };
+
+#ifdef __cplusplus
+#pragma pack(pop)
+#endif
 
 #endif  // INDIRECT_COMMAND
