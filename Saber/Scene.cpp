@@ -521,22 +521,24 @@ bool Scene::TryUpdateCamera(float deltaTime) {
 }
 
 void Scene::UpdateSceneBuffer(std::shared_ptr<CommandList> pCommandList) {
-    std::scoped_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
-    std::scoped_lock<std::mutex> camerasMutexLock(m_camerasMutex);
+	std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
-    std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+	std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+	DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
+
+	std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
 
     m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
     m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-
-
-    DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
     m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+	m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+
+    camerasMutexLock.unlock();
 
     DynamicAllocation cpuAlloc = m_pDynamicUploadHeapCpu->Allocate(sizeof(SceneBuffer));
+	memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
 
-    memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+    sceneBufferMutexLock.unlock();
 
     m_sceneCBDynamicAllocation = m_pDynamicUploadHeapGpu->Allocate(sizeof(SceneBuffer));
     m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(

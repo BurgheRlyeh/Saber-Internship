@@ -87,14 +87,11 @@ public:
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
-		UpdateSubresources(
-			pCommandListCopy->GetD3D12CommandList().Get(),
-			m_buffer.GetResource()->GetResource().Get(),
-			intermediateAllocation.pBuffer->GetResource().Get(),
-			intermediateAllocation.offset,
-			0,
-			1,
-			&subresData
+		m_buffer.GetResource()->UpdateSubresources(
+			pCommandListCopy,
+			intermediateAllocation.pBuffer,
+			&subresData,
+			intermediateAllocation.offset
 		);
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 

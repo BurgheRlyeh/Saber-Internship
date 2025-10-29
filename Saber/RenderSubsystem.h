@@ -93,7 +93,8 @@ public:
 			nullptr,
 			pDescHeapManagerCbvSrvUav,
 			m_capacity,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD }
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0), D3D12_RESOURCE_STATE_GENERIC_READ }
 		);
 		m_pModelBuffers->CreateUpdater<InstUploadBufferUpdater<ModelBuffer>>();
 

@@ -53,52 +53,6 @@ public:
 		m_state = toState;
 	}
 
-	static void InitCounterResetter(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
-	) {
-		m_pCounterResetter = std::make_shared<GPUResource>(
-			L"GPUResource/CounterResetter",
-			pAllocator,
-			HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
-		);
-
-		UINT zero{};
-		D3D12_SUBRESOURCE_DATA subresData{
-			.pData{ &zero },
-			.RowPitch{ sizeof(UINT) },
-			.SlicePitch{ subresData.RowPitch }
-		};
-
-		std::shared_ptr<GPUResource> pIntermediate{};
-
-		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueCopy->GetCommandList(pDevice)
-		};
-		m_pCounterResetter->UpdateSubresource(
-			pAllocator,
-			pCommandListCopy,
-			0,
-			1,
-			&subresData,
-			pIntermediate
-		);
-		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
-
-		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDevice)
-		};
-		m_pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
-	}
-
-	static void DestroyCounterResetter() {
-		m_pCounterResetter.reset();
-	}
-
 	void ResetCounter(
 		std::shared_ptr<CommandList> pCommandList,
 		uint64_t counterOffset
@@ -136,22 +90,22 @@ public:
 		UINT numSubresources = 1
 	);
 
-	void UpdateSubresource(
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	void UpdateSubresources(
 		std::shared_ptr<CommandList> pCommandList,
-		UINT firstSubresource,
-		UINT numSubresources,
+		std::shared_ptr<GPUResource>& pIntermediate,
 		const D3D12_SUBRESOURCE_DATA* pSrcData,
-		std::shared_ptr<GPUResource>& pIntermediate
+		UINT64 intermediateOffset = 0,
+		UINT firstSubresource = 0,
+		UINT numSubresources = 1
 	);
-	void UpdateSubresource(
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	void UpdateSubresources(
 		std::shared_ptr<CommandList> pCommandList,
-		UINT firstSubresource,
-		UINT numSubresources,
+		std::shared_ptr<GPUResource>& pIntermediate,
 		void* pResourceData,
 		const D3D12_SUBRESOURCE_INFO* pSrcData,
-		std::shared_ptr<GPUResource>& pIntermediate
+		UINT64 intermediateOffset = 0,
+		UINT firstSubresource = 0,
+		UINT numSubresources = 1
 	);
 
 	bool IsSrv() const;
@@ -193,6 +147,50 @@ public:
 			0,
 			nullptr
 		);
+	}
+
+	static void InitCounterResetter(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<CommandQueue> pCommandQueueDirect
+	) {
+		m_pCounterResetter = std::make_shared<GPUResource>(
+			L"GPUResource/CounterResetter",
+			pAllocator,
+			HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+			ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
+		);
+
+		UINT zero{};
+		D3D12_SUBRESOURCE_DATA subresData{
+			.pData{ &zero },
+			.RowPitch{ sizeof(UINT) },
+			.SlicePitch{ subresData.RowPitch }
+		};
+
+		std::shared_ptr<GPUResource> pIntermediate{
+			m_pCounterResetter->CreateIntermediate(pAllocator)
+		};
+
+		std::shared_ptr<CommandList> pCommandListCopy{
+			pCommandQueueCopy->GetCommandList(pDevice)
+		};
+		m_pCounterResetter->UpdateSubresources(
+			pCommandListCopy,
+			pIntermediate,
+			&subresData
+		);
+		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+
+		std::shared_ptr<CommandList> pCommandListDirect{
+			pCommandQueueDirect->GetCommandList(pDevice)
+		};
+		m_pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	}
+	static void DestroyCounterResetter() {
+		m_pCounterResetter.reset();
 	}
 };
 

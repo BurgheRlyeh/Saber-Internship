@@ -217,14 +217,11 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
         pCommandQueueCopy->GetCommandList(pDevice)
     };
 
-    std::shared_ptr<GPUResource> pIntermediate = pBuffer->CreateIntermediate(pAllocator);
-    pBuffer->UpdateSubresource(
-        pAllocator,
-        pCommandList,
-        0,
-        1,
-        &subresourceData,
-        pIntermediate
+    std::shared_ptr<GPUResource> pIntermediate{ pBuffer->CreateIntermediate(pAllocator) };
+    pBuffer->UpdateSubresources(
+		pCommandList,
+		pIntermediate,
+        &subresourceData
     );
 
     pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);

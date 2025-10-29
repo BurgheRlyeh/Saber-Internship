@@ -73,17 +73,14 @@ public:
 			.SlicePitch{ subresData.RowPitch }
 		};
 
-		std::shared_ptr<GPUResource> pIntermediate{};
+		std::shared_ptr<GPUResource> pIntermediate{ m_pVisibilityBuffer->CreateIntermediate(pAllocator) };
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};
-		m_pVisibilityBuffer->UpdateSubresource(
-			pAllocator,
+		m_pVisibilityBuffer->UpdateSubresources(
 			pCommandListCopy,
-			0,
-			1,
-			&subresData,
-			pIntermediate
+			pIntermediate,
+			&subresData
 		);
 		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 

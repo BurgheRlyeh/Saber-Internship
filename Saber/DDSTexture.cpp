@@ -49,14 +49,12 @@ void DDSTexture::LoadFromDDS(
 	std::shared_ptr<CommandList> pCommandListCopy{
 		pCommandQueueCopy->GetCommandList(pDevice)
 	};
-	std::shared_ptr<GPUResource> pIntermediate{};
-	UpdateSubresource(
-		pAllocator,
+	std::shared_ptr<GPUResource> pIntermediate{ CreateIntermediate(pAllocator, 0, subresources.size()) };
+	UpdateSubresources(
 		pCommandListCopy,
-		0,
-		subresources.size(),
+		pIntermediate,
 		subresources.data(),
-		pIntermediate
+		0, 0, subresources.size()
 	);
 	pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
 
