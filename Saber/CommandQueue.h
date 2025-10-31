@@ -52,17 +52,17 @@ public:
 
 	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;
 
-	// Get an available command list from the command queue.
 	std::shared_ptr<CommandList> GetCommandList(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+	);
+	std::shared_ptr<CommandList> GetDeferredCommandList(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		bool isDeffered = false,
-		uint8_t priority = 0,
+		size_t priority,
 		std::function<void()> beforeExecuteTask = []{},
 		std::function<void()> afterExecuteTask = []{}
 	);
 
-	// Execute a command list.
-	// Returns the fence value to wait for for this command list.
 	uint64_t ExecuteCommandList(std::shared_ptr<CommandList> commandList);
 	void ExecuteCommandListImmediately(std::shared_ptr<CommandList> commandList);
 
@@ -77,7 +77,20 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
 
 private:
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice);
+	// Get an available command list from the command queue.
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+	);
+
+	// Execute a command list.
+	// Returns the fence value to wait for for this command list.
+	uint64_t ExecuteD3D12CommandList(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(
+		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+	);
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(
 		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator

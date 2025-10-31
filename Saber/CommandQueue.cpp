@@ -40,92 +40,48 @@ D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
 	return m_commandListType;
 }
 
-// Get an available command list from the command queue.
 std::shared_ptr<CommandList> CommandQueue::GetCommandList(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+) {
+	return std::make_shared<CommandList>(
+		BASE_NAME + std::to_wstring(m_commandListType) + L"/CommandList" + std::to_wstring(m_fenceValue),
+		GetD3D12CommandList(pDevice)
+	);
+}
+
+std::shared_ptr<CommandList> CommandQueue::GetDeferredCommandList(
+	const std::wstring& name,
 	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	bool isDeffered,
-	uint8_t priority,
+	size_t priority,
 	std::function<void(void)> beforeExecuteTask,
 	std::function<void(void)> afterExecuteTask
 ) {
-	CommandAllocatorEntry allocatorEntry;
-	if (m_commandAllocatorQueue.Dequeue(allocatorEntry) && IsFenceComplete(allocatorEntry.fenceValue)) {
-		allocatorEntry.pCommandAllocator = allocatorEntry.pCommandAllocator;
-		ThrowIfFailed(allocatorEntry.pCommandAllocator->Reset());
-	}
-	else {
-		allocatorEntry.pCommandAllocator = CreateCommandAllocator(pDevice);
-	}
-
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList{};
-	if (m_commandListQueue.Dequeue(pD3D12CommandList)) {
-		ThrowIfFailed(pD3D12CommandList->Reset(allocatorEntry.pCommandAllocator.Get(), nullptr));
-	}
-	else {
-		pD3D12CommandList = CreateCommandList(pDevice, allocatorEntry.pCommandAllocator);
-	}
-
-	// Associate the command allocator with the command list so that it can be
-	// retrieved when the command list is executed.
-	ThrowIfFailed(pD3D12CommandList->SetPrivateDataInterface(
-		__uuidof(ID3D12CommandAllocator),
-		allocatorEntry.pCommandAllocator.Get()
-	));
-
 	std::shared_ptr<CommandList> pCommandList{ std::make_shared<CommandList>(
-		pD3D12CommandList,
-		priority,
+		BASE_NAME + std::to_wstring(m_commandListType) + L"/CommandList/" + name,
+		GetD3D12CommandList(pDevice),
 		beforeExecuteTask,
 		afterExecuteTask
 	) };
 
-	if (isDeffered) {
-		std::scoped_lock<std::mutex> setsLock(m_commandListsSetsMutex);
-		if (m_commandListSets.size() <= priority) {
-			m_commandListSets.resize(priority + 1);
-		}
-		if (!m_commandListSets.at(priority)) {
-			m_commandListSets.at(priority) = std::make_unique<PrioritySet>();
-		}
-		std::scoped_lock<std::mutex> setLock(m_commandListSets.at(priority)->mutex);
-		m_commandListSets.at(priority)->pCommandLists.insert(pCommandList);
+	std::scoped_lock<std::mutex> setsLock(m_commandListsSetsMutex);
+	if (m_commandListSets.size() <= priority) {
+		m_commandListSets.resize(priority + 1);
 	}
+	if (!m_commandListSets.at(priority)) {
+		m_commandListSets.at(priority) = std::make_unique<PrioritySet>();
+	}
+	std::scoped_lock<std::mutex> setLock(m_commandListSets.at(priority)->mutex);
+	m_commandListSets.at(priority)->pCommandLists.insert(pCommandList);
 
 	return pCommandList;
 }
 
-// Execute a command list.
-// Returns the fence value to wait for for this command list.
 uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandList) {
-	auto pD3D12CommandList{ commandList->GetD3D12CommandList() };
+	uint64_t fenceValue;
 
- 	ThrowIfFailed(pD3D12CommandList->Close());
-	
-	ID3D12CommandAllocator* pCommandAllocator{};
-	uint32_t dataSize{ sizeof(pCommandAllocator) };
-	ThrowIfFailed(pD3D12CommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
-
-	ID3D12CommandList* const pCommandLists[]{ pD3D12CommandList.Get() };
 	commandList->BeforeExecute();
-	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
+	fenceValue = ExecuteD3D12CommandList(commandList->GetD3D12CommandList());
 	commandList->AfterExecute();
-	uint64_t fenceValue{ Signal() };
-
-	CommandAllocatorEntry commandAllocEntry{ fenceValue, pCommandAllocator };
-	if (!m_commandAllocatorQueue.Enqueue(commandAllocEntry)) {
-		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
-		throw std::runtime_error("CommandAllocator Queue of CommandQueue with type " + commandQueueType + " is full" );
-	}
-
-	if (!m_commandListQueue.Enqueue(pD3D12CommandList)) {
-		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
-		throw std::runtime_error("CommandList Queue of CommandQueue with type " + commandQueueType + " is full");
-	}
-
-	// The ownership of the command allocator has been transferred to the ComPtr
-	// in the command allocator queue. It is safe to release the reference 
-	// in this temporary COM pointer here.
-	pCommandAllocator->Release();
 
 	return fenceValue;
 }
@@ -197,6 +153,68 @@ void CommandQueue::Flush() {
 
 Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() const {
 	return m_pCommandQueue;
+}
+
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetD3D12CommandList(
+	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+) {
+	CommandAllocatorEntry allocatorEntry;
+	if (m_commandAllocatorQueue.Dequeue(allocatorEntry) && IsFenceComplete(allocatorEntry.fenceValue)) {
+		allocatorEntry.pCommandAllocator = allocatorEntry.pCommandAllocator;
+		ThrowIfFailed(allocatorEntry.pCommandAllocator->Reset());
+	}
+	else {
+		allocatorEntry.pCommandAllocator = CreateCommandAllocator(pDevice);
+	}
+
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList{};
+	if (m_commandListQueue.Dequeue(pD3D12CommandList)) {
+		ThrowIfFailed(pD3D12CommandList->Reset(allocatorEntry.pCommandAllocator.Get(), nullptr));
+	}
+	else {
+		pD3D12CommandList = CreateCommandList(pDevice, allocatorEntry.pCommandAllocator);
+	}
+
+	// Associate the command allocator with the command list so that it can be
+	// retrieved when the command list is executed.
+	ThrowIfFailed(pD3D12CommandList->SetPrivateDataInterface(
+		__uuidof(ID3D12CommandAllocator),
+		allocatorEntry.pCommandAllocator.Get()
+	));
+
+	return pD3D12CommandList;
+}
+
+uint64_t CommandQueue::ExecuteD3D12CommandList(
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList
+) {
+	ThrowIfFailed(pD3D12CommandList->Close());
+
+	ID3D12CommandAllocator* pCommandAllocator{};
+	uint32_t dataSize{ sizeof(pCommandAllocator) };
+	ThrowIfFailed(pD3D12CommandList->GetPrivateData(__uuidof(ID3D12CommandAllocator), &dataSize, &pCommandAllocator));
+
+	ID3D12CommandList* const pCommandLists[]{ pD3D12CommandList.Get() };
+	m_pCommandQueue->ExecuteCommandLists(_countof(pCommandLists), pCommandLists);
+	uint64_t fenceValue{ Signal() };
+
+	CommandAllocatorEntry commandAllocEntry{ fenceValue, pCommandAllocator };
+	if (!m_commandAllocatorQueue.Enqueue(commandAllocEntry)) {
+		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
+		throw std::runtime_error("CommandAllocator Queue of CommandQueue with type " + commandQueueType + " is full");
+	}
+
+	if (!m_commandListQueue.Enqueue(pD3D12CommandList)) {
+		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
+		throw std::runtime_error("CommandList Queue of CommandQueue with type " + commandQueueType + " is full");
+	}
+
+	// The ownership of the command allocator has been transferred to the ComPtr
+	// in the command allocator queue. It is safe to release the reference 
+	// in this temporary COM pointer here.
+	pCommandAllocator->Release();
+
+	return fenceValue;
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAllocator(

@@ -472,7 +472,7 @@ void Renderer::Render() {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
+        m_pCommandQueueDirect->GetDeferredCommandList(L"BeforeFrameJob", m_pDevice, listPriority)
     };
 
     // Some small work doesn't need to be moved to jobs, just as example
@@ -503,7 +503,7 @@ void Renderer::Render() {
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority)
+        m_pCommandQueueDirect->GetDeferredCommandList(L"StaticObjects", m_pDevice, ++listPriority)
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
@@ -523,13 +523,13 @@ void Renderer::Render() {
         });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, listPriority)
+        m_pCommandQueueDirect->GetDeferredCommandList(L"StaticAlphakillObjects", m_pDevice, listPriority)
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
             commandListForAlphaObjects->GetD3D12CommandList().Get(),
             PIX_COLOR(0, 0, 0),
-            L"Alpha Objects rendering"
+            L"Alphakill Objects rendering"
         );
         scene->RenderStaticAlphaKillObjects(
             commandListForAlphaObjects,
@@ -545,7 +545,7 @@ void Renderer::Render() {
 
     uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority, [] {},
+        m_pCommandQueueDirect->GetDeferredCommandList(L"DynamicObjects", m_pDevice, ++listPriority, [] {},
             [&]() { fenceValueAfterRender = m_pCommandQueueDirect->Signal(); }
         )
     };
@@ -575,23 +575,23 @@ void Renderer::Render() {
         });
 
 
-    uint64_t fenceValueAfterHZB{ /*static_cast<uint64_t>(-1)*/ };
+    uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
+        m_pCommandQueueDirect->GetDeferredCommandList(L"HZB", m_pDevice, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterRender); },
             [&] { fenceValueAfterHZB = m_pCommandQueueDirect->Signal(); }
         )
     };
 
-    uint64_t fenceValueAfterDeferredShading{ /*static_cast<uint64_t>(-1)*/ };
+    uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForDeferredShading{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
+        m_pCommandQueueDirect->GetDeferredCommandList(L"DeferredShading", m_pDevice, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterHZB); },
             [&] { fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal(); }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pCommandQueueDirect->GetCommandList(m_pDevice, true, ++listPriority,
+        m_pCommandQueueDirect->GetDeferredCommandList(L"AfterFrameJob", m_pDevice, ++listPriority,
             [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterDeferredShading); }
         )
     };
