@@ -1,31 +1,24 @@
 #include "Scene.h"
-#include "Scene.h"
-#include "Scene.h"
 
 Scene::Scene(
     const std::wstring& name,
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
-    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
-    std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<Texture> pGBuffer
 ) : m_name(name),
-	m_pDynamicUploadHeapCpu(pDynamicUploadHeapCpu),
-	m_pDynamicUploadHeapGpu(pDynamicUploadHeapGpu),
 	m_pDepthBuffer(pDepthBuffer),
 	m_pGBuffer(pGBuffer)
 {
     m_pRenderSubsystems.resize(RenderSubsystemId::Count);
     for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
-        m_pRenderSubsystems[i] =
-            std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(m_name + L"/RenderSubsystem" + std::to_wstring(i + 1), pDevice);
+        m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
+            m_name + L"/RenderSubsystem" + std::to_wstring(i + 1)
+        );
     }
 	
     m_pSceneCb = std::make_shared<ConstantBuffer>(
         m_name + L"/SceneCb",
-        pAllocator,
+        pDeviceContext->GetDevice(),
         sizeof(SceneBuffer),
         nullptr,
         GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT }
@@ -33,67 +26,50 @@ Scene::Scene(
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
     m_pLightCB = std::make_shared<ConstantBuffer>(
         m_name + L"/LightCB",
-        pAllocator,
+        pDeviceContext->GetDevice(),
         sizeof(LightBuffer),
         &m_lightBuffer
     );
 
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
-        pDevice,
-        pAllocator,
+        pDeviceContext,
         CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R8G8B8A8_UNORM,
             pGBuffer->GetWidth(), pGBuffer->GetHeight(), 1, 0, 1, 0,
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
         ),
-        1,
-        pDescHeapManagerCbvSrvUav
+        1
     );
 }
 
 void Scene::InitializeRenderSubsystems(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-	std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<ComputeObject> pIndirectUpdater
 ) const {
 	for (size_t i{}; i < RenderSubsystemId::Count; ++i) {
 		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
-			pDevice,
-			pAllocator,
-			pDescHeapManagerCbvSrvUav,
-			pDynamicUploadHeap,
+            pDeviceContext,
 			i == Static || i == StaticAlphaKill ? nullptr : pIndirectUpdater
 		);
         m_pRenderSubsystems[i]->InitializeModelBuffer(
-            pDevice,
-            pAllocator,
-            pDescHeapManagerCbvSrvUav,
-            pDynamicUploadHeap,
+            pDeviceContext,
             nullptr
         );
 	}
 }
 
 void Scene::UpdateRenderSubsystems(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<CommandQueue> pCommandQueueCopy,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandQueue> pCommandQueueDirect
 ) const {
 	for (auto& pRenderSubsystem : m_pRenderSubsystems) {
 		pRenderSubsystem->PerformIndirectBufferUpdate(
-			pDevice,
-			pAllocator,
-			pCommandQueueCopy,
-			pCommandQueueDirect
-		);
+            pDeviceContext,
+            pCommandQueueDirect
+        );
         pRenderSubsystem->PerformModelBufferUpdate(
-            pDevice,
-            pAllocator,
-            pCommandQueueCopy,
+            pDeviceContext,
             pCommandQueueDirect
         );
 	}
@@ -123,9 +99,13 @@ std::shared_ptr<Texture> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 
-void Scene::Update(float deltaTime, std::shared_ptr<CommandList> pCommandList) {
+void Scene::Update(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    float deltaTime
+) {
     TryUpdateCamera(deltaTime);
-    UpdateSceneBuffer(pCommandList);
+    UpdateSceneBuffer(pDeviceContext, pCommandList);
 }
 
 void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
@@ -441,9 +421,7 @@ void Scene::RunDeferredShading(
     constexpr int block_size{ 8 };
     m_pDeferredShadingComputeObject->Dispatch(
         pCommandListCompute,
-        (width + block_size - 1) / block_size,
-        (height + block_size - 1) / block_size,
-        1,
+        { (width + block_size - 1) / block_size, (height + block_size - 1) / block_size, 1 },
         [&](std::shared_ptr<CommandList> pCommandListCompute, UINT& rootParamId) {
             auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
             pD3D12CommandList->SetComputeRootConstantBufferView(
@@ -520,7 +498,10 @@ bool Scene::TryUpdateCamera(float deltaTime) {
     return true;
 }
 
-void Scene::UpdateSceneBuffer(std::shared_ptr<CommandList> pCommandList) {
+void Scene::UpdateSceneBuffer(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
 	std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
 	std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
@@ -535,12 +516,12 @@ void Scene::UpdateSceneBuffer(std::shared_ptr<CommandList> pCommandList) {
 
     camerasMutexLock.unlock();
 
-    DynamicAllocation cpuAlloc = m_pDynamicUploadHeapCpu->Allocate(sizeof(SceneBuffer));
+    DynamicAllocation cpuAlloc = pDeviceContext->GetRingBuffer()->Allocate(sizeof(SceneBuffer));
 	memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
 
     sceneBufferMutexLock.unlock();
 
-    m_sceneCBDynamicAllocation = m_pDynamicUploadHeapGpu->Allocate(sizeof(SceneBuffer));
+    m_sceneCBDynamicAllocation = pDeviceContext->GetRingBuffer(RingBufferType::GPU)->Allocate(sizeof(SceneBuffer));
     m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(
         pCommandList,
         D3D12_RESOURCE_STATE_COPY_DEST

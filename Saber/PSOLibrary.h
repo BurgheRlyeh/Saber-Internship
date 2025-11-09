@@ -4,6 +4,8 @@
 
 #include "MemoryMappedFile.h"
 
+class Device;
+
 class PSOLibrary {
 private:
 	MemoryMappedFile m_file;
@@ -13,7 +15,7 @@ private:
 
 public:
 	PSOLibrary(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const std::wstring& filename
 	);
 
@@ -33,25 +35,25 @@ public:
 	);
 
 	bool Add(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const std::wstring& filename,
 		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
 	);
 
 	bool Add(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const std::wstring& filename,
 		const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
 	);
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Assign(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const std::wstring& filename,
 		const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
 	);
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> Assign(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const std::wstring& filename,
 		const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
 	);

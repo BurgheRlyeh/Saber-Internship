@@ -1,30 +1,21 @@
 #include "CommandQueue.h"
 
-const std::wstring CommandQueue::BASE_NAME = L"CommandQueue";
+#include "Device.h"
 
 CommandQueue::CommandQueue(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	const std::wstring& baseName,
+	std::shared_ptr<Device> pDevice,
 	D3D12_COMMAND_LIST_TYPE type
-) : m_commandListType(type) {
-	D3D12_COMMAND_QUEUE_DESC desc{
-		.Type{ m_commandListType },
-		.Priority{ D3D12_COMMAND_QUEUE_PRIORITY_NORMAL },
-		.Flags{ D3D12_COMMAND_QUEUE_FLAG_NONE },
-		.NodeMask{}
-	};
-
-	ThrowIfFailed(pDevice->CreateCommandQueue(
-		&desc,
-		IID_PPV_ARGS(&m_pCommandQueue)
-	));
-	m_pCommandQueue->SetName((BASE_NAME + std::to_wstring(type)).c_str());
-
-	ThrowIfFailed(pDevice->CreateFence(
+) : m_name(baseName + L"/CommandQueue" + std::to_wstring(type)) {
+	m_pCommandQueue = CreateCommandQueue(pDevice, type);
+	m_pCommandQueue->SetName(m_name.c_str());
+	
+	ThrowIfFailed(pDevice->GetD3D12Device()->CreateFence(
 		m_fenceValue,
 		D3D12_FENCE_FLAG_NONE,
 		IID_PPV_ARGS(&m_pFence)
 	));
-	m_pFence->SetName((BASE_NAME + std::to_wstring(type) + L"/Fence").c_str());
+	m_pFence->SetName((m_name + L"/Fence").c_str());
 
 	m_fenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 	assert(m_fenceEvent && "Failed to create fence event handle.");
@@ -36,28 +27,32 @@ CommandQueue::~CommandQueue() {
 	::CloseHandle(m_fenceEvent);
 }
 
+Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() const {
+	return m_pCommandQueue;
+}
+
 D3D12_COMMAND_LIST_TYPE CommandQueue::GetCommandListType() const {
-	return m_commandListType;
+	return m_pCommandQueue->GetDesc().Type;
 }
 
 std::shared_ptr<CommandList> CommandQueue::GetCommandList(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+	std::shared_ptr<Device> pDevice
 ) {
 	return std::make_shared<CommandList>(
-		BASE_NAME + std::to_wstring(m_commandListType) + L"/CommandList" + std::to_wstring(m_fenceValue),
+		m_name + L"/CommandList" + std::to_wstring(m_fenceValue),
 		GetD3D12CommandList(pDevice)
 	);
 }
 
 std::shared_ptr<CommandList> CommandQueue::GetDeferredCommandList(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	size_t priority,
 	std::function<void(void)> beforeExecuteTask,
 	std::function<void(void)> afterExecuteTask
 ) {
 	std::shared_ptr<CommandList> pCommandList{ std::make_shared<CommandList>(
-		BASE_NAME + std::to_wstring(m_commandListType) + L"/CommandList/" + name,
+		m_name + L"/CommandList/" + name,
 		GetD3D12CommandList(pDevice),
 		beforeExecuteTask,
 		afterExecuteTask
@@ -111,19 +106,17 @@ uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 			if (iter == pCommandLists.end()) {
 				iter = pCommandLists.begin();
 			}
-			if ((*iter)->IsReadyForExection()) {
-				if(waitFence)
-				{
-					WaitForFenceValue(waitFenceValue);
-					waitFence = false;
-				}
-				lastFrameValue = ExecuteCommandList(*iter);
-				pCommandLists.erase(iter);
-				iter = pCommandLists.begin();
-			}
-			else {
+			if (!(*iter)->IsReadyForExection()) {
 				++iter;
+				continue;
 			}
+			if (waitFence) {
+				WaitForFenceValue(waitFenceValue);
+				waitFence = false;
+			}
+			lastFrameValue = ExecuteCommandList(*iter);
+			pCommandLists.erase(iter);
+			iter = pCommandLists.begin();
 		}
 	}
 
@@ -151,12 +144,23 @@ void CommandQueue::Flush() {
 	WaitForFenceValue(Signal());
 }
 
-Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() const {
-	return m_pCommandQueue;
+Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::CreateCommandQueue(
+	std::shared_ptr<Device> pDevice,
+	D3D12_COMMAND_LIST_TYPE type
+) {
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> pCommandQueue{};
+
+	D3D12_COMMAND_QUEUE_DESC desc{ .Type{ type } };
+	ThrowIfFailed(pDevice->GetD3D12Device()->CreateCommandQueue(
+		&desc,
+		IID_PPV_ARGS(&pCommandQueue)
+	));
+
+	return pCommandQueue;
 }
 
 Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::GetD3D12CommandList(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+	std::shared_ptr<Device> pDevice
 ) {
 	CommandAllocatorEntry allocatorEntry;
 	if (m_commandAllocatorQueue.Dequeue(allocatorEntry) && IsFenceComplete(allocatorEntry.fenceValue)) {
@@ -200,13 +204,13 @@ uint64_t CommandQueue::ExecuteD3D12CommandList(
 
 	CommandAllocatorEntry commandAllocEntry{ fenceValue, pCommandAllocator };
 	if (!m_commandAllocatorQueue.Enqueue(commandAllocEntry)) {
-		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
-		throw std::runtime_error("CommandAllocator Queue of CommandQueue with type " + commandQueueType + " is full");
+		std::string commandQueueName{ m_name.begin(), m_name.end() };
+		throw std::runtime_error("CommandAllocator Queue of " + commandQueueName + " is full");
 	}
 
 	if (!m_commandListQueue.Enqueue(pD3D12CommandList)) {
-		std::string commandQueueType{ std::to_string(static_cast<size_t>(m_commandListType)) };
-		throw std::runtime_error("CommandList Queue of CommandQueue with type " + commandQueueType + " is full");
+		std::string commandQueueName{ m_name.begin(), m_name.end() };
+		throw std::runtime_error("CommandList Queue of CommandQueue with type " + commandQueueName + " is full");
 	}
 
 	// The ownership of the command allocator has been transferred to the ComPtr
@@ -218,12 +222,12 @@ uint64_t CommandQueue::ExecuteD3D12CommandList(
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAllocator(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-) {
+	std::shared_ptr<Device> pDevice
+) const {
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 
-	ThrowIfFailed(pDevice->CreateCommandAllocator(
-		m_commandListType,
+	ThrowIfFailed(pDevice->GetD3D12Device()->CreateCommandAllocator(
+		GetCommandListType(),
 		IID_PPV_ARGS(&pCommandAllocator)
 	));
 
@@ -231,14 +235,14 @@ Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandQueue::CreateCommandAlloca
 }
 
 Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandQueue::CreateCommandList(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator
-) {
+) const {
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList{};
 
-	ThrowIfFailed(pDevice->CreateCommandList(
+	ThrowIfFailed(pDevice->GetD3D12Device()->CreateCommandList(
 		0,
-		m_commandListType,
+		GetCommandListType(),
 		pAllocator.Get(),
 		nullptr,
 		IID_PPV_ARGS(&pCommandList)

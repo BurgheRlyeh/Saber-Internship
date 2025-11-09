@@ -9,45 +9,34 @@
 class IndirectUpdater : ComputeObject {
 public:
     static std::shared_ptr<ComputeObject> CreateConstMesh4Updater(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
+        std::shared_ptr<DeviceContext> pDeviceContext
     ) {
         return Create(
-            pDevice,
-            pShaderAtlas,
-            pRootSignatureAtlas,
-            pPSOLibrary,
+            pDeviceContext,
             L"IndirectUpdaterConstMesh4.cso"
         );
     }
 
 private:
     static std::shared_ptr<ComputeObject> Create(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        const LPCWSTR& filename
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::wstring& filename
     ) {
         std::shared_ptr<ComputeObject> pComputeObj{ std::make_shared<ComputeObject>() };
         pComputeObj->InitMaterial(
-            pDevice,
-            RootSignatureData(
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+            pDeviceContext,
+            RootSignatureData{
+                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
                 L"IndirectUpdaterRootSignature"
-            ),
-            ComputeShaderData(pShaderAtlas, filename),
-            pPSOLibrary
+            },
+            ComputeShaderData{ filename }
         );
 
         return pComputeObj;
     }
 
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+        std::shared_ptr<Device> pDevice
     ) {
         size_t rpId{};
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
@@ -60,7 +49,7 @@ private:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);
 
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(
+        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(
             D3D12_FEATURE_ROOT_SIGNATURE,
             &featureData,
             sizeof(featureData)

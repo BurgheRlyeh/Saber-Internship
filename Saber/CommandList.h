@@ -5,6 +5,8 @@
 #include <functional>
 
 class CommandList {
+	std::wstring m_name{};
+
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pD3D12CommandList{};
 
 	std::atomic<bool> m_isReadyForExecution{};
@@ -26,6 +28,5 @@ public:
 	void SetReadyForExection();
 
 	void BeforeExecute() const;
-
 	void AfterExecute() const;
 };

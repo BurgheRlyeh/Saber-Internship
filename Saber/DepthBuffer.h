@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "SinglePassDownsampler.h"
@@ -40,24 +41,19 @@ class DepthBuffer {
 public:
 	DepthBuffer(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerDsv,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		UINT64 width,
 		UINT height,
 		std::shared_ptr<SinglePassDownsampler> pSPD = nullptr
 	);
 
 	void Resize(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		UINT64 width,
 		UINT height
 	);
 	bool ResizeHZB(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		UINT64 width,
 		UINT height
 	);
@@ -66,8 +62,7 @@ public:
 
 	void SetSinglePassDownsampler(
 		std::shared_ptr<SinglePassDownsampler> pSPD,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		UINT64 width,
 		UINT height
 	);

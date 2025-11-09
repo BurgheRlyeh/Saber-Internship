@@ -21,29 +21,24 @@ class IndirectCommandBuffer : public Buffer<IndirectCommand> {
 public:
 	IndirectCommandBuffer(
 		const std::wstring& renderSubsystemName,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
 		uint32_t capacity
 	) : Buffer<IndirectCommand>(
-			renderSubsystemName,
-			pDevice,
-			pAllocator,
-			nullptr,
-			pDescHeapManagerCbvSrvUav,
-			capacity,
-			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
-			GPUResource::ResourceData{
-				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
-					capacity * sizeof(IndirectCommand),
-					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-				) }
-			}
-		) {
+		renderSubsystemName,
+		pDeviceContext,
+		capacity,
+		GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+		GPUResource::ResourceData{
+			.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+				capacity * sizeof(IndirectCommand),
+				D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			) }
+		}
+	) {
 		m_pCommandSignature = CreateCommandSignature(
-			pDevice,
+			pDeviceContext->GetDevice(),
 			commandSignatureDesc,
 			pRootSignature
 		);
@@ -65,14 +60,14 @@ public:
 
 protected:
 	static Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateCommandSignature(
-		const Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
 		const Microsoft::WRL::ComPtr<ID3D12RootSignature>& pRootSignature
 	) {
 		assert(commandSignatureDesc.ByteStride == sizeof(IndirectCommand));
 
 		Microsoft::WRL::ComPtr<ID3D12CommandSignature> pCommandSignature{};
-		ThrowIfFailed(pDevice->CreateCommandSignature(
+		ThrowIfFailed(pDevice->GetD3D12Device()->CreateCommandSignature(
 			&commandSignatureDesc,
 			pRootSignature.Get(),
 			IID_PPV_ARGS(&pCommandSignature)

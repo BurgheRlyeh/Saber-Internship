@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include "Device.h"
+#include "DeviceContext.h"
 #include "Atlas.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
@@ -15,85 +17,34 @@ protected:
 
 public:
     struct RootSignatureData {
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
-
-        RootSignatureData(
-            std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-            Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob,
-            std::wstring rootSignatureFilename
-        ) : pRootSignatureAtlas(pRootSignatureAtlas),
-            pRootSignatureBlob(pRootSignatureBlob),
-            rootSignatureFilename(rootSignatureFilename)
-        {}
     };
     struct ComputeShaderData {
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas{};
-        LPCWSTR computeShaderFilepath{};
-
-        ComputeShaderData(
-            std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-            LPCWSTR computeShaderFilepath
-        ) : pShaderAtlas(pShaderAtlas),
-            computeShaderFilepath(computeShaderFilepath)
-        {}
+        std::wstring computeShaderFilepath{};
     };
     void InitMaterial(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         const RootSignatureData& rootSignatureData,
-        const ComputeShaderData& shaderData,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
-    ) {
-        m_pRootSignatureResource = rootSignatureData.pRootSignatureAtlas->Assign(
-            rootSignatureData.rootSignatureFilename,
-            pDevice,
-            rootSignatureData.pRootSignatureBlob
-        );
-
-        m_pComputeShaderResource = shaderData.pShaderAtlas->Assign(shaderData.computeShaderFilepath);
-
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{
-            .pRootSignature{ m_pRootSignatureResource->pRootSignature.Get() },
-            .CS{ CD3DX12_SHADER_BYTECODE(m_pComputeShaderResource->pShaderBlob.Get()) }
-        };
-
-        m_pPipelineState = pPSOLibrary->Assign(
-            pDevice,
-            shaderData.computeShaderFilepath,
-            &desc
-        );
-    }
+        const ComputeShaderData& shaderData
+    );
 
     virtual void Dispatch(
-        std::shared_ptr<CommandList> pCommandListCompute,
-        UINT threadGroupsCountX,
-        UINT threadGroupsCountY,
-        UINT threadGroupsCountZ,
+        std::shared_ptr<CommandList> pCommandList,
+        DirectX::XMUINT3 threadGroupsCount,
         std::function<void(
             std::shared_ptr<CommandList> pCommandList,
             UINT& rootParamId
         )> outerRootParametersSetter = [](
-            std::shared_ptr<CommandList> pCommandListDirect,
+            std::shared_ptr<CommandList> pCommandList,
             UINT& rootParamId
         ) {}
-    ) {
-        pCommandListCompute->GetD3D12CommandList()->SetPipelineState(m_pPipelineState.Get());
-        pCommandListCompute->GetD3D12CommandList()->SetComputeRootSignature(m_pRootSignatureResource->pRootSignature.Get());
-
-        DispatchJob(pCommandListCompute);
-
-        UINT rootParamId{};
-        outerRootParametersSetter(pCommandListCompute, rootParamId);
-        InnerRootParametersSetter(pCommandListCompute, rootParamId);
-
-        pCommandListCompute->GetD3D12CommandList()->Dispatch(threadGroupsCountX, threadGroupsCountY, threadGroupsCountZ);
-    }
+    );
     
 protected:
-    virtual void DispatchJob(std::shared_ptr<CommandList> pCommandListDirect) const {}
+    virtual void DispatchJob(std::shared_ptr<CommandList> pCommandList) const {}
     virtual void InnerRootParametersSetter(
-        std::shared_ptr<CommandList> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandList,
         UINT& rootParamId
     ) const {}
 };
@@ -101,24 +52,18 @@ protected:
 class DeferredShading : ComputeObject {
 public:
     static std::shared_ptr<ComputeObject> CreateDefferedShadingComputeObject(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
+        std::shared_ptr<DeviceContext> pDeviceContext
     ) {
         std::shared_ptr<ComputeObject> pComputeObj{ std::make_shared<ComputeObject>() };
         pComputeObj->InitMaterial(
-            pDevice,
+            pDeviceContext,
             RootSignatureData(
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
                 L"DeferredShadingRootSignature"
             ),
             ComputeShaderData(
-                pShaderAtlas,
                 L"DeferredShadingComputeShader.cso"
-            ),
-            pPSOLibrary
+            )
         );
 
         return pComputeObj;
@@ -126,7 +71,7 @@ public:
 
 private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+        std::shared_ptr<Device> pDevice
     ) {
         size_t rpId{};
         CD3DX12_ROOT_PARAMETER1 rootParameters[7]{};
@@ -173,7 +118,7 @@ private:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(
+        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(
             D3D12_FEATURE_ROOT_SIGNATURE,
             &featureData,
             sizeof(featureData)
@@ -183,16 +128,12 @@ private:
 
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
-        HRESULT hr{ D3DX12SerializeVersionedRootSignature(
+        ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
             featureData.HighestVersion,
             &rootSignatureBlob,
             &errorBlob
-        ) };
-        if (FAILED(hr) && errorBlob) {
-            OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
-        }
-        ThrowIfFailed(hr);
+        ));
 
         return rootSignatureBlob;
     }

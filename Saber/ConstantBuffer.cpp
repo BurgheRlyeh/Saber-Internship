@@ -1,15 +1,17 @@
 #include "ConstantBuffer.h"
 
+#include "Device.h"
+
 ConstantBuffer::ConstantBuffer(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<Device> pDevice,
 	const UINT64& size,
 	void* initData,
 	const HeapData& heapData,
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) : GPUResource(
 		name,
-		pAllocator,
+		pDevice,
 		heapData,
 		ResourceData{
 			CD3DX12_RESOURCE_DESC::Buffer(AlignSize(
@@ -27,14 +29,14 @@ ConstantBuffer::ConstantBuffer(
 }
 
 void ConstantBuffer::CreateConstantBufferView(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle
 ) {
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
 		.BufferLocation{ GetResource()->GetGPUVirtualAddress() },
 		.SizeInBytes{ static_cast<UINT>(GetResource()->GetDesc().Width) }
 	};
-	pDevice->CreateConstantBufferView(&cbvDesc, cpuDescHandle);
+	pDevice->GetD3D12Device()->CreateConstantBufferView(&cbvDesc, cpuDescHandle);
 }
 
 void ConstantBuffer::Update(void* newData, size_t offset, size_t size) {

@@ -5,9 +5,58 @@
 #include <bit>
 #include <climits>
 
+#include "Buffer.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "GPUResource.h"
+
+//class VisibilityBuffer : public Buffer<DirectX::XMUINT4> {
+//	static constexpr size_t BITS_PER_UINT4{ 4 * sizeof(uint32_t) * CHAR_BIT };
+//	static constexpr size_t LOG2_BITS_PER_UINT4{ std::bit_width(BITS_PER_UINT4) - 1 };
+//
+//public:
+//	VisibilityBuffer(
+//		const std::wstring& name,
+//		std::shared_ptr<DeviceContext> pDeviceContext,
+//		size_t capacity,
+//		const GPUResource::HeapData& heapData = GPUResource::HeapData{},
+//		const GPUResource::ResourceData& resData = GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0) },
+//		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+//	) : Buffer< DirectX::XMUINT4>(
+//		name,
+//		pDeviceContext,
+//		ElementsToCapacity(capacity),
+//		heapData,
+//		resData,
+//		allocationFlags
+//	) {}
+//
+//	bool Expand(
+//		std::shared_ptr<DeviceContext> pDeviceContext,
+//		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+//		uint32_t numElements
+//	) override {
+//		Buffer::Expand(pDeviceContext, pCommandQueueDirect, ElementsToCapacity(numElements));
+//	}
+//
+//protected:
+//	void CreateBuffersAndViews(
+//		std::shared_ptr<DeviceContext> pDeviceContext,
+//		uint32_t numElements
+//	) override {
+//		Buffer::CreateBuffersAndViews(pDeviceContext, ElementsToCapacity(numElements));
+//	}
+//
+//private:
+//	static size_t ElementsToCapacity(size_t numElements) {
+//		numElements = std::max<size_t>(BITS_PER_UINT4, std::bit_ceil(numElements));
+//		return numElements >> LOG2_BITS_PER_UINT4;
+//	}
+//
+//	static size_t CapacityToElements(size_t numElements) {
+//		return numElements << LOG2_BITS_PER_UINT4;
+//	}
+//};
 
 class VisibilityBuffer {
 	static constexpr size_t BITS_PER_UINT4{ 4 * sizeof(uint32_t) * CHAR_BIT };
@@ -23,8 +72,7 @@ class VisibilityBuffer {
 public:
 	VisibilityBuffer(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		std::shared_ptr<CommandQueue> pCommandQueueCopy,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
@@ -41,7 +89,7 @@ public:
 
 		m_pVisibilityBuffer = std::make_shared<GPUResource>(
 			m_name,
-			pAllocator,
+			pDevice,
 			GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
 			GPUResource::ResourceData{
 				.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
@@ -73,7 +121,7 @@ public:
 			.SlicePitch{ subresData.RowPitch }
 		};
 
-		std::shared_ptr<GPUResource> pIntermediate{ m_pVisibilityBuffer->CreateIntermediate(pAllocator) };
+		std::shared_ptr<GPUResource> pIntermediate{ m_pVisibilityBuffer->CreateIntermediate(pDevice) };
 		std::shared_ptr<CommandList> pCommandListCopy{
 			pCommandQueueCopy->GetCommandList(pDevice)
 		};

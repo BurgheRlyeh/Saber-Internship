@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include "Device.h"
+
 struct ShaderResource {
 	Microsoft::WRL::ComPtr<ID3DBlob> pShaderBlob{};
 
@@ -15,10 +17,10 @@ struct RootSignatureResource {
 
 	RootSignatureResource(
 		const std::wstring& filename,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob
 	) {
-		ThrowIfFailed(pDevice->CreateRootSignature(
+		ThrowIfFailed(pDevice->GetD3D12Device()->CreateRootSignature(
 			0,
 			pRootSignatureBlob->GetBufferPointer(),
 			pRootSignatureBlob->GetBufferSize(),

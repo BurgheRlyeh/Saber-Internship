@@ -12,8 +12,6 @@ template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem {
 	std::wstring m_name{};
 
-	Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
-
 	size_t m_capacity{};
 
 	std::vector<std::shared_ptr<RenderObject>> m_objects{};
@@ -26,10 +24,8 @@ class RenderSubsystem {
 public:
 	RenderSubsystem(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
 		size_t capacity = 128
 	) : m_name(name),
-		m_pDevice(pDevice),
 		m_capacity(capacity)
 	{
 		IndirectCommandBase<IndirectCommand>::Assert();
@@ -80,18 +76,12 @@ public:
 	}
 
 	bool InitializeModelBuffer(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
 	) {
 		m_pModelBuffers = std::make_shared<Buffer<ModelBuffer>>(
 			m_name + L"/ModelBuffers",
-			pDevice,
-			pAllocator,
-			nullptr,
-			pDescHeapManagerCbvSrvUav,
+			pDeviceContext,
 			m_capacity,
 			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
 			GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0), D3D12_RESOURCE_STATE_GENERIC_READ }
@@ -108,10 +98,7 @@ public:
 	}
 
 	bool InitializeIndirectCommandBuffer(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
 	) {
 		std::scoped_lock<std::mutex> lock(m_objectsMutex);
@@ -123,23 +110,16 @@ public:
 			IndirectCommandBuffer<IndirectCommand>
 		>(
 			m_name + L"/IndirectCommandBuffer",
-			pDevice,
-			pAllocator,
+			pDeviceContext,
 			IndirectCommand::GetCommandSignatureDesc(),
 			m_objects.front()->GetRootSignature(),
-			pDescHeapManagerCbvSrvUav,
 			m_objects.size()
 		);
 		if (pIndirectUpdater) {
-			m_pIndirectCommandBuffer->CreateUpdater<DynamicBufferUpdater<IndirectCommand>>(
-				pDynamicUploadHeap,
-				pIndirectUpdater
-			);
+			m_pIndirectCommandBuffer->CreateUpdater<DynamicBufferUpdater<IndirectCommand>>(pIndirectUpdater);
 		}
 		else {
-			m_pIndirectCommandBuffer->CreateUpdater<StaticBufferUpdater<IndirectCommand>>(
-				pDynamicUploadHeap
-			);
+			m_pIndirectCommandBuffer->CreateUpdater<StaticBufferUpdater<IndirectCommand>>();
 		}
 
 		for (size_t i{}; i < m_objects.size(); ++i) {
@@ -152,36 +132,28 @@ public:
 	}
 
 	bool PerformIndirectBufferUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) {
 		if (!m_pIndirectCommandBuffer) {
 			return false;
 		}
 		m_pIndirectCommandBuffer->PerformUpdate(
-			pDevice,
-			pAllocator,
-			pCommandQueueCopy,
+			pDeviceContext,
 			pCommandQueueDirect
 		);
 		return true;
 	}
 
 	bool PerformModelBufferUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) {
 		if (!m_pModelBuffers) {
 			return false;
 		}
 		m_pModelBuffers->PerformUpdate(
-			pDevice,
-			pAllocator,
-			pCommandQueueCopy,
+			pDeviceContext,
 			pCommandQueueDirect
 		);
 		return true;

@@ -2,25 +2,21 @@
 
 DepthBuffer::DepthBuffer(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerDsv,
-	std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+	std::shared_ptr<DeviceContext> pDeviceContext,
 	UINT64 width,
 	UINT height,
 	std::shared_ptr<SinglePassDownsampler> pSPD
 ) : m_name(name) {
-	m_pDsvsRange = pDescHeapManagerDsv->AllocateRange(m_name + L"/Ranges/DSV", 1);
-	m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(m_name + L"/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pUavsRange = pDescHeapManagerCbvSrvUav->AllocateRange(m_name + L"/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pDsvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateRange(m_name + L"/Ranges/DSV", 1);
+	m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 
 	m_pSinglePassDownsampler = pSPD;
-	Resize(pDevice, pAllocator, width, height);
+	Resize(pDeviceContext->GetDevice(), width, height);
 }
 
 void DepthBuffer::Resize(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<Device> pDevice,
 	UINT64 width,
 	UINT height
 ) {
@@ -37,7 +33,7 @@ void DepthBuffer::Resize(
 
 	m_pDepthBuffer = std::make_shared<TextureResource>(
 		m_name + L"/DepthBuffer",
-		pAllocator,
+		pDevice,
 		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		GPUResource::ResourceData{
 			resDesc,
@@ -54,7 +50,9 @@ void DepthBuffer::Resize(
 		.Texture2D{}
 	};
 	m_pDepthBuffer->CreateDepthStencilView(
-		pDevice, m_pDsvsRange->GetNextCpuHandle(), &dsv
+		pDevice,
+		m_pDsvsRange->GetNextCpuHandle(),
+		&dsv
 	);
 	
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
@@ -68,12 +66,11 @@ void DepthBuffer::Resize(
 		pDevice, m_pSrvsRange->GetCpuHandle(m_depthSrvId), &srvDesc
 	);
 
-	ResizeHZB(pDevice, pAllocator, width, height);
+	ResizeHZB(pDevice, width, height);
 }
 
 bool DepthBuffer::ResizeHZB(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<Device> pDevice,
 	UINT64 width,
 	UINT height
 ) {
@@ -97,7 +94,7 @@ bool DepthBuffer::ResizeHZB(
 
 	m_pHZBuffer = std::make_shared<TextureResource>(
 		m_name + L"/HierarchicalDepthBuffer",
-		pAllocator,
+		pDevice,
 		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		GPUResource::ResourceData{
 			resDesc,
@@ -122,7 +119,7 @@ bool DepthBuffer::ResizeHZB(
 		m_pHZBuffer->CreateUnorderedAccessView(pDevice, m_pUavsRange->GetNextCpuHandle(), &uavDesc);
 	}
 
-	m_pSinglePassDownsampler->Resize(pDevice, pAllocator, width, height);
+	m_pSinglePassDownsampler->Resize(pDevice, width, height);
 	return true;
 }
 
@@ -131,9 +128,14 @@ void DepthBuffer::Clear(std::shared_ptr<CommandList> pCommandList) {
 	m_pDepthBuffer->ClearDepthTarget(pCommandList, GetDsvCpuDescHandle());
 }
 
-void DepthBuffer::SetSinglePassDownsampler(std::shared_ptr<SinglePassDownsampler> pSPD, Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator, UINT64 width, UINT height) {
+void DepthBuffer::SetSinglePassDownsampler(
+	std::shared_ptr<SinglePassDownsampler> pSPD,
+	std::shared_ptr<Device> pDevice,
+	UINT64 width,
+	UINT height
+) {
 	m_pSinglePassDownsampler = pSPD;
-	ResizeHZB(pDevice, pAllocator, width, height);
+	ResizeHZB(pDevice, width, height);
 }
 
 void DepthBuffer::CreateHierarchicalDepthBuffer(

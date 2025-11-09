@@ -16,6 +16,8 @@
 #include "Resources.h"
 #include "Vertices.h"
 
+class DeviceContext;
+
 class RenderObject {
 protected:
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
@@ -29,21 +31,18 @@ protected:
 
 public:
     struct RootSignatureData {
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
     };
     struct ShaderData {
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas{};
-        LPCWSTR vertexShaderFilepath{};
-        LPCWSTR pixelShaderFilepath{};
+        std::wstring vertexShaderFilepath{};
+        std::wstring pixelShaderFilepath{};
     };
     struct PipelineStateData {
-        std::shared_ptr<PSOLibrary> pPSOLibrary{};
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     };
     void InitMaterial(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         const RootSignatureData& rootSignatureData,
         const ShaderData& shaderData,
         PipelineStateData& pipelineStateData
@@ -68,7 +67,7 @@ public:
 
 protected:
     virtual void RenderJob(
-        std::shared_ptr<CommandList> pCommandListDirect
+        std::shared_ptr<CommandList> pCommandList
     ) const;
 
     virtual void InnerRootParametersSetter(

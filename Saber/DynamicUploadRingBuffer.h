@@ -5,7 +5,8 @@
 #include <deque>
 #include <list>
 
-#include "GPUResource.h"
+class Device;
+class GPUResource;
 
 // based on https://www.codeproject.com/Articles/1094799/Implementing-Dynamic-Resources-with-Direct-D
 class RingBuffer {
@@ -65,6 +66,12 @@ struct DynamicAllocation {
     D3D12_GPU_VIRTUAL_ADDRESS gpuAddress{};         	// The GPU-visible address
 };
 
+enum class RingBufferType : size_t {
+	CPU = 0,
+	GPU = 1,
+	Count = 2
+};
+
 class GPURingBuffer : public RingBuffer {
     void* m_cpuVirtualAddress;
     D3D12_GPU_VIRTUAL_ADDRESS m_gpuVirtualAddress;
@@ -73,9 +80,9 @@ class GPURingBuffer : public RingBuffer {
 public:
     GPURingBuffer() = delete;
     GPURingBuffer(
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        size_t capacity,
-        bool isCpuAccessable
+        std::shared_ptr<Device> pDevice,
+		size_t capacity,
+		const RingBufferType& type
     );
 
     ~GPURingBuffer();
@@ -87,16 +94,16 @@ private:
 };
 
 class DynamicUploadHeap {
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
-    const bool m_isCPUAccessible;
+    std::shared_ptr<Device> m_pDevice{};
+    const RingBufferType m_type;
     std::list<GPURingBuffer> m_ringBuffers{};
 
 public:
     DynamicUploadHeap() = delete;
     DynamicUploadHeap(
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        size_t initialCapacity,
-        bool isCPUAccessible
+        std::shared_ptr<Device> pDevice,
+		size_t initialCapacity,
+		const RingBufferType& type
     );
 
     DynamicAllocation Allocate(size_t size, size_t alignment = DEFAULT_ALIGN);

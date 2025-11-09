@@ -3,42 +3,33 @@
 const std::wstring SinglePassDownsampler::BASE_NAME = L"SinglePassDownsampler";
 
 SinglePassDownsampler::SinglePassDownsampler(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-    std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-    std::shared_ptr<PSOLibrary> pPSOLibrary,
-    std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     UINT64 width,
     UINT height
 ) {
     InitMaterial(
-        pDevice,
+        pDeviceContext,
         RootSignatureData(
-            pRootSignatureAtlas,
-            CreateRootSignatureBlob(pDevice),
+            CreateRootSignatureBlob(pDeviceContext->GetDevice()),
             L"AmdFfxSpdDownsamplePassRootSignature"
         ),
         ComputeShaderData(
-            pShaderAtlas,
             L"SinglePassDownsamplerCS.cso"
-        ),
-        pPSOLibrary
+        )
     );
 
-    m_pSpdCounterBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+    m_pSpdCounterBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
         BASE_NAME + L"/SpdCounterBuffer/Uav", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
     );
-    m_pSpdConstantBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+    m_pSpdConstantBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
         BASE_NAME + L"/SpdConstantBuffer/Cbv", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
     );
 
-    Resize(pDevice, pAllocator, width, height);
+    Resize(pDeviceContext->GetDevice(), width, height);
 }
 
 void SinglePassDownsampler::Resize(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<Device> pDevice,
     UINT64 width,
     UINT height
 ) {
@@ -48,7 +39,7 @@ void SinglePassDownsampler::Resize(
     // global atomic counter buffer
     m_pSpdCounterBuffer = std::make_shared<GPUResource>(
         BASE_NAME + L"/SpdCounterBuffer",
-        pAllocator,
+        pDevice,
         GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
         GPUResource::ResourceData{
             .resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
@@ -85,11 +76,14 @@ void SinglePassDownsampler::Resize(
     m_spdConstantBuffer.workGroupOffset[1] = workGroupOffset[1];
     m_pSpdConstantBuffer = std::make_shared<ConstantBuffer>(
         BASE_NAME + L"/SpdConstantBuffer",
-        pAllocator,
+        pDevice,
 		sizeof(SPDConstantBuffer),
         &m_spdConstantBuffer
     );
-    m_pSpdConstantBuffer->CreateConstantBufferView(pDevice, m_pSpdConstantBufferRange->GetNextCpuHandle());
+    m_pSpdConstantBuffer->CreateConstantBufferView(
+        pDevice,
+        m_pSpdConstantBufferRange->GetNextCpuHandle()
+    );
 }
 
 void SinglePassDownsampler::Dispatch(
@@ -101,9 +95,7 @@ void SinglePassDownsampler::Dispatch(
 ) {
     ComputeObject::Dispatch(
         pCommandListCompute,
-        m_dispatchX,
-        m_dispatchY,
-        1,
+        { m_dispatchX, m_dispatchY, 1 },
         [&](std::shared_ptr<CommandList> pCommandListCompute, UINT& rootParamId) {
             auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
             pD3D12CommandList->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
@@ -115,15 +107,17 @@ void SinglePassDownsampler::Dispatch(
 }
 
 void SinglePassDownsampler::InnerRootParametersSetter(
-    std::shared_ptr<CommandList> pCommandListDirect,
+    std::shared_ptr<CommandList> pCommandList,
     UINT& rootParamId
 ) const {
-    auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
+    auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
     pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
 	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
+Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
+    std::shared_ptr<Device> pDevice
+) {
     size_t rp{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
 
@@ -172,7 +166,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-    if (FAILED(pDevice->CheckFeatureSupport(
+    if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(
         D3D12_FEATURE_ROOT_SIGNATURE,
         &featureData,
         sizeof(featureData)

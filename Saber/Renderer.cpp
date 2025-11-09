@@ -16,9 +16,6 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
     , m_isTearingSupported(CheckTearingSupport())
     , m_time(m_clock.now())
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
-    , m_pMeshAtlas(std::make_shared<Atlas<Mesh>>(L""))
-    , m_pShaderAtlas(std::make_shared<Atlas<ShaderResource>>(L""))
-    , m_pRootSignatureAtlas(std::make_shared<Atlas<RootSignatureResource>>(L""))
     , m_pJobSystem(pJobSystem)
 {
     m_numFrames = backBuffersCnt;
@@ -31,8 +28,8 @@ Renderer::~Renderer() {
     m_pScenes.clear();
     m_pGBuffers.clear();
     m_pDepthBuffers.clear();
-    m_pMaterialManager.reset();
-    m_pResourceDescHeapManager.reset();
+    m_pDeviceContext->GetMaterialManager().reset();
+    m_pDeviceContext->GetDescriptorHeap().reset();
 }
 
 void Renderer::Initialize(HWND hWnd) {
@@ -45,76 +42,42 @@ void Renderer::Initialize(HWND hWnd) {
     EnableDRED();
 #endif
 
-    // device and allocator
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter{ GetAdapter(m_useWarp) };
-    m_pDevice = CreateDevice(pAdapter);
-
+	UINT factoryCreateFlags{};
 #if defined(_DEBUG)
-    SetInfoQueueFilter(m_pDevice);
+    factoryCreateFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
-
-    m_pAllocator = CreateAllocator(m_pDevice, pAdapter);
-
-    // command queues
-    m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-    m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
-
-    GPUResource::InitCounterResetter(
-        m_pDevice,
-        m_pAllocator,
-        m_pCommandQueueCopy,
-        m_pCommandQueueDirect
-    );
-
-    m_pSwapChain = CreateSwapChain(hWnd, m_pCommandQueueDirect->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
-    m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
+    Microsoft::WRL::ComPtr<IDXGIFactory6> pFactory{ CreateDxgiFactory(factoryCreateFlags) };
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter{
+        m_useWarp ? GetDxgiAdapterWarp(pFactory) : GetDxgiAdapterByVideoMemory(pFactory)
+    };
 
     constexpr size_t GBUFFER_SIZE{ 3 };
+    m_pDeviceContext = std::make_shared<DeviceContext>(pAdapter);
+    m_pDeviceContext->InitializeContext(std::to_array<DeviceContext::DescHeapArgs>({
+        // CBV_SRV_UAV
+        { 8192, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE },
+        // SAMPLER
+        {},
+        // RTV
+        { m_numFrames + GBUFFER_SIZE },
+        // DSV
+        { 1 }
+    }));
 
-    m_pRtvDescHeapManager = std::make_shared<DescriptorHeapManager>(
-        L"DescHeapManagerRtv",
-        m_pDevice,
-        D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-        m_numFrames + GBUFFER_SIZE
-    );
-    m_pBackBuffersDescHeapRange = m_pRtvDescHeapManager->AllocateRange(L"BackBuffersRange", m_numFrames);
+    m_pSwapChain = CreateSwapChain(hWnd, m_pDeviceContext->GetCommandQueue()->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
+    m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    m_pBackBuffers = CreateBackBuffers(m_pDevice, m_pSwapChain, m_pBackBuffersDescHeapRange);
-
-    m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");
-
-    m_pDsvDescHeapManager = std::make_shared<DescriptorHeapManager>(
-        L"DescHeapManagerDsv",
-        m_pDevice,
-        D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-        1
-    );
-
-    m_pResourceDescHeapManager = std::make_shared<DescriptorHeapManager>(
-        L"DescHeapManagerCbvSrvUav",
-        m_pDevice,
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        8192,
-        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	);
+    m_pBackBuffersDescHeapRange = m_pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(L"BackBuffersRange", m_numFrames);
+    m_pBackBuffers = CreateBackBuffers(m_pDeviceContext->GetDevice(), m_pSwapChain, m_pBackBuffersDescHeapRange);
 
 	m_pDepthBuffers.resize(1);
 	m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
 		L"DepthBuffer",
-		m_pDevice,
-		m_pAllocator,
-		m_pDsvDescHeapManager,
-		m_pResourceDescHeapManager,
+        m_pDeviceContext,
 		m_clientWidth,
 		m_clientHeight,
 		std::make_shared<SinglePassDownsampler>(
-			m_pDevice,
-			m_pAllocator,
-			m_pShaderAtlas,
-			m_pRootSignatureAtlas,
-			m_pPSOLibrary,
-			m_pResourceDescHeapManager,
+			m_pDeviceContext,
 			m_clientWidth,
 			m_clientHeight
 		)
@@ -123,38 +86,14 @@ void Renderer::Initialize(HWND hWnd) {
     m_pGBuffers.resize(1);
     m_pGBuffers[0] = std::make_shared<Texture>(
         L"GBuffer",
-        m_pDevice,
-        m_pAllocator,
+        m_pDeviceContext,
         CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R32G32B32A32_FLOAT,
             m_clientWidth, m_clientHeight, 1, 0, 1, 0,
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
         ),
-        GBUFFER_SIZE,
-        m_pResourceDescHeapManager,
-        m_pRtvDescHeapManager
+        GBUFFER_SIZE
 	);
-
-	m_pMaterialManager = std::make_shared<MaterialManager>(
-		L"../../Resources/Textures/",
-		m_pDevice,
-		m_pAllocator,
-		m_pResourceDescHeapManager,
-		1024
-	);
-
-    const size_t RingBufferDefaultSize{ 1024 };
-    m_pRingBuffers.resize(RingBufferId::Count);
-    m_pRingBuffers[RingBufferId::Cpu] = std::make_shared<DynamicUploadHeap>(
-        m_pAllocator,
-        RingBufferDefaultSize,
-        true
-    );
-    m_pRingBuffers[RingBufferId::Gpu] = std::make_shared<DynamicUploadHeap>(
-        m_pAllocator,
-        RingBufferDefaultSize,
-        false
-    );
 
     m_isInitialized = true;
 
@@ -162,28 +101,13 @@ void Renderer::Initialize(HWND hWnd) {
         constexpr size_t ScenesCount{ 4 };
         m_pScenes.resize(ScenesCount);
 
-        auto copyPostProcess{ CopyPostProcessing::Create(
-            m_pDevice,
-            m_pMeshAtlas,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ) };
-        auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(
-            m_pDevice,
-            m_pShaderAtlas,
-            m_pRootSignatureAtlas,
-            m_pPSOLibrary
-        ) };
+        auto copyPostProcess{ CopyPostProcessing::Create(m_pDeviceContext) };
+        auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext) };
         for (size_t i{}; i < ScenesCount; ++i) {
             std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
             pScene = std::make_unique<Scene>(
                 L"Scene" + std::to_wstring(i),
-                m_pDevice,
-                m_pAllocator,
-                m_pRingBuffers[RingBufferId::Cpu],
-                m_pRingBuffers[RingBufferId::Gpu],
-                m_pResourceDescHeapManager,
+                m_pDeviceContext,
                 m_pDepthBuffers[0],
                 m_pGBuffers[0]
             );
@@ -196,48 +120,27 @@ void Renderer::Initialize(HWND hWnd) {
         sceneObjectAdders[0] = [&](std::unique_ptr<Scene>& pScene) {};
         sceneObjectAdders[1] = [&](std::unique_ptr<Scene>& pScene) {
             pScene->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
-                m_pDevice,
-                m_pAllocator,
-                m_pCommandQueueCopy,
-                m_pCommandQueueDirect,
-                m_pMeshAtlas,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary,
+                m_pDeviceContext,
+                m_pDeviceContext->GetCommandQueue(),
                 m_pGBuffers[0],
-                m_pMaterialManager,
                 DirectX::XMMatrixIdentity()
             ));
         };
         sceneObjectAdders[2] = [&](std::unique_ptr<Scene>& pScene) {
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
             pScene->AddDynamicObject(TestTextureRenderObject::CreateModelFromGLTF(
-                m_pDevice,
-                m_pAllocator,
-                m_pCommandQueueCopy,
-                m_pCommandQueueDirect,
-                m_pMeshAtlas,
+                m_pDeviceContext,
+                m_pDeviceContext->GetCommandQueue(),
                 filepath,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary,
                 m_pGBuffers[0],
-                m_pMaterialManager,
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
             pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                m_pDevice,
-                m_pAllocator,
-                m_pCommandQueueCopy,
-                m_pCommandQueueDirect,
-                m_pMeshAtlas,
+                m_pDeviceContext,
+                m_pDeviceContext->GetCommandQueue(),
                 filepathGrass,
-                m_pShaderAtlas,
-                m_pRootSignatureAtlas,
-                m_pPSOLibrary,
                 m_pGBuffers[0],
-                m_pMaterialManager,
                 DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
             ));
         };
@@ -250,17 +153,10 @@ void Renderer::Initialize(HWND hWnd) {
             std::uniform_real_distribution<float> posDist(-10.f, 10.f);
             for (size_t i{}; i < 100; ++i) {
                 pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                    m_pDevice,
-                    m_pAllocator,
-                    m_pCommandQueueCopy,
-                    m_pCommandQueueDirect,
-                    m_pMeshAtlas,
+                    m_pDeviceContext,
+                    m_pDeviceContext->GetCommandQueue(),
                     filepathGrass,
-                    m_pShaderAtlas,
-                    m_pRootSignatureAtlas,
-                    m_pPSOLibrary,
                     m_pGBuffers[0],
-                    m_pMaterialManager,
                     scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
                 ));
             }
@@ -304,18 +200,15 @@ void Renderer::Initialize(HWND hWnd) {
 
                 addObjects(pScene);
                 pScene->InitializeRenderSubsystems(
-                    m_pDevice,
-                    m_pAllocator,
-                    m_pResourceDescHeapManager,
-                    m_pRingBuffers[RingBufferId::Cpu],
-                    IndirectUpdater::CreateConstMesh4Updater(m_pDevice, m_pShaderAtlas, m_pRootSignatureAtlas, m_pPSOLibrary)
+                    m_pDeviceContext,
+                    IndirectUpdater::CreateConstMesh4Updater(m_pDeviceContext)
                 );
 
                 pScene->SetSceneReadiness(true);
             });
         }
     }
-    m_pPSOLibrary->FlushCacheToFile();
+    m_pDeviceContext->GetPSOLibrary()->FlushCacheToFile();
 }
 
 bool Renderer::StartRenderThread() {
@@ -411,20 +304,20 @@ void Renderer::PerformResize() {
 
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    m_pBackBuffers = CreateBackBuffers(m_pDevice, m_pSwapChain, m_pBackBuffersDescHeapRange);
+    m_pBackBuffers = CreateBackBuffers(m_pDeviceContext->GetDevice(), m_pSwapChain, m_pBackBuffersDescHeapRange);
 
     m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_clientWidth), static_cast<float>(m_clientHeight));
 
     // TODO update during switch
     for (auto& pScene : m_pScenes) {
         //pScene->UpdateCamerasAspectRatio(static_cast<float>(m_clientWidth) / m_clientHeight);
-        pScene->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
+        pScene->Resize(m_pDeviceContext->GetDevice(), m_clientWidth, m_clientHeight);
     }
     for (auto& pDepthBuffer : m_pDepthBuffers) {
-        pDepthBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
+        pDepthBuffer->Resize(m_pDeviceContext->GetDevice(), m_clientWidth, m_clientHeight);
     }
     for (auto& pGBuffer : m_pGBuffers) {
-        pGBuffer->Resize(m_pDevice, m_pAllocator, m_clientWidth, m_clientHeight);
+        pGBuffer->Resize(m_pDeviceContext->GetDevice(), m_clientWidth, m_clientHeight);
     }
 }
 
@@ -436,15 +329,13 @@ void Renderer::Update() {
 
     std::unique_ptr<Scene>& pScene{ m_pScenes[m_currSceneId] };
     if (pScene->IsSceneReady()) {
-        std::shared_ptr pCommandList{ m_pCommandQueueDirect->GetCommandList(m_pDevice) };
-        pScene->Update(deltaTime.count() * 1e-9f, pCommandList);
-        m_pCommandQueueDirect->ExecuteCommandListImmediately(pCommandList);
+        std::shared_ptr pCommandList{ m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice()) };
+        pScene->Update(m_pDeviceContext, pCommandList, deltaTime.count() * 1e-9f);
+        m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
 
         pScene->UpdateRenderSubsystems(
-            m_pDevice,
-            m_pAllocator,
-            m_pCommandQueueCopy,
-            m_pCommandQueueDirect
+            m_pDeviceContext,
+            m_pDeviceContext->GetCommandQueue()
         );
     }
 
@@ -472,7 +363,9 @@ void Renderer::Render() {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"BeforeFrameJob", m_pDevice, listPriority)
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"BeforeFrameJob", m_pDeviceContext->GetDevice(), listPriority
+        )
     };
 
     // Some small work doesn't need to be moved to jobs, just as example
@@ -502,8 +395,10 @@ void Renderer::Render() {
     }
 
     // two command lists: static (1), dynamic (2)
-    std::shared_ptr<CommandList> commandListForStaticObjects{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"StaticObjects", m_pDevice, ++listPriority)
+    std::shared_ptr<CommandList> commandListForStaticObjects{ 
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority
+        )
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
@@ -516,14 +411,16 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect,
             rtv,
-            m_pResourceDescHeapManager
+            m_pDeviceContext->GetDescriptorHeap()
         );
         PIXEndEvent(commandListForStaticObjects->GetD3D12CommandList().Get());
         commandListForStaticObjects->SetReadyForExection();
         });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"StaticAlphakillObjects", m_pDevice, listPriority)
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), listPriority
+        )
     };
     m_pJobSystem->AddJob([&]() {
         PIXBeginEvent(
@@ -536,8 +433,8 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect,
             rtv,
-            m_pResourceDescHeapManager,
-            m_pMaterialManager
+            m_pDeviceContext->GetDescriptorHeap(),
+            m_pDeviceContext->GetMaterialManager()
         );
         PIXEndEvent(commandListForAlphaObjects->GetD3D12CommandList().Get());
         commandListForAlphaObjects->SetReadyForExection();
@@ -545,8 +442,12 @@ void Renderer::Render() {
 
     uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"DynamicObjects", m_pDevice, ++listPriority, [] {},
-            [&]() { fenceValueAfterRender = m_pCommandQueueDirect->Signal(); }
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"DynamicObjects",
+            m_pDeviceContext->GetDevice(),
+            ++listPriority,
+            [] {},
+            [&]() { fenceValueAfterRender = m_pDeviceContext->GetCommandQueue()->Signal(); }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -560,15 +461,15 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect,
             rtv,
-            m_pResourceDescHeapManager
+            m_pDeviceContext->GetDescriptorHeap()
         );
         scene->RenderDynamicAlphaKillObjects(
             commandListForDynamicObjects,
             m_viewport,
             m_scissorRect,
             rtv,
-            m_pResourceDescHeapManager,
-            m_pMaterialManager
+            m_pDeviceContext->GetDescriptorHeap(),
+            m_pDeviceContext->GetMaterialManager()
         );
         PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
         commandListForDynamicObjects->SetReadyForExection();
@@ -577,22 +478,31 @@ void Renderer::Render() {
 
     uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"HZB", m_pDevice, ++listPriority,
-            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterRender); },
-            [&] { fenceValueAfterHZB = m_pCommandQueueDirect->Signal(); }
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"HZB",
+            m_pDeviceContext->GetDevice(),
+            ++listPriority,
+            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterRender); },
+            [&] { fenceValueAfterHZB = m_pDeviceContext->GetCommandQueue()->Signal(); }
         )
     };
 
     uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForDeferredShading{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"DeferredShading", m_pDevice, ++listPriority,
-            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterHZB); },
-            [&] { fenceValueAfterDeferredShading = m_pCommandQueueDirect->Signal(); }
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"DeferredShading",
+            m_pDeviceContext->GetDevice(),
+            ++listPriority,
+            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterHZB); },
+            [&] { fenceValueAfterDeferredShading = m_pDeviceContext->GetCommandQueue()->Signal(); }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pCommandQueueDirect->GetDeferredCommandList(L"AfterFrameJob", m_pDevice, ++listPriority,
-            [&] { m_pCommandQueueDirect->WaitForFenceValue(fenceValueAfterDeferredShading); }
+        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+            L"AfterFrameJob",
+            m_pDeviceContext->GetDevice(),
+            ++listPriority,
+            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterDeferredShading); }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -604,7 +514,7 @@ void Renderer::Render() {
             );
             scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
-                m_pResourceDescHeapManager->GetDescriptorHeap()
+                m_pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap()
             );
             PIXEndEvent(commandListForHZB->GetD3D12CommandList().Get());
             commandListForHZB->SetReadyForExection();
@@ -618,8 +528,8 @@ void Renderer::Render() {
             );
             scene->RunDeferredShading(
                 commandListForDeferredShading,
-                m_pResourceDescHeapManager,
-                m_pMaterialManager,
+                m_pDeviceContext->GetDescriptorHeap(),
+                m_pDeviceContext->GetMaterialManager(),
                 m_clientWidth,
                 m_clientHeight
             );
@@ -635,7 +545,7 @@ void Renderer::Render() {
             );
             scene->RenderPostProcessing(
                 commandListAfterFrame,
-                m_pResourceDescHeapManager,
+                m_pDeviceContext->GetDescriptorHeap(),
                 m_viewport,
                 m_scissorRect,
                 rtv
@@ -653,7 +563,7 @@ void Renderer::Render() {
     uint64_t lastCompletedFenceValue{
         m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
     };
-    m_frameFenceValues[m_currBackBufferId] = m_pCommandQueueDirect->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
+    m_frameFenceValues[m_currBackBufferId] = m_pDeviceContext->GetCommandQueue()->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
     uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
     // Present
@@ -674,9 +584,7 @@ void Renderer::Render() {
         m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
     }
 
-    for (auto& pRingBuffer : m_pRingBuffers) {
-        pRingBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
-    }
+    m_pDeviceContext->FinishFrame(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
@@ -733,136 +641,83 @@ void Renderer::EnableDRED() {
     pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
     pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 }
-
-void Renderer::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
-    ThrowIfFailed(pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue)));
-
-    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-    pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
-
-    // Suppress whole categories of messages
-    //D3D12_MESSAGE_CATEGORY Categories[]{};
-
-    // Suppress messages based on their severity level
-    D3D12_MESSAGE_SEVERITY Severities[]{
-        D3D12_MESSAGE_SEVERITY_INFO,
-    };
-
-    // Suppress individual messages by their ID
-    D3D12_MESSAGE_ID DenyIds[] = {
-        D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
-        D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
-        D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
-
-        D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_HAS_NO_RESOURCE,            // For D3D12MA compatibility
-
-        D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
-
-        D3D12_MESSAGE_ID_GPU_BASED_VALIDATION_RESOURCE_STATE_IMPRECISE, // Occured by GBV when ExecuteIndirect is used
-    };
-    D3D12_INFO_QUEUE_FILTER NewFilter{
-        .DenyList{
-            //.NumCategories{ _countof(Categories) },
-            //.pCategoryList{ Categories },
-            .NumSeverities{ _countof(Severities) },
-            .pSeverityList{ Severities },
-            .NumIDs{ _countof(DenyIds) },
-            .pIDList{ DenyIds }
-        }
-    };
-
-    ThrowIfFailed(pInfoQueue->PushStorageFilter(&NewFilter));
-}
 #endif
 
-Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetAdapter(bool useWarp) {
-    // IDXGIFactory
-    // An IDXGIFactory interface implements methods for generating DXGI objects (which handle full screen transitions)
-    Microsoft::WRL::ComPtr<IDXGIFactory6> pDXGIFactory;
-
-    // Enabling the DXGI_CREATE_FACTORY_DEBUG flag during factory creation enables errors
-    // to be caught during device creation and while querying for the adapters
-    UINT createFactoryFlags{};
-#if defined(_DEBUG)
-    createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
-    // CreateDXGIFactory2
-    // Creates a DXGI factory that you can use to generate other DXGI objects
-    ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&pDXGIFactory)));
-
-    // The IDXGIAdapter interface represents a display subsystem (including one or more GPUs, DACs and video memory)
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> pDXGIAdapter1;
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> pDXGIAdapter4;
-
-    if (useWarp) {
-        // IDXGIFactory4::EnumWarpAdapter
-        // Provides an adapter which can be provided to D3D12CreateDevice to use the WARP renderer
-        ThrowIfFailed(pDXGIFactory->EnumWarpAdapter(IID_PPV_ARGS(&pDXGIAdapter1)));
-        ThrowIfFailed(pDXGIAdapter1.As(&pDXGIAdapter4));
-        return pDXGIAdapter4;
-    }
-
-    SIZE_T maxDedicatedVideoMemory{};
-    for (UINT adapterIndex{};
-        pDXGIFactory->EnumAdapterByGpuPreference(
-            adapterIndex,
-            DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,   // The GPU preference for the app
-            IID_PPV_ARGS(&pDXGIAdapter1)
-        ) != DXGI_ERROR_NOT_FOUND;
-        ++adapterIndex
-        ) {
-        DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
-        ThrowIfFailed(pDXGIAdapter1->GetDesc1(&dxgiAdapterDesc1));
-
-        if (dxgiAdapterDesc1.DedicatedVideoMemory <= maxDedicatedVideoMemory) {
-            continue;
-        }
-
-        if (!(dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-            // Creates a device that represents the display adapter
-            && SUCCEEDED(D3D12CreateDevice(
-                pDXGIAdapter1.Get(),     // A pointer to the video adapter to use when creating a device
-                D3D_FEATURE_LEVEL_11_0, // Feature Level
-                __uuidof(ID3D12Device), // Device interface GUID
-                nullptr                 // A pointer to a memory block that receives a pointer to the device
-            ))) {
-            ThrowIfFailed(pDXGIAdapter1.As(&pDXGIAdapter4));
-            maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
-        }
-    }
-
-    return pDXGIAdapter4;
+Microsoft::WRL::ComPtr<IDXGIFactory6> Renderer::CreateDxgiFactory(UINT createFlags) const {
+	Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory;
+	ThrowIfFailed(CreateDXGIFactory2(createFlags, IID_PPV_ARGS(&pDxgiFactory)));
+	return pDxgiFactory;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Device2> Renderer::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter) {
-    // Represents a virtual adapter
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice;
-
-    // Creates a device that represents the display adapter
-    ThrowIfFailed(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
-    return pDevice;
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetDxgiAdapterWarp(
+	Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory
+) const {
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> pDxgiAdapter;
+	ThrowIfFailed(pDxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pDxgiAdapter)));
+	return pDxgiAdapter;
 }
 
-Microsoft::WRL::ComPtr<D3D12MA::Allocator> Renderer::CreateAllocator(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
-) {
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator{};
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetDxgiAdapterByPreference(
+	Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+	const DXGI_GPU_PREFERENCE& preference,
+	size_t id,
+	const DXGI_ADAPTER_FLAG& flags
+) const {
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> pDxgiAdapter;
+	if (FAILED(pDxgiFactory->EnumAdapterByGpuPreference(
+		id,
+		preference,
+		IID_PPV_ARGS(&pDxgiAdapter)
+	))) {
+		return nullptr;
+	}
 
-    D3D12MA::ALLOCATOR_DESC desc{
-        .Flags{
-            D3D12MA::ALLOCATOR_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED
-            | D3D12MA::ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED
-        },
-        .pDevice{ m_pDevice.Get() },
-        .pAdapter{ pAdapter.Get() }
-    };
+	if (flags != DXGI_ADAPTER_FLAG_NONE) {
+		DXGI_ADAPTER_DESC1 desc;
+		if (FAILED(pDxgiAdapter->GetDesc1(&desc)) || !(desc.Flags & flags))
+			return nullptr;
+	}
 
-    ThrowIfFailed(D3D12MA::CreateAllocator(&desc, pAllocator.GetAddressOf()));
-    return pAllocator;
+	return pDxgiAdapter;
+}
+
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Renderer::GetDxgiAdapterByVideoMemory(
+	Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+	size_t id,
+	const DXGI_ADAPTER_FLAG& flags
+) const {
+	struct AdapterInfo {
+		Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter;
+		SIZE_T videoMemory;
+	};
+	std::vector<AdapterInfo> adapters;
+
+	for (UINT i{};; ++i) {
+		Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter;
+		if (pDxgiFactory->EnumAdapterByGpuPreference(
+			i,
+			DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+			IID_PPV_ARGS(&pAdapter)
+		) == DXGI_ERROR_NOT_FOUND)
+			break;
+
+		DXGI_ADAPTER_DESC1 desc{};
+		if (FAILED(pAdapter->GetDesc1(&desc)))
+			continue;
+		if (flags != DXGI_ADAPTER_FLAG_NONE && !(desc.Flags & flags))
+			continue;
+		adapters.push_back({ pAdapter, desc.DedicatedVideoMemory });
+	}
+
+	if (adapters.empty())
+		return nullptr;
+
+	std::sort(adapters.begin(), adapters.end(),
+		[](const AdapterInfo& a, const AdapterInfo& b) {
+			return a.videoMemory > b.videoMemory;
+		});
+
+	return adapters[std::min(id, adapters.size() - 1)].pAdapter;
 }
 
 Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
@@ -919,13 +774,12 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
 }
 
 std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    std::shared_ptr<Device> pDevice,
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
     std::shared_ptr<DescHeapRange> pDescHeapRange
 ) {
     DXGI_SWAP_CHAIN_DESC desc{};
     ThrowIfFailed(pSwapChain->GetDesc(&desc));
-    ThrowIfFailed(pDevice->GetDeviceRemovedReason());
 
     std::vector<std::shared_ptr<TextureResource>> backBuffers{ desc.BufferCount };
 
@@ -944,6 +798,6 @@ std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
 // Ensure that any commands previously executed on the GPU have finished executing 
 // before the CPU thread is allowed to continue processing
 void Renderer::Flush() {
-    m_pCommandQueueDirect->Flush();
-    m_pCommandQueueCopy->Flush();
+    m_pDeviceContext->GetCommandQueue()->Flush();
+    m_pDeviceContext->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->Flush();
 }

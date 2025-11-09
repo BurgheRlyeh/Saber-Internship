@@ -2,6 +2,7 @@
 
 #include "Headers.h"
 
+#include "DeviceContext.h"
 #include "Atlas.h"
 #include "ComputeObject.h"
 #include "ConstantBuffer.h"
@@ -40,25 +41,19 @@ class SinglePassDownsampler : public ComputeObject {
 
 public:
     SinglePassDownsampler(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         UINT64 width,
         UINT height
     );
 
     void Resize(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<Device> pDevice,
         UINT64 width,
         UINT height
     );
 
     void Dispatch(
-        std::shared_ptr<CommandList> pCommandListCompute,
+        std::shared_ptr<CommandList> pCommandList,
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
         D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
@@ -67,12 +62,12 @@ public:
 
 protected:
     virtual void InnerRootParametersSetter(
-        std::shared_ptr<CommandList> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandList,
         UINT& rootParamId
     ) const override;
 
 private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+        std::shared_ptr<Device> pDevice
     );
 };

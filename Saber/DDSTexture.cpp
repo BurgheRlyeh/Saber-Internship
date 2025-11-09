@@ -1,20 +1,21 @@
 #include "DDSTexture.h"
 
+#include "DirectXTex.h"
+
+#include "CommandQueue.h"
+#include "DeviceContext.h"
+
 DDSTexture::DDSTexture(
 	const std::wstring& filename,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<CommandQueue> pCommandQueueCopy,
+	std::shared_ptr<DeviceContext> pDeviceContext,
 	std::shared_ptr<CommandQueue> pCommandQueueDirect
 ) {
-	LoadFromDDS(filename, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect);
+	LoadFromDDS(filename, pDeviceContext, pCommandQueueDirect);
 }
 
 void DDSTexture::LoadFromDDS(
 	const std::wstring& filename,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<CommandQueue> pCommandQueueCopy,
+	std::shared_ptr<DeviceContext> pDeviceContext,
 	std::shared_ptr<CommandQueue> pCommandQueueDirect
 ) {
 	// load texture from dds
@@ -24,7 +25,7 @@ void DDSTexture::LoadFromDDS(
 	// create texture resource
 	CreateResource(
 		filename,
-		pAllocator,
+		pDeviceContext->GetDevice(),
 		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		ResourceData{
 			CD3DX12_RESOURCE_DESC::Tex2D(
@@ -47,19 +48,20 @@ void DDSTexture::LoadFromDDS(
 	}
 
 	std::shared_ptr<CommandList> pCommandListCopy{
-		pCommandQueueCopy->GetCommandList(pDevice)
+		pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 	};
-	std::shared_ptr<GPUResource> pIntermediate{ CreateIntermediate(pAllocator, 0, subresources.size()) };
+	ResourceTransition(pCommandListCopy, D3D12_RESOURCE_STATE_COPY_DEST);
+	std::shared_ptr<GPUResource> pIntermediate{ CreateIntermediate(pDeviceContext->GetDevice(), 0, subresources.size())};
 	UpdateSubresources(
 		pCommandListCopy,
 		pIntermediate,
 		subresources.data(),
 		0, 0, subresources.size()
 	);
-	pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
 
 	std::shared_ptr<CommandList> pCommandListDirect{
-		pCommandQueueDirect->GetCommandList(pDevice)
+		pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 	};
 	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);

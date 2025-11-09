@@ -10,10 +10,13 @@
 
 #include "MaterialCB.h"
 
+class DescHeapRange;
+class Device;
+class DeviceContext;
+
 class MaterialManager {
 	static const std::wstring BASE_NAME;
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
 	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
 	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
 
@@ -31,28 +34,25 @@ class MaterialManager {
 public:
 	MaterialManager(
 		const std::wstring& resourceFolder,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
 		const size_t& capacity
 	);
 	~MaterialManager();
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetDescHeap() const {
-		return m_pDescHeap;
-	}
 	std::shared_ptr<DescHeapRange> GetMaterialCBVsRange() const;
 	std::shared_ptr<DescHeapRange> GetMaterialSRVsRange() const;
 
 	size_t AddMaterial(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		const std::wstring& albedoFilepath,
 		const std::wstring& normalFilepath
 	);
 
 private:
-	size_t AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<TextureResource> pTex);
+	size_t AddTexture(
+		std::shared_ptr<Device> pDevice,
+		std::shared_ptr<TextureResource> pTex
+	);
 };

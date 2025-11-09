@@ -4,11 +4,13 @@
 
 #include "GPUResource.h"
 
+class Device;
+
 class ConstantBuffer : public GPUResource {
 public:
 	ConstantBuffer(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		const UINT64& size,
 		void* initData = nullptr,
 		const HeapData& heapData = HeapData{ D3D12_HEAP_TYPE_UPLOAD },
@@ -16,7 +18,7 @@ public:
 	);
 
 	void CreateConstantBufferView(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle
 	);
 

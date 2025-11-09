@@ -1,16 +1,18 @@
 #include "MaterialManager.h"
 
+#include "DescriptorHeapRange.h"
+#include "Device.h"
+#include "DeviceContext.h"
+
 const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
 
 MaterialManager::MaterialManager(
 	const std::wstring& resourceFolder,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<Device> pDevice,
 	std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
 	const size_t& capacity
 ) {
 	m_pTextureAtlas = std::make_shared<Atlas<DDSTexture>>(resourceFolder);
-	m_pDescHeap = pDescHeapManager->GetDescriptorHeap();
 
 	m_pCBVsRange = pDescHeapManager->AllocateRange(
 		BASE_NAME + L"/Ranges/Cbv",
@@ -25,7 +27,7 @@ MaterialManager::MaterialManager(
 
 	m_pMaterialCB = std::make_shared<ConstantBuffer>(
 		BASE_NAME + L"/MaterialCB",
-		pAllocator,
+		pDevice,
 		sizeof(MaterialCB),
 		&m_materialCB
 	);
@@ -50,25 +52,23 @@ std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialSRVsRange() const {
 }
 
 size_t MaterialManager::AddMaterial(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<CommandQueue> pCommandQueueCopy,
+	std::shared_ptr<DeviceContext> pDeviceContext,
 	std::shared_ptr<CommandQueue> pCommandQueueDirect,
 	const std::wstring& albedoFilepath,
 	const std::wstring& normalFilepath
 ) {
 	std::shared_ptr<TextureResource> pAlbedo{
-		m_pTextureAtlas->Assign(albedoFilepath, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect)
+		m_pTextureAtlas->Assign(albedoFilepath, pDeviceContext, pCommandQueueDirect)
 	};
 	std::shared_ptr<DDSTexture> pNormal{
-		m_pTextureAtlas->Assign(normalFilepath, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect)
+		m_pTextureAtlas->Assign(normalFilepath, pDeviceContext, pCommandQueueDirect)
 	};
 	m_pMaterials.push_back(std::make_shared<RenderMaterial>(pAlbedo, pNormal));
 
 	size_t materialId{ m_pMaterials.size() - 1 };
 	m_materialCB.materials[materialId] = {
-		static_cast<UINT>(AddTexture(pDevice, pAlbedo)),
-		static_cast<UINT>(AddTexture(pDevice, pNormal)),
+		static_cast<UINT>(AddTexture(pDeviceContext->GetDevice(), pAlbedo)),
+		static_cast<UINT>(AddTexture(pDeviceContext->GetDevice(), pNormal)),
 		0,
 		0
 	};
@@ -77,7 +77,10 @@ size_t MaterialManager::AddMaterial(
 	return materialId;
 }
 
-size_t MaterialManager::AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<TextureResource> pTex) {
+size_t MaterialManager::AddTexture(
+	std::shared_ptr<Device> pDevice,
+	std::shared_ptr<TextureResource> pTex
+) {
 	size_t id{ m_pSRVsRange->GetNextId() };
 
 	auto handle = m_pSRVsRange->GetCpuHandle(id);

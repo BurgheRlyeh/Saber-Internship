@@ -123,9 +123,6 @@
     <ClInclude Include="DescriptorHeapManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GBuffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="DepthBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -178,6 +175,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="BufferUpdater.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DeviceContext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Device.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -245,9 +248,6 @@
     <ClCompile Include="DescriptorHeapRange.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GBuffer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="MaterialManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -255,6 +255,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SinglePassDownsampler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DeviceContext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ComputeObject.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Device.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -5,9 +5,12 @@
 #include "D3D12MemAlloc.h"
 
 #include "CommandQueue.h"
+#include "CommandList.h"
+
+class Device;
 
 class GPUResource {
-	static std::shared_ptr<GPUResource> m_pCounterResetter;
+	static std::shared_ptr<GPUResource> pCounterResetter;
 
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 
@@ -29,7 +32,7 @@ public:
 	};
 	GPUResource(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		const HeapData& heapData,
 		const ResourceData& resData,
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
@@ -60,7 +63,7 @@ public:
 
 	void CreateResource(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		const HeapData& heapData,
 		const ResourceData& resData,
 		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
@@ -85,7 +88,7 @@ public:
 	}
 
 	std::shared_ptr<GPUResource> CreateIntermediate(
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		UINT firstSubresource = 0,
 		UINT numSubresources = 1
 	);
@@ -111,7 +114,7 @@ public:
 	bool IsSrv() const;
 	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;;
 	void CreateShaderResourceView(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_SHADER_RESOURCE_VIEW_DESC* pSrvDesc = nullptr
 	);
@@ -119,7 +122,7 @@ public:
 	bool IsUav() const;
 	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const;;
 	void CreateUnorderedAccessView(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc = nullptr,
 		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
@@ -128,7 +131,7 @@ public:
 	bool IsRtv() const;
 	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const;;
 	void CreateRenderTargetView(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
 	);
@@ -149,48 +152,50 @@ public:
 		);
 	}
 
-	static void InitCounterResetter(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
-	) {
-		m_pCounterResetter = std::make_shared<GPUResource>(
-			L"GPUResource/CounterResetter",
-			pAllocator,
-			HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
-		);
+	//static void InitCounterResetter(
+	//	std::shared_ptr<DeviceContext> pDeviceContext,
+	//	std::shared_ptr<CommandQueue> pCommandQueueDirect
+	//) {
+	//	if (pCounterResetter) {
+	//		return;
+	//	}
 
-		UINT zero{};
-		D3D12_SUBRESOURCE_DATA subresData{
-			.pData{ &zero },
-			.RowPitch{ sizeof(UINT) },
-			.SlicePitch{ subresData.RowPitch }
-		};
+	//	pCounterResetter = std::make_shared<GPUResource>(
+	//		L"GPUResource/CounterResetter",
+	//		pDeviceContext->GetAllocator(),
+	//		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+	//		ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
+	//	);
 
-		std::shared_ptr<GPUResource> pIntermediate{
-			m_pCounterResetter->CreateIntermediate(pAllocator)
-		};
+	//	UINT zero{};
+	//	D3D12_SUBRESOURCE_DATA subresData{
+	//		.pData{ &zero },
+	//		.RowPitch{ sizeof(UINT) },
+	//		.SlicePitch{ subresData.RowPitch }
+	//	};
 
-		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueCopy->GetCommandList(pDevice)
-		};
-		m_pCounterResetter->UpdateSubresources(
-			pCommandListCopy,
-			pIntermediate,
-			&subresData
-		);
-		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+	//	std::shared_ptr<GPUResource> pIntermediate{
+	//		pCounterResetter->CreateIntermediate(pDeviceContext->GetAllocator())
+	//	};
 
-		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDevice)
-		};
-		m_pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
-	}
+	//	std::shared_ptr<CommandList> pCommandListCopy{
+	//		pCommandQueueDirect->GetCommandList(pDeviceContext)
+	//	};
+	//	pCounterResetter->UpdateSubresources(
+	//		pCommandListCopy,
+	//		pIntermediate,
+	//		&subresData
+	//	);
+	//	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
+
+	//	std::shared_ptr<CommandList> pCommandListDirect{
+	//		pCommandQueueDirect->GetCommandList(pDeviceContext)
+	//	};
+	//	pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	//	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	//}
 	static void DestroyCounterResetter() {
-		m_pCounterResetter.reset();
+		pCounterResetter.reset();
 	}
 };
 

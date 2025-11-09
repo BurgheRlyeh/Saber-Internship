@@ -4,6 +4,8 @@
 
 #include "D3D12MemAlloc.h"
 
+#include "DeviceContext.h"
+
 #include "Atlas.h"
 #include "PSOLibrary.h"
 #include "RenderObject.h"
@@ -19,27 +21,20 @@ protected:
 class CopyPostProcessing : public PostProcessing {
 public:
     static std::shared_ptr<PostProcessing> Create(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary
+        std::shared_ptr<DeviceContext> pDeviceContext
     ) {
         std::shared_ptr<PostProcessing> pp{ std::make_shared<PostProcessing>() };
         pp->InitMaterial(
-            pDevice,
+            pDeviceContext,
             RootSignatureData{
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
                 L"CopyPostProcessingRootSignature"
             },
             ShaderData{
-                pShaderAtlas,
                 L"CopyPostProcessingVS.cso",
                 L"CopyPostProcessingPS.cso"
             },
             PipelineStateData{
-                pPSOLibrary,
                 CreatePipelineStateDesc()
             }
         );
@@ -49,7 +44,7 @@ public:
 
 private:
     static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
+        std::shared_ptr<Device> pDevice
     ) {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
@@ -84,7 +79,7 @@ private:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
             featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
         }
 

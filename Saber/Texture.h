@@ -24,29 +24,26 @@ class Texture {
 public:
 	Texture(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		const D3D12_RESOURCE_DESC& desc,
-		size_t capacity = 1,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav = nullptr,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerRtv = nullptr
+		size_t capacity = 1
 	) : m_name(name),
 		m_desc(desc),
 		m_width(desc.Width),
 		m_height(desc.Height),
 		m_capacity(capacity)
 	{
-		if (pDescHeapManagerCbvSrvUav && IsSrvDesc(desc)) {
-			m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(m_name + L"/Ranges/SRV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		if (IsSrvDesc(desc)) {
+			m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		}
-		if (pDescHeapManagerCbvSrvUav && IsUavDesc(desc)) {
-			m_pUavsRange = pDescHeapManagerCbvSrvUav->AllocateRange(m_name + L"/Ranges/UAV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		if (IsUavDesc(desc)) {
+			m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 		}
-		if (pDescHeapManagerRtv && IsRtvDesc(desc)) {
-			m_pRtvsRange = pDescHeapManagerRtv->AllocateRange(m_name + L"/Ranges/RTV", m_capacity);
+		if (IsRtvDesc(desc)) {
+			m_pRtvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(m_name + L"/Ranges/RTV", m_capacity);
 		}
 
-		Resize(pDevice, pAllocator, desc.Width, desc.Height);
+		Resize(pDeviceContext->GetDevice(), desc.Width, desc.Height);
 	}
 
 	size_t GetSize() const {
@@ -66,8 +63,7 @@ public:
 	}
 
 	void Resize(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		UINT64 width,
 		UINT height
 	) {
@@ -90,7 +86,7 @@ public:
 		for (size_t i{}; i < m_capacity; ++i) {
 			m_pTextures[i] = std::make_shared<TextureResource>(
 				m_name + L"/Texture" + std::to_wstring(i),
-				pAllocator,
+				pDevice,
 				GPUResource::HeapData{},
 				GPUResource::ResourceData{ m_desc }
 			);

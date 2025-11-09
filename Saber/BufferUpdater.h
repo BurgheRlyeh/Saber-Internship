@@ -23,24 +23,17 @@ public:
 	virtual void SetUpdateAll(T* pData, size_t count) = 0;
 	virtual void SetUpdateAt(size_t id, const T& data) = 0;
 	virtual void PerformUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) = 0;
 };
 
 template <typename T>
 class StaticBufferUpdater : public BufferUpdater<T> {
-	std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeap{};
-
 public:
 	StaticBufferUpdater(
-		Buffer<T>& buffer,
-		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap
-	) : BufferUpdater<T>(buffer),
-		m_pDynamicUploadHeap(pDynamicUploadHeap)
-	{}
+		Buffer<T>& buffer
+	) : BufferUpdater<T>(buffer) {}
 
 	virtual void SetUpdateAll(T* pData, size_t count) override {
 		if (count > m_buffer.GetCapacity()) {
@@ -57,17 +50,15 @@ public:
 		m_buffer.m_data[id] = data;
 	}
 	virtual void PerformUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) override {
 		if (m_buffer.m_data.size() > m_buffer.GetCapacity()) {
-			m_buffer.CreateBuffersAndViews(pDevice, pAllocator, m_buffer.m_data.size());
+			m_buffer.CreateBuffersAndViews(pDeviceContext->GetDevice(), m_buffer.m_data.size());
 		}
 
 		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDevice)
+			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 		};
 		m_buffer.GetResource()->ResourceTransition(
 			pCommandListDirect,
@@ -76,7 +67,7 @@ public:
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 
 		DynamicAllocation intermediateAllocation{
-			m_pDynamicUploadHeap->Allocate(m_buffer.m_data.size() * sizeof(T))
+			pDeviceContext->GetRingBuffer()->Allocate(m_buffer.m_data.size() * sizeof(T))
 		};
 		D3D12_SUBRESOURCE_DATA subresData{
 			.pData{ m_buffer.m_data.data() },
@@ -85,7 +76,7 @@ public:
 		};
 
 		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueCopy->GetCommandList(pDevice)
+			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 		};
 		m_buffer.GetResource()->UpdateSubresources(
 			pCommandListCopy,
@@ -93,9 +84,9 @@ public:
 			&subresData,
 			intermediateAllocation.offset
 		);
-		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
 
-		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
+		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice());
 		m_buffer.GetResource()->ResourceTransition(
 			pCommandListDirect,
 			m_buffer.m_resData.resInitState
@@ -106,7 +97,6 @@ public:
 
 template <typename T>
 class DynamicBufferUpdater : public BufferUpdater<T> {
-	std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeap{};
 	std::shared_ptr<ComputeObject> m_pUpdater{};
 
 	std::vector<UINT> m_updBufIds{};
@@ -116,12 +106,8 @@ class DynamicBufferUpdater : public BufferUpdater<T> {
 public:
 	DynamicBufferUpdater(
 		Buffer<T>& buffer,
-		std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
 		std::shared_ptr<ComputeObject> pUpdater
-	) : BufferUpdater<T>(buffer),
-		m_pDynamicUploadHeap(pDynamicUploadHeap),
-		m_pUpdater(pUpdater)
-	{
+	) : BufferUpdater<T>(buffer), m_pUpdater(pUpdater) {
 		assert(m_buffer.GetResource()->IsUav());
 		m_updBufIds.reserve(m_buffer.GetCapacity());
 		m_updBuf.reserve(m_buffer.GetCapacity());
@@ -144,9 +130,7 @@ public:
 		m_updMaxId = id;
 	}
 	virtual void PerformUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) override {
 		assert(m_updBufIds.size() == m_updBuf.size());
@@ -157,32 +141,30 @@ public:
 
 		if (m_updMaxId + 1 > m_buffer.GetCapacity()) {
 			m_buffer.Expand(
-				pDevice,
-				pAllocator,
-				pCommandQueueCopy,
+				pDeviceContext,
 				pCommandQueueDirect,
 				m_updMaxId + 1
 			);
 		}
 
 		size_t updBufIdsSize{ updCnt * sizeof(UINT) };
-		DynamicAllocation updBufIdsAllocation{ m_pDynamicUploadHeap->Allocate(updBufIdsSize) };
+		DynamicAllocation updBufIdsAllocation{ pDeviceContext->GetRingBuffer()->Allocate(updBufIdsSize) };
 		memcpy(updBufIdsAllocation.cpuAddress, m_updBufIds.data(), updBufIdsSize);
 		m_updBufIds.clear();
 
 		size_t updBufSize{ updCnt * sizeof(T) };
-		DynamicAllocation updBufAllocation{ m_pDynamicUploadHeap->Allocate(updBufSize) };
+		DynamicAllocation updBufAllocation{ pDeviceContext->GetRingBuffer()->Allocate(updBufSize) };
 		memcpy(updBufAllocation.cpuAddress, m_updBuf.data(), updBufSize);
 		m_updBuf.clear();
 
 		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDevice)
+			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 		};
 		static const size_t threadBlockSize{ 128 };
 		m_buffer.GetResource()->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pUpdater->Dispatch(
 			pCommandListDirect,
-			(updCnt + threadBlockSize - 1) / threadBlockSize, 1, 1,
+			{ static_cast<uint32_t>(updCnt + threadBlockSize - 1 / threadBlockSize), 1, 1 },
 			[&](std::shared_ptr<CommandList> pCommandList, UINT& rootParamId) {
 				auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
 				pD3D12CommandList->SetComputeRoot32BitConstant(rootParamId++, updCnt, 0);
@@ -220,9 +202,7 @@ public:
 		m_buffer.GetResource()->GetResource()->Unmap(0, &CD3DX12_RANGE(id, id + 1));
 	}
 	virtual void PerformUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) override {}
 };

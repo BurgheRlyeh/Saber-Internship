@@ -5,7 +5,8 @@ CommandList::CommandList(
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
 	std::function<void()> beforeExec,
 	std::function<void()> afterExec
-) : m_pD3D12CommandList(pCommandList),
+) : m_name(name),
+	m_pD3D12CommandList(pCommandList),
 	m_beforeExec(beforeExec),
 	m_afterExec(afterExec) {
 	m_pD3D12CommandList->SetName(name.c_str());

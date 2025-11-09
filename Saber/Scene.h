@@ -21,9 +21,6 @@
 class Scene {
     std::wstring m_name{};
 
-    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapCpu{};
-    std::shared_ptr<DynamicUploadHeap> m_pDynamicUploadHeapGpu{};
-
     SceneBuffer m_sceneBuffer;
     std::shared_ptr<ConstantBuffer> m_pSceneCb{};
     std::mutex m_sceneBufferMutex{};
@@ -63,45 +60,34 @@ public:
     Scene() = delete;
     Scene(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
-        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
         std::shared_ptr<Texture> m_pGBuffer
     );
 
     void Resize(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<Device> pDevice,
         uint64_t width,
         uint32_t height
     ) {
-        ResizeTargetTexture(pDevice, pAllocator, width, height);
+        ResizeTargetTexture(pDevice, width, height);
         UpdateCamerasAspectRatio(static_cast<float>(width) / height);
     }
 
     void ResizeTargetTexture(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<Device> pDevice,
         uint64_t width,
         uint32_t height
     ) {
-        m_pTargetTexture->Resize(pDevice, pAllocator, width, height);
+        m_pTargetTexture->Resize(pDevice, width, height);
     }
 
     void InitializeRenderSubsystems(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
-        std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeap,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<ComputeObject> pIndirectUpdater
     ) const;
     void UpdateRenderSubsystems(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> pCommandQueueCopy,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> pCommandQueueDirect
     ) const;
 
@@ -114,7 +100,11 @@ public:
     std::shared_ptr<Texture> GetGBuffer();
     void SetGBuffer(std::shared_ptr<Texture> pGBuffer);
 
-    void Update(float deltaTime, std::shared_ptr<CommandList> pCommandList);
+    void Update(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList,
+        float deltaTime
+    );
     void BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
         m_pDepthBuffer->Clear(pCommandList);
         if (m_pGBuffer) {
@@ -198,6 +188,9 @@ public:
 private:
     bool TryUpdateCamera(float deltaTime);
 
-    void UpdateSceneBuffer(std::shared_ptr<CommandList> pCommandList);
+    void UpdateSceneBuffer(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList
+    );
     void UpdateLightBuffer();
 };

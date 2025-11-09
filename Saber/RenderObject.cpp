@@ -1,29 +1,29 @@
 #include "RenderObject.h"
 
+#include "DeviceContext.h"
+
 void RenderObject::InitMaterial(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     const RootSignatureData& rootSignatureData,
     const ShaderData& shaderData,
     PipelineStateData& pipelineStateData
 ) {
-    m_pRootSignatureResource = rootSignatureData.pRootSignatureAtlas->Assign(
+    m_pRootSignatureResource = pDeviceContext->GetRootSignatureAtlas()->Assign(
         rootSignatureData.rootSignatureFilename,
-        pDevice,
+        pDeviceContext->GetDevice(),
         rootSignatureData.pRootSignatureBlob
     );
 
-    m_pVertexShaderResource = shaderData.pShaderAtlas->Assign(shaderData.vertexShaderFilepath);
-    m_pPixelShaderResource = shaderData.pShaderAtlas->Assign(shaderData.pixelShaderFilepath);
+    m_pVertexShaderResource = pDeviceContext->GetShaderAtlas()->Assign(shaderData.vertexShaderFilepath);
+    m_pPixelShaderResource = pDeviceContext->GetShaderAtlas()->Assign(shaderData.pixelShaderFilepath);
 
     pipelineStateData.desc.pRootSignature = m_pRootSignatureResource->pRootSignature.Get();
     pipelineStateData.desc.VS = CD3DX12_SHADER_BYTECODE(m_pVertexShaderResource->pShaderBlob.Get());
     pipelineStateData.desc.PS = CD3DX12_SHADER_BYTECODE(m_pPixelShaderResource->pShaderBlob.Get());
 
-    m_pPipelineState = pipelineStateData.pPSOLibrary->Assign(
-        pDevice,
-        (std::wstring(shaderData.vertexShaderFilepath)
-            + std::wstring(shaderData.pixelShaderFilepath)
-            ).c_str(),
+    m_pPipelineState = pDeviceContext->GetPSOLibrary()->Assign(
+        pDeviceContext->GetDevice(),
+        (shaderData.vertexShaderFilepath + shaderData.pixelShaderFilepath).c_str(),
         &pipelineStateData.desc
     );
 }
@@ -52,7 +52,7 @@ void RenderObject::SetPipelineStateAndRootSignature(std::shared_ptr<CommandList>
     pD3D12CommandList->SetGraphicsRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 }
 
-void RenderObject::RenderJob(std::shared_ptr<CommandList> pCommandListDirect) const {}
+void RenderObject::RenderJob(std::shared_ptr<CommandList> pCommandList) const {}
 
-void RenderObject::InnerRootParametersSetter(std::shared_ptr<CommandList> pCommandListDirect, UINT& rootParamId) const {}
+void RenderObject::InnerRootParametersSetter(std::shared_ptr<CommandList> pCommandList, UINT& rootParamId) const {}
 

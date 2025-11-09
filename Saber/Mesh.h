@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <variant>
 
+#include "DeviceContext.h"
 #include "CommandQueue.h"
 #include "CommandList.h"
 #include "GPUResource.h"
@@ -75,8 +76,7 @@ public:
     Mesh() = delete;
     Mesh(
         const std::wstring& filename,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshData& meshData
     );
@@ -94,23 +94,20 @@ public:
 private:
     void InitFromVerticesIndices(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshDataIndicesVertices& meshData
     );
     void InitFromGLTF(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const MeshDataGLTF& meshData
     );
 
     void AddIndexBuffer(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const BufferData& bufferData,
         DXGI_FORMAT indexFormat
@@ -118,16 +115,14 @@ private:
 
     void AddVertexBuffer(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const BufferData& bufferData
     );
 
     std::shared_ptr<GPUResource> CreateBuffer(
         const std::wstring& name,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
         const BufferData& bufferData
     );

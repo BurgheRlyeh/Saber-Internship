@@ -6,6 +6,7 @@
 
 #include "BufferUpdater.h"
 #include "ComputeObject.h"
+#include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "DynamicUploadRingBuffer.h"
@@ -36,10 +37,7 @@ protected:
 public:
 	Buffer(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerRtv,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		size_t capacity,
 		const GPUResource::HeapData& heapData = GPUResource::HeapData{},
 		const GPUResource::ResourceData& resData = GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0) },
@@ -50,28 +48,29 @@ public:
 		m_resData(resData),
 		m_allocFlags(allocationFlags)
 	{
-		if (pDescHeapManagerCbvSrvUav && IsSrvDesc(resData.resDesc)) {
-			m_pSrvsRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+		
+		if (IsSrvDesc(resData.resDesc)) {
+			m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
 				m_name + L"/Ranges/Srv",
 				1,
 				D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 			);
 		}
-		if (pDescHeapManagerCbvSrvUav && IsUavDesc(resData.resDesc)) {
-			m_pUavsRange = pDescHeapManagerCbvSrvUav->AllocateRange(
+		if (IsUavDesc(resData.resDesc)) {
+			m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
 				m_name + L"/Ranges/Uav",
 				1,
 				D3D12_DESCRIPTOR_RANGE_TYPE_UAV
 			);
 		}
-		if (pDescHeapManagerRtv && IsRtvDesc(resData.resDesc)) {
-			m_pRtvsRange = pDescHeapManagerRtv->AllocateRange(
+		if (IsRtvDesc(resData.resDesc)) {
+			m_pRtvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(
 				m_name + L"/Ranges/Rtv",
 				1
 			);
 		}
 
-		CreateBuffersAndViews(pDevice, pAllocator, capacity);
+		CreateBuffersAndViews(pDeviceContext->GetDevice(), capacity);
 	}
 
 	virtual ~Buffer() = default;
@@ -98,24 +97,17 @@ public:
 		m_pUpdater->SetUpdateAt(id, data);
 	}
 	virtual void PerformUpdate(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect
 	) {
 		assert(m_pUpdater);
 		m_pUpdater->PerformUpdate(
-			pDevice,
-			pAllocator,
-			pCommandQueueCopy,
-			pCommandQueueDirect
-		);
+			pDeviceContext,
+			pCommandQueueDirect);
 	}
 
 	bool Expand(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandQueue> pCommandQueueDirect,
 		uint32_t numElements
 	) {
@@ -126,10 +118,10 @@ public:
 		std::shared_ptr<GPUResource> pOldResource{ m_pResource };
 		uint32_t oldCapacity{ static_cast<uint32_t>(m_capacity) };
 
-		CreateBuffersAndViews(pDevice, pAllocator, numElements);
+		CreateBuffersAndViews(pDeviceContext->GetDevice(), numElements);
 
 		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDevice)
+			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 		};
 		pOldResource->ResourceTransition(
 			pCommandListDirect,
@@ -142,7 +134,7 @@ public:
 		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
 
 		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueCopy->GetCommandList(pDevice)
+			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
 		};
 		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
 			m_pResource->GetResource().Get(),
@@ -151,9 +143,9 @@ public:
 			0,
 			oldCapacity * sizeof(T)
 		);
-		pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
 
-		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDevice);
+		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice());
 		m_pResource->ResourceTransition(
 			pCommandListDirect,
 			m_resData.resInitState
@@ -165,8 +157,7 @@ public:
 
 protected:
 	void CreateBuffersAndViews(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		uint32_t numElements
 	) {
 		m_capacity = numElements;
@@ -174,7 +165,7 @@ protected:
 		m_resData.resDesc.Width = m_capacity * sizeof(T);
 		m_pResource = std::make_shared<GPUResource>(
 			m_name,
-			pAllocator,
+			pDevice,
 			m_heapData,
 			m_resData,
 			m_allocFlags

@@ -1,5 +1,8 @@
 #include "DynamicUploadRingBuffer.h"
 
+#include "Device.h"
+#include "GPUResource.h"
+
 RingBuffer::RingBuffer(size_t capacity)
     : m_completedFramesAttribs(0, FrameAttribs(0, 0, 0))
     , m_capacity(capacity)
@@ -62,39 +65,44 @@ void RingBuffer::ReleaseCompletedFrames(uint64_t completedFenceValue) {
 }
 
 GPURingBuffer::GPURingBuffer(
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<Device> pDevice,
     size_t capacity,
-    bool isCpuAccessable
+    const RingBufferType& type
 ) : RingBuffer(capacity),
     m_cpuVirtualAddress(nullptr),
     m_gpuVirtualAddress(0)
 {
-    if (isCpuAccessable) {
-        m_pBuffer = std::make_shared<GPUResource>(
-            L"RingBuffer/Upload",
-            pAllocator,
-            GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-            GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
-                D3D12_RESOURCE_STATE_GENERIC_READ
-            }
-        );
-
-        m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+    switch (type) {
+    case RingBufferType::CPU: {
+		m_pBuffer = std::make_shared<GPUResource>(
+			L"RingBuffer/Upload",
+			pDevice,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceData{
+				CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
+				D3D12_RESOURCE_STATE_GENERIC_READ
+			}
+		);
+		m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+        break;
     }
-    else {
-        m_pBuffer = std::make_shared<GPUResource>(
-            L"RingBuffer/Default",
-            pAllocator,
-            GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-            GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(
-                    GetCapacity(),
-                    D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    case RingBufferType::GPU: {
+		m_pBuffer = std::make_shared<GPUResource>(
+			L"RingBuffer/Default",
+			pDevice,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceData{
+				CD3DX12_RESOURCE_DESC::Buffer(
+					GetCapacity(),
+					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 				),
 				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-            }
-        );
+			}
+		);
+		break;
+    }
+    default:
+        throw std::runtime_error("An attempt was made to create a ring buffer with unknown type");
     }
 
     m_gpuVirtualAddress = m_pBuffer->GetResource()->GetGPUVirtualAddress();
@@ -128,11 +136,11 @@ void GPURingBuffer::Destroy() {
 }
 
 DynamicUploadHeap::DynamicUploadHeap(
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    size_t initialCapacity,
-    bool isCPUAccessible
-) : m_pAllocator(pAllocator), m_isCPUAccessible(isCPUAccessible) {
-    m_ringBuffers.emplace_back(m_pAllocator, initialCapacity, m_isCPUAccessible);
+    std::shared_ptr<Device> pDevice,
+	size_t initialCapacity,
+	const RingBufferType& type
+) : m_pDevice(pDevice), m_type(type) {
+    m_ringBuffers.emplace_back(pDevice, initialCapacity, m_type);
 }
 
 DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
@@ -147,7 +155,7 @@ DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
         while (newCapacity < alignedSize) {
             newCapacity <<= 1;
         }
-        m_ringBuffers.emplace_back(m_pAllocator, newCapacity, m_isCPUAccessible);
+        m_ringBuffers.emplace_back(m_pDevice, newCapacity, m_type);
         dynamicAllocation = m_ringBuffers.back().Allocate(alignedSize);
     }
 
