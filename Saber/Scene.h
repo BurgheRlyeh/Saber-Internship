@@ -4,19 +4,25 @@
 
 #include <mutex>
 
-#include "Camera.h"
-#include "CommandQueue.h"
-#include "CommandList.h"
-#include "ConstantBuffer.h"
-#include "ComputeObject.h"
-#include "DepthBuffer.h"
 #include "DynamicUploadRingBuffer.h"
-#include "Texture.h"
+#include "IndirectCommand.h"
 #include "LightBuffer.h"
-#include "MeshRenderObject.h"
-#include "PostProcessing.h"
-#include "RenderSubsystem.h"
 #include "SceneBuffer.h"
+
+class Camera;
+class CommandList;
+class CommandQueue;
+class ComputeObject;
+class ConstantBuffer;
+class DepthBuffer;
+class DescriptorHeapManager;
+class Device;
+class DeviceContext;
+class MaterialManager;
+class RenderObject;
+template <IndirectCommandConcept IndirectCommand>
+class RenderSubsystem;
+class Texture;
 
 class Scene {
     std::wstring m_name{};
@@ -54,7 +60,7 @@ class Scene {
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
-    std::shared_ptr<PostProcessing> m_pPostProcessing{};
+    std::shared_ptr<RenderObject> m_pPostProcessing{};
 
 public:
     Scene() = delete;
@@ -69,18 +75,7 @@ public:
         std::shared_ptr<Device> pDevice,
         uint64_t width,
         uint32_t height
-    ) {
-        ResizeTargetTexture(pDevice, width, height);
-        UpdateCamerasAspectRatio(static_cast<float>(width) / height);
-    }
-
-    void ResizeTargetTexture(
-        std::shared_ptr<Device> pDevice,
-        uint64_t width,
-        uint32_t height
-    ) {
-        m_pTargetTexture->Resize(pDevice, width, height);
-    }
+    );
 
     void InitializeRenderSubsystems(
         std::shared_ptr<DeviceContext> pDeviceContext,
@@ -105,13 +100,7 @@ public:
         std::shared_ptr<CommandList> pCommandList,
         float deltaTime
     );
-    void BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
-        m_pDepthBuffer->Clear(pCommandList);
-        if (m_pGBuffer) {
-            m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-            m_pGBuffer->Clear(pCommandList);
-        }
-    }
+    void BeforeFrameJob(std::shared_ptr<CommandList> pCommandList);
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
     void UpdateCamerasAspectRatio(float aspectRatio);
@@ -176,7 +165,7 @@ public:
         UINT height
     );
 
-    void SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing);
+    void SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing);
     void RenderPostProcessing(
         std::shared_ptr<CommandList> pCommandListDirect,
         std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,

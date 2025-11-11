@@ -2,12 +2,10 @@
 #define MODEL_BUFFER_H
 
 #ifdef __cplusplus
-
 #include <limits>
-
 #endif  // __cplusplus
 
-#include "HlslCppTypesRedefine.h"
+#include "HlslTypesDef.h"
 
 struct ModelBuffer
 {
@@ -50,4 +48,7 @@ struct ModelBuffer
     }
 #endif
 };
+
+#include "HlslTypesUndef.h"
+
 #endif  // MODEL_BUFFER_H

@@ -129,7 +129,7 @@
     <ClInclude Include="MaterialCB.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="HlslCppTypesRedefine.h">
+    <ClInclude Include="HlslTypesDef.h">
       <Filter>Common Files</Filter>
     </ClInclude>
     <ClInclude Include="SinglePassDownsampler.h">
@@ -142,9 +142,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RenderSubsystem.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SeparateChainingMap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CppHlslTypesRedefine.h">
@@ -182,6 +179,12 @@
     </ClInclude>
     <ClInclude Include="Device.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DeferredShading.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HlslTypesUndef.h">
+      <Filter>Common Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -264,6 +267,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Device.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DeferredShading.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

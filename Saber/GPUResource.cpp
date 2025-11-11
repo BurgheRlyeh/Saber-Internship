@@ -1,5 +1,7 @@
 #include "GPUResource.h"
 
+#include "CommandList.h"
+#include "CommandQueue.h"
 #include "Device.h"
 
 std::shared_ptr<GPUResource> GPUResource::pCounterResetter = nullptr;
@@ -12,6 +14,21 @@ GPUResource::GPUResource(
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) {
 	CreateResource(name, pDevice, heapData, resData, allocationFlags);
+}
+
+void GPUResource::ResourceTransition(
+	std::shared_ptr<CommandList> pCommandList,
+	const D3D12_RESOURCE_STATES& toState
+) {
+	pCommandList->GetD3D12CommandList()->ResourceBarrier(
+		1,
+		&CD3DX12_RESOURCE_BARRIER::Transition(
+			GetResource().Get(),
+			m_state,
+			toState
+		)
+	);
+	m_state = toState;
 }
 
 void GPUResource::ResetCounter(
@@ -154,6 +171,22 @@ void GPUResource::CreateRenderTargetView(
 		GetResource().Get(),
 		pRtvDesc ? pRtvDesc : GetRtvDesc(),
 		cpuDescHandle
+	);
+}
+
+void GPUResource::ClearRenderTarget(
+	std::shared_ptr<CommandList> pCommandList,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+	const float* clearColor
+) {
+	assert(IsRtv());
+
+	static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
+	pCommandList->GetD3D12CommandList()->ClearRenderTargetView(
+		cpuDescHandle,
+		clearColor ? clearColor : defaultColor,
+		0,
+		nullptr
 	);
 }
 

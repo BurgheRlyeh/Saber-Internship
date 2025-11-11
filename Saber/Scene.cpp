@@ -1,5 +1,21 @@
 #include "Scene.h"
 
+#include <functional>
+
+#include "Camera.h"
+#include "CommandList.h"
+#include "CommandQueue.h"
+#include "ComputeObject.h"
+#include "ConstantBuffer.h"
+#include "DepthBuffer.h"
+#include "DescriptorHeapManager.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "MaterialManager.h"
+#include "RenderObject.h"
+#include "RenderSubsystem.h"
+#include "Texture.h"
+
 Scene::Scene(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
@@ -41,6 +57,14 @@ Scene::Scene(
         ),
         1
     );
+}
+
+void Scene::Resize(
+    std::shared_ptr<Device> pDevice,
+    uint64_t width, uint32_t height
+) {
+    m_pTargetTexture->Resize(pDevice, width, height);
+    UpdateCamerasAspectRatio(static_cast<float>(width) / height);
 }
 
 void Scene::InitializeRenderSubsystems(
@@ -106,6 +130,14 @@ void Scene::Update(
 ) {
     TryUpdateCamera(deltaTime);
     UpdateSceneBuffer(pDeviceContext, pCommandList);
+}
+
+void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
+    m_pDepthBuffer->Clear(pCommandList);
+    if (m_pGBuffer) {
+        m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_pGBuffer->Clear(pCommandList);
+    }
 }
 
 void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
@@ -442,7 +474,7 @@ void Scene::RunDeferredShading(
     );
 }
 
-void Scene::SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing) {
+void Scene::SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing) {
     m_pPostProcessing = pPostProcessing;
 }
 

@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 // Windows Header Files
+#define NOMINMAX
 #include <Windows.h> // For HRESULT
 
 // Windows Runtime Library. Needed for Microsoft::WRL::ComPtr<> template class.

@@ -1,6 +1,9 @@
 #include "RenderObject.h"
 
+#include "CommandList.h"
 #include "DeviceContext.h"
+#include "PSOLibrary.h"
+#include "Resources.h"
 
 void RenderObject::InitMaterial(
     std::shared_ptr<DeviceContext> pDeviceContext,

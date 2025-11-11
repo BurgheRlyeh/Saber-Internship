@@ -2,8 +2,6 @@
 
 #include "Headers.h"
 
-#include <optional>
-
 #include "BufferUpdater.h"
 #include "ComputeObject.h"
 #include "DeviceContext.h"

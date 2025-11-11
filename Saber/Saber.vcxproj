@@ -170,6 +170,7 @@
     <ClInclude Include="CppHlslTypesRedefine.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="DDSTexture.h" />
+    <ClInclude Include="DeferredShading.h" />
     <ClInclude Include="DepthBuffer.h" />
     <ClInclude Include="DescriptorHeapManager.h" />
     <ClInclude Include="DescriptorHeapRange.h" />
@@ -180,7 +181,8 @@
     <ClInclude Include="GLTFLoader.h" />
     <ClInclude Include="GPUResource.h" />
     <ClInclude Include="Headers.h" />
-    <ClInclude Include="HlslCppTypesRedefine.h" />
+    <ClInclude Include="HlslTypesDef.h" />
+    <ClInclude Include="HlslTypesUndef.h" />
     <ClInclude Include="IndirectCommand.h" />
     <ClInclude Include="IndirectCommandBuffer.h" />
     <ClInclude Include="IndirectUpdater.h" />
@@ -204,7 +206,6 @@
     <ClInclude Include="Saber.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="SceneBuffer.h" />
-    <ClInclude Include="SeparateChainingMap.h" />
     <ClInclude Include="SinglePassDownsampler.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TextureResource.h" />
@@ -220,6 +221,7 @@
     <ClCompile Include="ConstantBuffer.cpp" />
     <ClCompile Include="D3D12MemAlloc.cpp" />
     <ClCompile Include="DDSTexture.cpp" />
+    <ClCompile Include="DeferredShading.cpp" />
     <ClCompile Include="DepthBuffer.cpp" />
     <ClCompile Include="DescriptorHeapManager.cpp" />
     <ClCompile Include="DescriptorHeapRange.cpp" />

@@ -8,11 +8,6 @@
 #include "Headers.h"
 
 #include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-
-#include "Vertices.h"
 
 class GLTFLoader {
     std::unique_ptr<Microsoft::glTF::GLBResourceReader> m_pResourceReader{};

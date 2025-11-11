@@ -1,11 +1,11 @@
 #ifndef SCENE_BUFFER_H
 #define SCENE_BUFFER_H
 
-#include "HlslCppTypesRedefine.h"
-
 #ifdef __cplusplus
 #include "Camera.h"
 #endif
+
+#include "HlslTypesDef.h"
 
 struct SceneBuffer {
     matrix viewProjMatrix;
@@ -28,5 +28,7 @@ struct SceneBuffer {
     }
 #endif
 };
+
+#include "HlslTypesUndef.h"
 
 #endif  // SCENE_BUFFER_H

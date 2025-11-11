@@ -8,8 +8,10 @@ class CommandQueue;
 class DeviceContext;
 
 class DDSTexture : public TextureResource {
-public:
+protected:
 	using TextureResource::TextureResource;
+
+public:
 	DDSTexture(
 		const std::wstring& filename,
 		std::shared_ptr<DeviceContext> pDeviceContext,

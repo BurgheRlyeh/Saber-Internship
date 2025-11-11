@@ -1,10 +1,7 @@
 #pragma once
 
-#include "Atlas.h"
 #include "ComputeObject.h"
-#include "PSOLibrary.h"
-#include "RenderObject.h"
-#include "Resources.h"
+#include "DeviceContext.h"
 
 class IndirectUpdater : ComputeObject {
 public:
@@ -26,7 +23,7 @@ private:
         pComputeObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
-                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
+                CreateRootSignatureBlob(),
                 L"IndirectUpdaterRootSignature"
             },
             ComputeShaderData{ filename }
@@ -35,9 +32,7 @@ private:
         return pComputeObj;
     }
 
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        std::shared_ptr<Device> pDevice
-    ) {
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
         size_t rpId{};
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
         rootParameters[rpId++].InitAsConstants(4, 0);
@@ -48,20 +43,11 @@ private:
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);
 
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(
-            D3D12_FEATURE_ROOT_SIGNATURE,
-            &featureData,
-            sizeof(featureData)
-        ))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
         HRESULT hr{ D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
-            featureData.HighestVersion,
+            D3D_ROOT_SIGNATURE_VERSION_1_1,
             &rootSignatureBlob,
             &errorBlob
         ) };

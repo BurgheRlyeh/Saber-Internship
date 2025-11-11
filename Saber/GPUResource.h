@@ -4,9 +4,8 @@
 
 #include "D3D12MemAlloc.h"
 
-#include "CommandQueue.h"
-#include "CommandList.h"
-
+class CommandList;
+class CommandQueue;
 class Device;
 
 class GPUResource {
@@ -44,17 +43,7 @@ public:
 	void ResourceTransition(
 		std::shared_ptr<CommandList> pCommandList,
 		const D3D12_RESOURCE_STATES& toState
-	) {
-		pCommandList->GetD3D12CommandList()->ResourceBarrier(
-			1,
-			&CD3DX12_RESOURCE_BARRIER::Transition(
-				GetResource().Get(),
-				m_state,
-				toState
-			)
-		);
-		m_state = toState;
-	}
+	);
 
 	void ResetCounter(
 		std::shared_ptr<CommandList> pCommandList,
@@ -112,7 +101,7 @@ public:
 	);
 
 	bool IsSrv() const;
-	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;;
+	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;
 	void CreateShaderResourceView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
@@ -120,7 +109,7 @@ public:
 	);
 
 	bool IsUav() const;
-	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const;;
+	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const;
 	void CreateUnorderedAccessView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
@@ -129,7 +118,7 @@ public:
 	);
 
 	bool IsRtv() const;
-	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const;;
+	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const;
 	void CreateRenderTargetView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
@@ -140,17 +129,7 @@ public:
 		std::shared_ptr<CommandList> pCommandList,
 		D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
 		const float* clearColor = nullptr
-	) {
-		assert(IsRtv());
-
-		static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
-		pCommandList->GetD3D12CommandList()->ClearRenderTargetView(
-			cpuDescHandle,
-			clearColor ? clearColor : defaultColor,
-			0,
-			nullptr
-		);
-	}
+	);
 
 	//static void InitCounterResetter(
 	//	std::shared_ptr<DeviceContext> pDeviceContext,

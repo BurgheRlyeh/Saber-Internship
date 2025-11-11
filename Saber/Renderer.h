@@ -2,43 +2,22 @@
 
 #include "Headers.h"
 
-// To avoid conflicts and use only min/max defined in <algorithm>
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
 #include <algorithm>
 #include <chrono>
 #include <vector>
 
 #include <atomic>
 #include <mutex>
-#include <thread>
 
-#include "Atlas.h"
-#include "Camera.h"
-#include "CommandQueue.h"
-#include "CommandList.h"
-#include "DepthBuffer.h"
-#include "GPUResource.h"
-#include "Texture.h"
-#include "IndirectUpdater.h"
-#include "PostProcessing.h"
-#include "PSOLibrary.h"
-#include "RenderObject.h"
-#include "Resources.h"
-#include "Scene.h"
-#include "SinglePassDownSampler.h"
-#include "MaterialManager.h"
 #include "JobSystem.h"
-#include "DynamicUploadRingBuffer.h"
 
-#include "Device.h"
-#include "DeviceContext.h"
+class DepthBuffer;
+class DescHeapRange;
+class Device;
+class DeviceContext;
+class Scene;
+class Texture;
+class TextureResource;
 
 class Renderer {
     // The number of swap chain back buffers.
@@ -56,6 +35,7 @@ class Renderer {
 
     std::shared_ptr<DeviceContext> m_pDeviceContext{};
 
+    // todo: move to some swapchain wrapper
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
     std::vector<std::shared_ptr<TextureResource>> m_pBackBuffers{};
     std::shared_ptr<DescHeapRange> m_pBackBuffersDescHeapRange{};

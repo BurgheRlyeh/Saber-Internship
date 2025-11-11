@@ -1,5 +1,7 @@
 #include "DynamicUploadRingBuffer.h"
 
+#include <stdexcept>
+
 #include "Device.h"
 #include "GPUResource.h"
 

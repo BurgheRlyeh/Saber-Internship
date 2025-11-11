@@ -1,7 +1,7 @@
 #ifndef LIGHT_BUFFER_H
 #define LIGHT_BUFFER_H
 
-#include "HlslCppTypesRedefine.h"
+#include "HlslTypesDef.h"
 
 #define LIGHTS_MAX_COUNT 10
 
@@ -58,5 +58,7 @@ struct LightBuffer {
     }
 #endif
 };
+
+#include "HlslTypesUndef.h"
 
 #endif  // LIGHT_BUFFER_H

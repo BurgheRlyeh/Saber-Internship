@@ -1,6 +1,3 @@
-#ifndef HLSL_CPP_TYPES_REDEFINE_H
-#define HLSL_CPP_TYPES_REDEFINE_H
-
 #ifdef __cplusplus
 
 #include <DirectXMath.h>
@@ -20,8 +17,4 @@
 
 #define matrix DirectX::XMMATRIX
 
-//#define
-
 #endif	// __cplusplus
-
-#endif	// HLSL_CPP_TYPES_REDEFINE_H

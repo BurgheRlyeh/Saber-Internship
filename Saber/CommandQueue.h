@@ -2,23 +2,14 @@
 
 #include "Headers.h"
 
-// To avoid conflicts and use only min/max defined in <algorithm>
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
-#include <queue>
-#include <vector>
-#include <unordered_set>
+#include <functional>
 #include <mutex>
+#include <unordered_set>
+#include <vector>
 
-#include "CommandList.h"
 #include "LockFreeQueue.h"
 
+class CommandList;
 class Device;
 
 class CommandQueue {

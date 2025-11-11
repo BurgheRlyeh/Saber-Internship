@@ -48,19 +48,6 @@ void DeviceContext::InitializeContext(
 		);
 	}
 
-	//m_pRootSignatureAtlas = std::make_shared<Atlas<RootSignatureResource>>(m_name + L"/Atlas/RootSignatureResource");
-	//m_pShaderAtlas = std::make_shared<Atlas<ShaderResource>>(m_name + L"/Atlas/ShaderResource");
-	//m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, m_name + L"/PSOLibrary");
-	//m_pMeshAtlas = std::make_shared<Atlas<Mesh>>(m_name + L"/Atlas/Mesh");
-	//// TODO: divide name and path
-	//m_pMaterialManager = std::make_shared<MaterialManager>(
-	//	L"../../Resources/Textures/",
-	//	m_pDevice,
-	//	m_pAllocator,
-	//	m_pDescHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV],
-	//	1024
-	//);
-
 	m_pRootSignatureAtlas = std::make_shared<Atlas<RootSignatureResource>>(L"");
 	m_pShaderAtlas = std::make_shared<Atlas<ShaderResource>>(L"");
 	m_pPSOLibrary = std::make_shared<PSOLibrary>(m_pDevice, L"PSOLibrary");

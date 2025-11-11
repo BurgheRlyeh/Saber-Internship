@@ -3,16 +3,16 @@
 #include "Headers.h"
 
 #include "Atlas.h"
-#include "ConstantBuffer.h"
-#include "DDSTexture.h"
-#include "DescriptorHeapManager.h"
-#include "TextureResource.h"
-
 #include "MaterialCB.h"
 
+class CommandQueue;
+class ConstantBuffer;
+class DDSTexture;
+class DescriptorHeapManager;
 class DescHeapRange;
 class Device;
 class DeviceContext;
+class TextureResource;
 
 class MaterialManager {
 	static const std::wstring BASE_NAME;

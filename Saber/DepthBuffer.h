@@ -2,13 +2,12 @@
 
 #include "Headers.h"
 
-#include <cmath>
-
-#include "DeviceContext.h"
-#include "DescriptorHeapManager.h"
-#include "DescriptorHeapRange.h"
-#include "SinglePassDownsampler.h"
-#include "TextureResource.h"
+class CommandList;
+class DescHeapRange;
+class Device;
+class DeviceContext;
+class SinglePassDownsampler;
+class TextureResource;
 
 class DepthBuffer {
 	static inline D3D12_RESOURCE_DESC m_depthBufferDesc{

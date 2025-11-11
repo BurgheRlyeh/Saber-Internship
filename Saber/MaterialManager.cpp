@@ -1,8 +1,13 @@
 #include "MaterialManager.h"
 
+#include "CommandQueue.h"
+#include "ConstantBuffer.h"
+#include "DDSTexture.h"
+#include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "TextureResource.h"
 
 const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
 

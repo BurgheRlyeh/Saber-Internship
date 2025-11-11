@@ -13,7 +13,6 @@
 #include "CommandQueue.h"
 #include "CommandList.h"
 #include "GPUResource.h"
-#include "GLTFLoader.h"
 
 class Mesh {
     std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};

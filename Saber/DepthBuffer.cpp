@@ -1,5 +1,13 @@
 #include "DepthBuffer.h"
 
+#include "CommandList.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "SinglePassDownsampler.h"
+#include "TextureResource.h"
+
 DepthBuffer::DepthBuffer(
 	const std::wstring& name,
 	std::shared_ptr<DeviceContext> pDeviceContext,

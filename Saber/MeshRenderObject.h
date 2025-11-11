@@ -4,21 +4,18 @@
 
 #include "Headers.h"
 
-#include <filesystem>
 #include <initializer_list>
 #include <limits>
 
 #include "Atlas.h"
 #include "CommandQueue.h"
 #include "ConstantBuffer.h"
-#include "Texture.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
-#include "ModelBuffer.h"
 #include "Mesh.h"
-#include "PSOLibrary.h"
+#include "ModelBuffer.h"
 #include "RenderObject.h"
-#include "Resources.h"
+#include "Texture.h"
 #include "Vertices.h"
 
 template <typename ModelBuffer>
@@ -303,7 +300,7 @@ public:
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
-                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
+                CreateRootSignatureBlob(),
                 L"GLTFRootSignature"
             },
             ShaderData{
@@ -365,7 +362,7 @@ public:
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
-                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
+                CreateRootSignatureBlob(),
                 L"GLTFRootSignature"
             },
             ShaderData{
@@ -390,9 +387,7 @@ public:
     }
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        std::shared_ptr<Device> pDevice
-    ) {
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -411,16 +406,11 @@ private:
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
-            featureData.HighestVersion,
+            D3D_ROOT_SIGNATURE_VERSION_1_1,
             &rootSignatureBlob,
             &errorBlob
         ));
@@ -491,7 +481,7 @@ public:
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
-                CreateRootSignatureBlob(pDeviceContext->GetDevice()),
+                CreateRootSignatureBlob(),
                 L"AlphaGrassGLTFRootSignature"
             },
             ShaderData{
@@ -516,9 +506,7 @@ public:
     }
 
 protected:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        std::shared_ptr<Device> pDevice
-    ) {
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -562,16 +550,11 @@ protected:
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
-            featureData.HighestVersion,
+            D3D_ROOT_SIGNATURE_VERSION_1_1,
             &rootSignatureBlob,
             &errorBlob
         ));

@@ -4,9 +4,7 @@
 
 #include "IndirectCommand.h"
 #include "IndirectCommandBuffer.h"
-#include "RenderObject.h"
 #include "MeshRenderObject.h"
-#include "SeparateChainingMap.h"
 
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem {

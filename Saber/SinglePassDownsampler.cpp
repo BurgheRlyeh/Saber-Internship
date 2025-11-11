@@ -1,5 +1,17 @@
 #include "SinglePassDownsampler.h"
 
+#include "CommandList.h"
+#include "ConstantBuffer.h"
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "GPUResource.h"
+
+#define FFX_CPU
+#include "FidelityFX/gpu/ffx_core.h"
+#include "FidelityFX/gpu/spd/ffx_spd.h"
+
 const std::wstring SinglePassDownsampler::BASE_NAME = L"SinglePassDownsampler";
 
 SinglePassDownsampler::SinglePassDownsampler(
@@ -9,13 +21,13 @@ SinglePassDownsampler::SinglePassDownsampler(
 ) {
     InitMaterial(
         pDeviceContext,
-        RootSignatureData(
-            CreateRootSignatureBlob(pDeviceContext->GetDevice()),
+        RootSignatureData{
+            CreateRootSignatureBlob(),
             L"AmdFfxSpdDownsamplePassRootSignature"
-        ),
-        ComputeShaderData(
+        },
+        ComputeShaderData{
             L"SinglePassDownsamplerCS.cso"
-        )
+        }
     );
 
     m_pSpdCounterBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
@@ -115,9 +127,7 @@ void SinglePassDownsampler::InnerRootParametersSetter(
 	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
-    std::shared_ptr<Device> pDevice
-) {
+Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob() {
     size_t rp{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
 
@@ -165,20 +175,11 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-    if (FAILED(pDevice->GetD3D12Device()->CheckFeatureSupport(
-        D3D12_FEATURE_ROOT_SIGNATURE,
-        &featureData,
-        sizeof(featureData)
-    ))) {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
     // Serialize the root signature.
     Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
     HRESULT hr{ D3DX12SerializeVersionedRootSignature(
         &rootSignatureDescription,
-        featureData.HighestVersion,
+        D3D_ROOT_SIGNATURE_VERSION_1_1,
         &rootSignatureBlob,
         &errorBlob
     ) };

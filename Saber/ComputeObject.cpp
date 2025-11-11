@@ -1,5 +1,10 @@
 #include "ComputeObject.h"
 
+#include "CommandList.h"
+#include "DeviceContext.h"
+#include "PSOLibrary.h"
+#include "Resources.h"
+
 void ComputeObject::InitMaterial(
     std::shared_ptr<DeviceContext> pDeviceContext,
     const RootSignatureData& rootSignatureData,
@@ -32,7 +37,7 @@ void ComputeObject::Dispatch(
         std::shared_ptr<CommandList> pCommandList,
         UINT& rootParamId
     )> outerRootParametersSetter
-) {
+) const {
     pCommandList->GetD3D12CommandList()->SetPipelineState(m_pPipelineState.Get());
     pCommandList->GetD3D12CommandList()->SetComputeRootSignature(m_pRootSignatureResource->pRootSignature.Get());
 
@@ -44,3 +49,12 @@ void ComputeObject::Dispatch(
 
     pCommandList->GetD3D12CommandList()->Dispatch(threadGroupsCount.x, threadGroupsCount.y, threadGroupsCount.z);
 }
+
+void ComputeObject::DispatchJob(
+    std::shared_ptr<CommandList> pCommandList
+) const {}
+
+void ComputeObject::InnerRootParametersSetter(
+    std::shared_ptr<CommandList> pCommandList,
+    UINT& rootParamId
+) const {}

@@ -8,6 +8,23 @@
 
 #include "pix3.h"
 
+#include "CommandList.h"
+#include "CommandQueue.h"
+#include "DeferredShading.h"
+#include "DepthBuffer.h"
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "IndirectUpdater.h"
+#include "MeshRenderObject.h"
+#include "PostProcessing.h"
+#include "PSOLibrary.h"
+#include "Scene.h"
+#include "SinglePassDownSampler.h"
+#include "Texture.h"
+#include "TextureResource.h"
+
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
     , m_clientWidth(resWidth)
@@ -51,7 +68,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_useWarp ? GetDxgiAdapterWarp(pFactory) : GetDxgiAdapterByVideoMemory(pFactory)
     };
 
-    constexpr size_t GBUFFER_SIZE{ 3 };
+    constexpr size_t GBUFFER_SIZE{ 3 }; // uvMaterial + tbn + ddxddy
     m_pDeviceContext = std::make_shared<DeviceContext>(pAdapter);
     m_pDeviceContext->InitializeContext(std::to_array<DeviceContext::DescHeapArgs>({
         // CBV_SRV_UAV
@@ -101,7 +118,7 @@ void Renderer::Initialize(HWND hWnd) {
         constexpr size_t ScenesCount{ 4 };
         m_pScenes.resize(ScenesCount);
 
-        auto copyPostProcess{ CopyPostProcessing::Create(m_pDeviceContext) };
+        auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
         auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext) };
         for (size_t i{}; i < ScenesCount; ++i) {
             std::unique_ptr<Scene>& pScene{ m_pScenes[i] };

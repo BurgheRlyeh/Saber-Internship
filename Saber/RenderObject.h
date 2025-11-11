@@ -1,22 +1,13 @@
 #pragma once
 
-#include <GLTFSDK/GLTF.h>
-
 #include "Headers.h"
 
-#include <filesystem>
-#include <initializer_list>
-
-#include "Atlas.h"
-#include "CommandQueue.h"
-#include "ConstantBuffer.h"
 #include "IndirectCommand.h"
-#include "Mesh.h"
-#include "PSOLibrary.h"
-#include "Resources.h"
-#include "Vertices.h"
 
+class CommandList;
 class DeviceContext;
+class RootSignatureResource;
+class ShaderResource;
 
 class RenderObject {
 protected:
@@ -78,4 +69,11 @@ protected:
     virtual void DrawCall(
         std::shared_ptr<CommandList> pCommandList
     ) const = 0;
+};
+
+class FullscreenDrawPass : public RenderObject {
+protected:
+    virtual void DrawCall(
+        std::shared_ptr<CommandList> pCommandList
+    ) const override;
 };

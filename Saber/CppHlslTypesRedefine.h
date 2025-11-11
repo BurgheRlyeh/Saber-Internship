@@ -7,10 +7,10 @@
 
 #else
 
-#define uint32_t uint  
-#define DirectX::XMUINT2 uint2 
-#define DirectX::XMUINT3 uint3 
-#define DirectX::XMUINT4 uint4 
+#define uint32_t uint
+#define DirectX::XMUINT2 uint2
+#define DirectX::XMUINT3 uint3
+#define DirectX::XMUINT4 uint4
 
 #define D3D12_GPU_VIRTUAL_ADDRESS	uint2
 #define D3D12_INDEX_BUFFER_VIEW		uint4
