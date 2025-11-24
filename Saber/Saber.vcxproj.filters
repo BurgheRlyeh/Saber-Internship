@@ -159,9 +159,6 @@
     <ClInclude Include="LightBuffer.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="VisibilityBuffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Vertices.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -185,6 +182,9 @@
     </ClInclude>
     <ClInclude Include="HlslTypesUndef.h">
       <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FencedQueue.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

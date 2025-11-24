@@ -69,6 +69,8 @@ void DeviceContext::InitializeContext(
 			static_cast<RingBufferType>(i)
 		);
 	}
+
+	m_pFrameDataBuffer = std::make_shared<FrameDataBuffer<std::shared_ptr<GPUResource>>>(3);
 }
 
 void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {

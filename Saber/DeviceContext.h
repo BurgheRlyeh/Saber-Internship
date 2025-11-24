@@ -6,10 +6,14 @@
 
 #include "Atlas.h"
 #include "DynamicUploadRingBuffer.h"
+#include "FencedQueue.h"
 
 class CommandQueue;
 class DescriptorHeapManager;
 class Device;
+template <typename T>
+class FrameDataBuffer;
+class GPUResource;
 class MaterialManager;
 class Mesh;
 class PSOLibrary;
@@ -39,6 +43,7 @@ class DeviceContext {
 
 	// Ring Buffers
 	std::array<std::shared_ptr<DynamicUploadHeap>, static_cast<size_t>(RingBufferType::Count)> m_pRingBuffers{};
+	std::shared_ptr<FrameDataBuffer<std::shared_ptr<GPUResource>>> m_pFrameDataBuffer{};
 
 public:
 	struct DescHeapArgs {
@@ -99,10 +104,15 @@ public:
 		return m_pRingBuffers[static_cast<size_t>(type)];
 	}
 
+	void AddIntermediate(std::shared_ptr<GPUResource> pResource) {
+		m_pFrameDataBuffer->Add(pResource);
+	}
+
 	void FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
 		for (auto& pRingBuffer : m_pRingBuffers) {
 			pRingBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
 		}
+		m_pFrameDataBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
 	}
 
 private:

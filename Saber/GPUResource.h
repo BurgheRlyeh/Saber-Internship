@@ -5,7 +5,6 @@
 #include "D3D12MemAlloc.h"
 
 class CommandList;
-class CommandQueue;
 class Device;
 
 class GPUResource {

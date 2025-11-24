@@ -31,7 +31,6 @@ Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersC
     , m_clientHeight(resHeight)
     , m_isVSync(isUseVSync)
     , m_isTearingSupported(CheckTearingSupport())
-    , m_time(m_clock.now())
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
     , m_pJobSystem(pJobSystem)
 {
@@ -112,6 +111,7 @@ void Renderer::Initialize(HWND hWnd) {
         GBUFFER_SIZE
 	);
 
+    m_time = m_clock.now();
     m_isInitialized = true;
 
     {
@@ -136,32 +136,48 @@ void Renderer::Initialize(HWND hWnd) {
         sceneObjectAdders.resize(ScenesCount);
         sceneObjectAdders[0] = [&](std::unique_ptr<Scene>& pScene) {};
         sceneObjectAdders[1] = [&](std::unique_ptr<Scene>& pScene) {
-            pScene->AddStaticObject(TestTextureRenderObject::CreateTextureCube(
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+            };
+
+            pScene->AddObject(Default, TestTextureRenderObject::CreateTextureCube(
                 m_pDeviceContext,
-                m_pDeviceContext->GetCommandQueue(),
+                pCommandList,
                 m_pGBuffers[0],
                 DirectX::XMMatrixIdentity()
             ));
+
+            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
         sceneObjectAdders[2] = [&](std::unique_ptr<Scene>& pScene) {
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+            };
+
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddDynamicObject(TestTextureRenderObject::CreateModelFromGLTF(
+            pScene->AddObject(Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
-                m_pDeviceContext->GetCommandQueue(),
+                pCommandList,
                 filepath,
                 m_pGBuffers[0],
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+            pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                 m_pDeviceContext,
-                m_pDeviceContext->GetCommandQueue(),
+                pCommandList,
                 filepathGrass,
                 m_pGBuffers[0],
                 DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
             ));
+
+            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
         sceneObjectAdders[3] = [&](std::unique_ptr<Scene>& pScene) {
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+            };
+
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
             DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
 
@@ -169,14 +185,16 @@ void Renderer::Initialize(HWND hWnd) {
             std::mt19937 gen(rd());
             std::uniform_real_distribution<float> posDist(-10.f, 10.f);
             for (size_t i{}; i < 100; ++i) {
-                pScene->AddStaticAlphaKillObject(TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+                pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                     m_pDeviceContext,
-                    m_pDeviceContext->GetCommandQueue(),
+                    pCommandList,
                     filepathGrass,
                     m_pGBuffers[0],
                     scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
                 ));
             }
+
+            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
 
         // cameras and lights for all scenes
@@ -341,22 +359,9 @@ void Renderer::PerformResize() {
 void Renderer::Update() {
     m_frameCounter++;
     auto t1 = m_clock.now();
-    auto deltaTime = t1 - m_time;
+    m_elapsedSeconds += (t1 - m_time).count() * 1e-9;
     m_time = t1;
 
-    std::unique_ptr<Scene>& pScene{ m_pScenes[m_currSceneId] };
-    if (pScene->IsSceneReady()) {
-        std::shared_ptr pCommandList{ m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice()) };
-        pScene->Update(m_pDeviceContext, pCommandList, deltaTime.count() * 1e-9f);
-        m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
-
-        pScene->UpdateRenderSubsystems(
-            m_pDeviceContext,
-            m_pDeviceContext->GetCommandQueue()
-        );
-    }
-
-    m_elapsedSeconds += deltaTime.count() * 1e-9;
     if (m_elapsedSeconds > 1.0) {
         auto fps = m_frameCounter / m_elapsedSeconds;
 
@@ -394,6 +399,16 @@ void Renderer::Render() {
         );
         scene->BeforeFrameJob(commandListBeforeFrame);
 
+        // TODO: move it to "before first exec" task in CommandQueue::ExecutionTask
+        auto newTime = m_clock.now();
+        auto deltaTime = newTime - m_sceneTime;
+        m_sceneTime = newTime;
+        scene->Update(
+            m_pDeviceContext,
+            commandListBeforeFrame,
+            deltaTime.count() * 1e-9f
+        );
+
         backBuffer->ResourceTransition(
             commandListBeforeFrame,
             D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -423,12 +438,12 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Static Objects rendering"
         );
-        scene->RenderStaticObjects(
+        scene->RenderObjects(
+            Default,
+            m_pDeviceContext,
             commandListForStaticObjects,
             m_viewport,
-            m_scissorRect,
-            rtv,
-            m_pDeviceContext->GetDescriptorHeap()
+            m_scissorRect
         );
         PIXEndEvent(commandListForStaticObjects->GetD3D12CommandList().Get());
         commandListForStaticObjects->SetReadyForExection();
@@ -445,13 +460,12 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Alphakill Objects rendering"
         );
-        scene->RenderStaticAlphaKillObjects(
+        scene->RenderObjects(
+            AlphaKill,
+            m_pDeviceContext,
             commandListForAlphaObjects,
             m_viewport,
-            m_scissorRect,
-            rtv,
-            m_pDeviceContext->GetDescriptorHeap(),
-            m_pDeviceContext->GetMaterialManager()
+            m_scissorRect
         );
         PIXEndEvent(commandListForAlphaObjects->GetD3D12CommandList().Get());
         commandListForAlphaObjects->SetReadyForExection();
@@ -473,20 +487,19 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Dynamic Objects rendering"
         );
-        scene->RenderDynamicObjects(
+        scene->RenderObjects(
+            Dynamic,
+            m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
-            m_scissorRect,
-            rtv,
-            m_pDeviceContext->GetDescriptorHeap()
+            m_scissorRect
         );
-        scene->RenderDynamicAlphaKillObjects(
+        scene->RenderObjects(
+            static_cast<RenderSubsystemType>(AlphaKill | Dynamic),
+            m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
-            m_scissorRect,
-            rtv,
-            m_pDeviceContext->GetDescriptorHeap(),
-            m_pDeviceContext->GetMaterialManager()
+            m_scissorRect
         );
         PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
         commandListForDynamicObjects->SetReadyForExection();

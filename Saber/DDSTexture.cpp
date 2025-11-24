@@ -2,21 +2,21 @@
 
 #include "DirectXTex.h"
 
-#include "CommandQueue.h"
+#include "CommandList.h"
 #include "DeviceContext.h"
 
 DDSTexture::DDSTexture(
 	const std::wstring& filename,
 	std::shared_ptr<DeviceContext> pDeviceContext,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect
+	std::shared_ptr<CommandList> pCommandListDirect
 ) {
-	LoadFromDDS(filename, pDeviceContext, pCommandQueueDirect);
+	LoadFromDDS(filename, pDeviceContext, pCommandListDirect);
 }
 
 void DDSTexture::LoadFromDDS(
 	const std::wstring& filename,
 	std::shared_ptr<DeviceContext> pDeviceContext,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect
+	std::shared_ptr<CommandList> pCommandListDirect
 ) {
 	// load texture from dds
 	DirectX::ScratchImage image{};
@@ -47,22 +47,21 @@ void DDSTexture::LoadFromDDS(
 		}
 	}
 
-	std::shared_ptr<CommandList> pCommandListCopy{
-		pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
+	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_DEST);
+	}
+	std::shared_ptr<GPUResource> pIntermediate{
+		CreateIntermediate(pDeviceContext->GetDevice(), 0, subresources.size())
 	};
-	ResourceTransition(pCommandListCopy, D3D12_RESOURCE_STATE_COPY_DEST);
-	std::shared_ptr<GPUResource> pIntermediate{ CreateIntermediate(pDeviceContext->GetDevice(), 0, subresources.size())};
 	UpdateSubresources(
-		pCommandListCopy,
+		pCommandListDirect,
 		pIntermediate,
 		subresources.data(),
 		0, 0, subresources.size()
 	);
-	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
+	pDeviceContext->AddIntermediate(pIntermediate);
 
-	std::shared_ptr<CommandList> pCommandListDirect{
-		pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-	};
-	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	}
 }

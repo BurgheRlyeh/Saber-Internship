@@ -51,6 +51,7 @@ class Renderer {
     double m_elapsedSeconds{};
     std::chrono::high_resolution_clock m_clock{};
     std::chrono::steady_clock::time_point m_time{};
+    std::chrono::steady_clock::time_point m_sceneTime{};
 
     // render thread sync
     std::thread m_renderThread{};

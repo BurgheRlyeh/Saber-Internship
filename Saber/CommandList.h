@@ -23,6 +23,7 @@ public:
 	);
 
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList() const;
+	D3D12_COMMAND_LIST_TYPE GetType() const;
 
 	bool IsReadyForExection() const;
 	void SetReadyForExection();

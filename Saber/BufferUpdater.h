@@ -24,12 +24,16 @@ public:
 	virtual void SetUpdateAt(size_t id, const T& data) = 0;
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandListDirect
 	) = 0;
+
+	virtual bool IsUpdatePending() const = 0;
 };
 
 template <typename T>
 class StaticBufferUpdater : public BufferUpdater<T> {
+	bool m_isUpdatePending{};
+
 public:
 	StaticBufferUpdater(
 		Buffer<T>& buffer
@@ -42,29 +46,34 @@ public:
 		for (size_t i{}; i < count; ++i) {
 			m_buffer.m_data[i] = pData[i];
 		}
+		m_isUpdatePending = true;
 	}
 	virtual void SetUpdateAt(size_t id, const T& data) override {
 		if (id >= m_buffer.m_data.size()) {
 			m_buffer.m_data.resize(id + 1);
 		}
 		m_buffer.m_data[id] = data;
+		m_isUpdatePending = true;
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandListDirect
 	) override {
+		if (!m_isUpdatePending) {
+			return;
+		}
+		m_isUpdatePending = false;
+
 		if (m_buffer.m_data.size() > m_buffer.GetCapacity()) {
 			m_buffer.CreateBuffersAndViews(pDeviceContext->GetDevice(), m_buffer.m_data.size());
 		}
 
-		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-		};
-		m_buffer.GetResource()->ResourceTransition(
-			pCommandListDirect,
-			D3D12_RESOURCE_STATE_COPY_DEST
-		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			m_buffer.GetResource()->ResourceTransition(
+				pCommandListDirect,
+				D3D12_RESOURCE_STATE_COPY_DEST
+			);
+		}
 
 		DynamicAllocation intermediateAllocation{
 			pDeviceContext->GetRingBuffer()->Allocate(m_buffer.m_data.size() * sizeof(T))
@@ -75,23 +84,21 @@ public:
 			.SlicePitch{ subresData.RowPitch }
 		};
 
-		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-		};
 		m_buffer.GetResource()->UpdateSubresources(
-			pCommandListCopy,
+			pCommandListDirect,
 			intermediateAllocation.pBuffer,
 			&subresData,
 			intermediateAllocation.offset
 		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
 
-		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice());
 		m_buffer.GetResource()->ResourceTransition(
 			pCommandListDirect,
 			m_buffer.m_resData.resInitState
 		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	}
+
+	virtual bool IsUpdatePending() const override {
+		return m_isUpdatePending;
 	}
 };
 
@@ -131,7 +138,7 @@ public:
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandListDirect
 	) override {
 		assert(m_updBufIds.size() == m_updBuf.size());
 		size_t updCnt{ m_updBufIds.size() };
@@ -142,7 +149,7 @@ public:
 		if (m_updMaxId + 1 > m_buffer.GetCapacity()) {
 			m_buffer.Expand(
 				pDeviceContext,
-				pCommandQueueDirect,
+				pCommandListDirect,
 				m_updMaxId + 1
 			);
 		}
@@ -157,9 +164,6 @@ public:
 		memcpy(updBufAllocation.cpuAddress, m_updBuf.data(), updBufSize);
 		m_updBuf.clear();
 
-		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-		};
 		static const size_t threadBlockSize{ 128 };
 		m_buffer.GetResource()->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pUpdater->Dispatch(
@@ -176,7 +180,10 @@ public:
 				);
 			}
 		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	}
+
+	virtual bool IsUpdatePending() const override {
+		return m_updBufIds.size();
 	}
 };
 
@@ -203,6 +210,10 @@ public:
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandListDirect
 	) override {}
+
+	virtual bool IsUpdatePending() const override {
+		return false;
+	}
 };

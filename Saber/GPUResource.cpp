@@ -1,7 +1,6 @@
 #include "GPUResource.h"
 
 #include "CommandList.h"
-#include "CommandQueue.h"
 #include "Device.h"
 
 std::shared_ptr<GPUResource> GPUResource::pCounterResetter = nullptr;

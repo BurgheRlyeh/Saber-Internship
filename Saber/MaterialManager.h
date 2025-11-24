@@ -5,7 +5,7 @@
 #include "Atlas.h"
 #include "MaterialCB.h"
 
-class CommandQueue;
+class CommandList;
 class ConstantBuffer;
 class DDSTexture;
 class DescriptorHeapManager;
@@ -45,7 +45,7 @@ public:
 
 	size_t AddMaterial(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+		std::shared_ptr<CommandList> pCommandListDirect,
 		const std::wstring& albedoFilepath,
 		const std::wstring& normalFilepath
 	);

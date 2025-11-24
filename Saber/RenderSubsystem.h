@@ -15,9 +15,8 @@ class RenderSubsystem {
 	std::vector<std::shared_ptr<RenderObject>> m_objects{};
 	std::mutex m_objectsMutex{};
 
-	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
-
 	std::shared_ptr<Buffer<ModelBuffer>> m_pModelBuffers{};
+	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 public:
 	RenderSubsystem(
@@ -29,6 +28,11 @@ public:
 		IndirectCommandBase<IndirectCommand>::Assert();
 
 		m_objects.reserve(m_capacity);
+	}
+
+	bool IsUpdatePending() const {
+		return (m_pModelBuffers && m_pModelBuffers->IsUpdatePending())
+			|| (m_pIndirectCommandBuffer && m_pIndirectCommandBuffer->IsUpdatePending());
 	}
 
 	bool Add(std::shared_ptr<RenderObject> pObject) {
@@ -129,31 +133,21 @@ public:
 		return true;
 	}
 
-	bool PerformIndirectBufferUpdate(
+	void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandList
 	) {
-		if (!m_pIndirectCommandBuffer) {
-			return false;
+		if (m_pModelBuffers) {
+			m_pModelBuffers->PerformUpdate(
+				pDeviceContext,
+				pCommandList
+			);
 		}
-		m_pIndirectCommandBuffer->PerformUpdate(
-			pDeviceContext,
-			pCommandQueueDirect
-		);
-		return true;
-	}
-
-	bool PerformModelBufferUpdate(
-		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
-	) {
-		if (!m_pModelBuffers) {
-			return false;
+		if (m_pIndirectCommandBuffer) {
+			m_pIndirectCommandBuffer->PerformUpdate(
+				pDeviceContext,
+				pCommandList
+			);
 		}
-		m_pModelBuffers->PerformUpdate(
-			pDeviceContext,
-			pCommandQueueDirect
-		);
-		return true;
 	}
 };

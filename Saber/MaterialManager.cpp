@@ -1,6 +1,6 @@
 #include "MaterialManager.h"
 
-#include "CommandQueue.h"
+#include "CommandList.h"
 #include "ConstantBuffer.h"
 #include "DDSTexture.h"
 #include "DescriptorHeapManager.h"
@@ -58,15 +58,15 @@ std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialSRVsRange() const {
 
 size_t MaterialManager::AddMaterial(
 	std::shared_ptr<DeviceContext> pDeviceContext,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect,
+	std::shared_ptr<CommandList> pCommandListDirect,
 	const std::wstring& albedoFilepath,
 	const std::wstring& normalFilepath
 ) {
 	std::shared_ptr<TextureResource> pAlbedo{
-		m_pTextureAtlas->Assign(albedoFilepath, pDeviceContext, pCommandQueueDirect)
+		m_pTextureAtlas->Assign(albedoFilepath, pDeviceContext, pCommandListDirect)
 	};
 	std::shared_ptr<DDSTexture> pNormal{
-		m_pTextureAtlas->Assign(normalFilepath, pDeviceContext, pCommandQueueDirect)
+		m_pTextureAtlas->Assign(normalFilepath, pDeviceContext, pCommandListDirect)
 	};
 	m_pMaterials.push_back(std::make_shared<RenderMaterial>(pAlbedo, pNormal));
 

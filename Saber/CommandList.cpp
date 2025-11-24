@@ -16,6 +16,10 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandList::GetD3D12CommandL
 	return m_pD3D12CommandList;
 }
 
+D3D12_COMMAND_LIST_TYPE CommandList::GetType() const {
+	return m_pD3D12CommandList->GetType();
+}
+
 bool CommandList::IsReadyForExection() const {
 	return m_isReadyForExecution.load();
 }

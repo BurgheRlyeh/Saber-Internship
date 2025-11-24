@@ -10,9 +10,12 @@
 #include <variant>
 
 #include "DeviceContext.h"
-#include "CommandQueue.h"
 #include "CommandList.h"
 #include "GPUResource.h"
+
+class CommandList;
+class DeviceContext;
+class GPUResource;
 
 class Mesh {
     std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};
@@ -76,7 +79,7 @@ public:
     Mesh(
         const std::wstring& filename,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshData& meshData
     );
 
@@ -94,20 +97,20 @@ private:
     void InitFromVerticesIndices(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshDataIndicesVertices& meshData
     );
     void InitFromGLTF(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshDataGLTF& meshData
     );
 
     void AddIndexBuffer(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData,
         DXGI_FORMAT indexFormat
     );
@@ -115,14 +118,14 @@ private:
     void AddVertexBuffer(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData
     );
 
     std::shared_ptr<GPUResource> CreateBuffer(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData
     );
 };

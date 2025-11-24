@@ -86,27 +86,32 @@ public:
 		m_pUpdater = std::make_unique<Updater>(*this, std::forward<Args>(args)...);
 	}
 
-	virtual void SetUpdateAll(T* pData, size_t count) {
+	void SetUpdateAll(T* pData, size_t count) {
 		assert(m_pUpdater);
 		m_pUpdater->SetUpdateAll(pData, count);
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) {
+	void SetUpdateAt(size_t id, const T& data) {
 		assert(m_pUpdater);
 		m_pUpdater->SetUpdateAt(id, data);
 	}
-	virtual void PerformUpdate(
+	void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<CommandList> pCommandListDirect
 	) {
 		assert(m_pUpdater);
 		m_pUpdater->PerformUpdate(
 			pDeviceContext,
-			pCommandQueueDirect);
+			pCommandListDirect
+		);
+	}
+
+	bool IsUpdatePending() const {
+		return m_pUpdater ? m_pUpdater->IsUpdatePending() : false;
 	}
 
 	bool Expand(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+		std::shared_ptr<CommandList> pCommandListDirect,
 		uint32_t numElements
 	) {
 		if (numElements <= m_capacity) {
@@ -118,37 +123,32 @@ public:
 
 		CreateBuffersAndViews(pDeviceContext->GetDevice(), numElements);
 
-		std::shared_ptr<CommandList> pCommandListDirect{
-			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-		};
-		pOldResource->ResourceTransition(
-			pCommandListDirect,
-			D3D12_RESOURCE_STATE_COPY_SOURCE
-		);
-		m_pResource->ResourceTransition(
-			pCommandListDirect,
-			D3D12_RESOURCE_STATE_COPY_DEST
-		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			pOldResource->ResourceTransition(
+				pCommandListDirect,
+				D3D12_RESOURCE_STATE_COPY_SOURCE
+			);
+			m_pResource->ResourceTransition(
+				pCommandListDirect,
+				D3D12_RESOURCE_STATE_COPY_DEST
+			);
+		}
 
-		std::shared_ptr<CommandList> pCommandListCopy{
-			pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice())
-		};
-		pCommandListCopy->GetD3D12CommandList()->CopyBufferRegion(
+		pCommandListDirect->GetD3D12CommandList()->CopyBufferRegion(
 			m_pResource->GetResource().Get(),
 			0,
 			pOldResource->GetResource().Get(),
 			0,
 			oldCapacity * sizeof(T)
 		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
+		pDeviceContext->AddIntermediate(pOldResource);
 
-		pCommandListDirect = pCommandQueueDirect->GetCommandList(pDeviceContext->GetDevice());
-		m_pResource->ResourceTransition(
-			pCommandListDirect,
-			m_resData.resInitState
-		);
-		pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			m_pResource->ResourceTransition(
+				pCommandListDirect,
+				m_resData.resInitState
+			);
+		}
 
 		return true;
 	}

@@ -5,16 +5,16 @@
 Mesh::Mesh(
     const std::wstring& filename,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const MeshData& meshData
 ) {
     std::visit([&](const auto& data) {
         using T = std::decay_t<decltype(data)>;
         if constexpr (std::is_same_v<T, MeshDataIndicesVertices>) {
-            InitFromVerticesIndices(filename, pDeviceContext, pCommandQueueCopy, data);
+            InitFromVerticesIndices(filename, pDeviceContext, pCommandList, data);
         }
         else if constexpr (std::is_same_v<T, MeshDataGLTF>) {
-            InitFromGLTF(filename, pDeviceContext, pCommandQueueCopy, data);
+            InitFromGLTF(filename, pDeviceContext, pCommandList, data);
         }
     }, meshData.data);
 }
@@ -43,13 +43,13 @@ size_t Mesh::GetIndicesCount() const {
 void Mesh::InitFromVerticesIndices(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const MeshDataIndicesVertices& meshData
 ) {
     AddIndexBuffer(
         name + L"/IndexBuffer",
         pDeviceContext,
-        pCommandQueueCopy,
+        pCommandList,
         BufferData{
             .data{ meshData.indices },
             .count{ meshData.indicesCnt },
@@ -66,7 +66,7 @@ void Mesh::InitFromVerticesIndices(
         AddVertexBuffer(
             name + L"/VertexBuffer" + std::to_wstring(i++),
             pDeviceContext,
-            pCommandQueueCopy,
+            pCommandList,
             BufferData{
                 .data{ vertexData.data },
                 .count{ meshData.verticesCnt },
@@ -79,7 +79,7 @@ void Mesh::InitFromVerticesIndices(
 void Mesh::InitFromGLTF(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const MeshDataGLTF& meshData
 ) {
     GLTFLoader gltfLoader{ meshData.filepath };
@@ -96,7 +96,7 @@ void Mesh::InitFromGLTF(
             .count{ indices.size() },
             .size{ sizeof(indices.front())}
         };
-        AddIndexBuffer(name + L"/IndexBuffer", pDeviceContext, pCommandQueueCopy, indexBufferData, format);
+        AddIndexBuffer(name + L"/IndexBuffer", pDeviceContext, pCommandList, indexBufferData, format);
     }
     break;
     case DXGI_FORMAT_R16_UINT:
@@ -109,7 +109,7 @@ void Mesh::InitFromGLTF(
             .count{ indices.size() },
             .size{ sizeof(indices.front())}
         };
-        AddIndexBuffer(name + L"/IndexBuffer", pDeviceContext, pCommandQueueCopy, indexBufferData, format);
+        AddIndexBuffer(name + L"/IndexBuffer", pDeviceContext, pCommandList, indexBufferData, format);
     }
     break;
     default:
@@ -137,14 +137,14 @@ void Mesh::InitFromGLTF(
             .size{ attribute.size }
         };
         std::wstring attributeName(attribute.name.begin(), attribute.name.end());
-        AddVertexBuffer(name + L"/VertexBuffer/" + attributeName, pDeviceContext, pCommandQueueCopy, vertexBufferData);
+        AddVertexBuffer(name + L"/VertexBuffer/" + attributeName, pDeviceContext, pCommandList, vertexBufferData);
     }
 }
 
 void Mesh::AddIndexBuffer(
     const std::wstring& indexBufferName,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const BufferData& bufferData,
     DXGI_FORMAT indexFormat
 ) {
@@ -153,7 +153,7 @@ void Mesh::AddIndexBuffer(
     m_pIndexBuffer = CreateBuffer(
         indexBufferName,
         pDeviceContext,
-        pCommandQueueCopy,
+        pCommandList,
         bufferData
     );
 
@@ -167,13 +167,13 @@ void Mesh::AddIndexBuffer(
 void Mesh::AddVertexBuffer(
     const std::wstring& vertexBufferName,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const BufferData& bufferData
 ) {
     m_pBuffers.push_back(CreateBuffer(
         vertexBufferName,
         pDeviceContext,
-        pCommandQueueCopy,
+        pCommandList,
         bufferData
     ));
 
@@ -187,7 +187,7 @@ void Mesh::AddVertexBuffer(
 std::shared_ptr<GPUResource> Mesh::CreateBuffer(
     const std::wstring& bufferName,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+    const std::shared_ptr<CommandList>& pCommandList,
     const BufferData& bufferData
 ) {
     size_t bufferSize{ bufferData.count * bufferData.size };
@@ -205,18 +205,13 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
         .SlicePitch{ subresourceData.RowPitch }
     };
 
-    std::shared_ptr<CommandList> pCommandList{
-        pCommandQueueCopy->GetCommandList(pDeviceContext->GetDevice())
-    };
-
     std::shared_ptr<GPUResource> pIntermediate{ pBuffer->CreateIntermediate(pDeviceContext->GetDevice()) };
     pBuffer->UpdateSubresources(
 		pCommandList,
 		pIntermediate,
         &subresourceData
     );
-
-    pCommandQueueCopy->ExecuteCommandListImmediately(pCommandList);
+    pDeviceContext->AddIntermediate(pIntermediate);
 
     return pBuffer;
 }

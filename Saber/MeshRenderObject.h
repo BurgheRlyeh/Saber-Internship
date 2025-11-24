@@ -8,7 +8,6 @@
 #include <limits>
 
 #include "Atlas.h"
-#include "CommandQueue.h"
 #include "ConstantBuffer.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
@@ -51,13 +50,13 @@ public:
     };
     void InitMesh(
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshInitData& meshInitData
     ) {
         m_pMesh = pDeviceContext->GetMeshAtlas()->Assign(
             m_name + L"/Mesh",
             pDeviceContext,
-            pCommandQueueCopy,
+            pCommandList,
             meshInitData.meshData
         );
     }
@@ -228,7 +227,7 @@ class TestTextureRenderObject : protected TestRenderObject {
 public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateTextureCube(
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
+        const std::shared_ptr<CommandList>& pCommandList,
         std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
@@ -296,7 +295,7 @@ public:
                 {.data{ uvs }, .size{ sizeof(*uvs) } }
             }
         };
-        pObj->InitMesh(pDeviceContext, pCommandQueueDirect, MeshInitData(meshData));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(meshData));
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
@@ -315,7 +314,7 @@ public:
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
             pDeviceContext,
-            pCommandQueueDirect,
+            pCommandList,
             L"Brick.dds",
             L"BrickNM.dds"
         ));
@@ -326,7 +325,7 @@ public:
 
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
+        const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
@@ -358,7 +357,7 @@ public:
             }
         };
 
-        pObj->InitMesh(pDeviceContext, pCommandQueueDirect, MeshInitData(data));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(data));
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
@@ -377,7 +376,7 @@ public:
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
             pDeviceContext,
-            pCommandQueueDirect,
+            pCommandList,
             L"barbarian_diffuse.dds",
             L"barb2_n.dds"
         ));
@@ -445,7 +444,7 @@ class TestAlphaRenderObject : protected TestRenderObject {
 public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateAlphaModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
+        const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
@@ -477,7 +476,7 @@ public:
             }
         };
 
-        pObj->InitMesh(pDeviceContext, pCommandQueueDirect, MeshInitData(data));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(data));
         pObj->InitMaterial(
             pDeviceContext,
             RootSignatureData{
@@ -496,7 +495,7 @@ public:
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
             pDeviceContext,
-            pCommandQueueDirect,
+            pCommandList,
             L"grassAlbedo.dds",
             L"grassNormal.dds"
         ));

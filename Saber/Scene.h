@@ -2,6 +2,7 @@
 
 #include "Headers.h"
 
+#include <array>
 #include <mutex>
 
 #include "DynamicUploadRingBuffer.h"
@@ -11,7 +12,6 @@
 
 class Camera;
 class CommandList;
-class CommandQueue;
 class ComputeObject;
 class ConstantBuffer;
 class DepthBuffer;
@@ -23,6 +23,13 @@ class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem;
 class Texture;
+
+enum RenderSubsystemType : size_t {
+    Default     = 0 << 0,
+    Dynamic     = 1 << 0,
+    AlphaKill   = 1 << 1,
+    Count       = 1 << 2
+};
 
 class Scene {
     std::wstring m_name{};
@@ -38,14 +45,10 @@ class Scene {
     std::mutex m_lightBufferMutex{};
     std::atomic<bool> m_isUpdateLightCB{};
 
-    enum RenderSubsystemId {
-	    Static = 0,
-        Dynamic = 1,
-        StaticAlphaKill = 2,
-        DynamicAlphaKill = 3,
-        Count = 4
-    };
-    std::vector<std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>> m_pRenderSubsystems{};
+    std::array<
+        std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
+        RenderSubsystemType::Count
+    > m_pRenderSubsystems{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -80,10 +83,6 @@ public:
     void InitializeRenderSubsystems(
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<ComputeObject> pIndirectUpdater
-    ) const;
-    void UpdateRenderSubsystems(
-        std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<CommandQueue> pCommandQueueDirect
     ) const;
 
     void SetSceneReadiness(bool value);
@@ -121,39 +120,16 @@ public:
         const float& specularPower = 1.f
     );
 
-    void AddStaticObject(std::shared_ptr<RenderObject> pObject) const;
-    void AddDynamicObject(std::shared_ptr<RenderObject> pObject) const;
-    void AddStaticAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
-    void AddDynamicAlphaKillObject(std::shared_ptr<RenderObject> pObject) const;
-    void RenderStaticObjects(
+    void AddObject(
+        const RenderSubsystemType type,
+        std::shared_ptr<RenderObject> pObject
+    ) const;
+    void RenderObjects(
+        const RenderSubsystemType type,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
-    );
-    void RenderDynamicObjects(
-        std::shared_ptr<CommandList> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager
-    );
-    void RenderStaticAlphaKillObjects(
-        std::shared_ptr<CommandList> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
-        std::shared_ptr<MaterialManager> pMaterialManager
-    );
-    void RenderDynamicAlphaKillObjects(
-        std::shared_ptr<CommandList> pCommandListDirect,
-        D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect,
-        D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
-        std::shared_ptr<MaterialManager> pMaterialManager
+        D3D12_RECT scissorRect
     );
 
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);

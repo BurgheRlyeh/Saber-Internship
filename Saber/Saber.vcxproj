@@ -177,6 +177,7 @@
     <ClInclude Include="Device.h" />
     <ClInclude Include="DeviceContext.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
+    <ClInclude Include="FencedQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GLTFLoader.h" />
     <ClInclude Include="GPUResource.h" />
@@ -211,7 +212,6 @@
     <ClInclude Include="TextureResource.h" />
     <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Vertices.h" />
-    <ClInclude Include="VisibilityBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
