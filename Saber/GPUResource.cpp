@@ -1,20 +1,56 @@
 #include "GPUResource.h"
 
+#include "CommandList.h"
+#include "Device.h"
+
+std::shared_ptr<GPUResource> GPUResource::pCounterResetter = nullptr;
+
 GPUResource::GPUResource(
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	const std::wstring& name,
+	std::shared_ptr<Device> pDevice,
 	const HeapData& heapData,
 	const ResourceData& resData,
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
 ) {
-	CreateResource(pAllocator, heapData, resData, allocationFlags);
+	CreateResource(name, pDevice, heapData, resData, allocationFlags);
+}
+
+void GPUResource::ResourceTransition(
+	std::shared_ptr<CommandList> pCommandList,
+	const D3D12_RESOURCE_STATES& toState
+) {
+	pCommandList->GetD3D12CommandList()->ResourceBarrier(
+		1,
+		&CD3DX12_RESOURCE_BARRIER::Transition(
+			GetResource().Get(),
+			m_state,
+			toState
+		)
+	);
+	m_state = toState;
+}
+
+void GPUResource::ResetCounter(
+	std::shared_ptr<CommandList> pCommandList,
+	uint64_t counterOffset
+) const {
+	assert(pCounterResetter);
+
+	pCommandList->GetD3D12CommandList()->CopyBufferRegion(
+		GetResource().Get(),
+		counterOffset,
+		pCounterResetter->GetResource().Get(),
+		0,
+		sizeof(UINT)
+	);
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> GPUResource::GetResource() const {
-	return m_pAllocation->GetResource();
+	return m_pResource;
 }
 
 std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	std::shared_ptr<Device> pDevice,
 	UINT firstSubresource,
 	UINT numSubresources
 ) {
@@ -27,7 +63,8 @@ std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
 	}
 
 	return std::make_shared<GPUResource>(
-		pAllocator,
+		L"Intermediate",
+		pDevice,
 		HeapData{ D3D12_HEAP_TYPE_UPLOAD },
 		ResourceData{
 			resDesc,
@@ -36,41 +73,39 @@ std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
 	);
 }
 
-void GPUResource::UpdateSubresource(
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+void GPUResource::UpdateSubresources(
 	std::shared_ptr<CommandList> pCommandList,
-	UINT firstSubresource,
-	UINT numSubresources,
+	std::shared_ptr<GPUResource>& pIntermediate,
 	const D3D12_SUBRESOURCE_DATA* pSrcData,
-	std::shared_ptr<GPUResource>& pIntermediate
+	UINT64 intermediateOffset,
+	UINT firstSubresource,
+	UINT numSubresources
 ) {
-	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
-	UpdateSubresources(
-		pCommandList->m_pCommandList.Get(),
+	::UpdateSubresources(
+		pCommandList->GetD3D12CommandList().Get(),
 		GetResource().Get(),
 		pIntermediate->GetResource().Get(),
-		0,
+		intermediateOffset,
 		firstSubresource,
 		numSubresources,
 		pSrcData
 	);
 }
 
-void GPUResource::UpdateSubresource(
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+void GPUResource::UpdateSubresources(
 	std::shared_ptr<CommandList> pCommandList,
-	UINT firstSubresource,
-	UINT numSubresources,
+	std::shared_ptr<GPUResource>& pIntermediate,
 	void* pResourceData,
 	const D3D12_SUBRESOURCE_INFO* pSrcData,
-	std::shared_ptr<GPUResource>& pIntermediate
+	UINT64 intermediateOffset,
+	UINT firstSubresource,
+	UINT numSubresources
 ) {
-	pIntermediate = CreateIntermediate(pAllocator, firstSubresource, numSubresources);
-	UpdateSubresources(
-		pCommandList->m_pCommandList.Get(),
+	::UpdateSubresources(
+		pCommandList->GetD3D12CommandList().Get(),
 		GetResource().Get(),
 		pIntermediate->GetResource().Get(),
-		0,
+		intermediateOffset,
 		firstSubresource,
 		numSubresources,
 		pResourceData,
@@ -80,18 +115,18 @@ void GPUResource::UpdateSubresource(
 
 
 bool GPUResource::IsSrv() const {
-	return !(GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+	return IsSrvDesc(GetResource()->GetDesc());
 }
 const D3D12_SHADER_RESOURCE_VIEW_DESC* GPUResource::GetSrvDesc() const {
 	return nullptr;
 }
 void GPUResource::CreateShaderResourceView(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_SHADER_RESOURCE_VIEW_DESC* pSrvDesc
 ) {
 	assert(IsSrv());
-	pDevice->CreateShaderResourceView(
+	pDevice->GetD3D12Device()->CreateShaderResourceView(
 		GetResource().Get(),
 		pSrvDesc ? pSrvDesc : GetSrvDesc(),
 		cpuDescHandle
@@ -99,19 +134,19 @@ void GPUResource::CreateShaderResourceView(
 }
 
 bool GPUResource::IsUav() const {
-	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	return IsUavDesc(GetResource()->GetDesc());
 }
 const D3D12_UNORDERED_ACCESS_VIEW_DESC* GPUResource::GetUavDesc() const {
 	return nullptr;
 }
 void GPUResource::CreateUnorderedAccessView(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc,
 	Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource
 ) {
 	assert(IsUav());
-	pDevice->CreateUnorderedAccessView(
+	pDevice->GetD3D12Device()->CreateUnorderedAccessView(
 		GetResource().Get(),
 		pCounterResource.Get(),
 		pUavDesc ? pUavDesc : GetUavDesc(),
@@ -120,26 +155,43 @@ void GPUResource::CreateUnorderedAccessView(
 }
 
 bool GPUResource::IsRtv() const {
-	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	return IsRtvDesc(GetResource()->GetDesc());
 }
 const D3D12_RENDER_TARGET_VIEW_DESC* GPUResource::GetRtvDesc() const {
 	return nullptr;
 }
 void GPUResource::CreateRenderTargetView(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc
 ) {
 	assert(IsRtv());
-	pDevice->CreateRenderTargetView(
+	pDevice->GetD3D12Device()->CreateRenderTargetView(
 		GetResource().Get(),
 		pRtvDesc ? pRtvDesc : GetRtvDesc(),
 		cpuDescHandle
 	);
 }
 
+void GPUResource::ClearRenderTarget(
+	std::shared_ptr<CommandList> pCommandList,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+	const float* clearColor
+) {
+	assert(IsRtv());
+
+	static float defaultColor[]{ 0.f, 0.f, 0.f, 1.f };
+	pCommandList->GetD3D12CommandList()->ClearRenderTargetView(
+		cpuDescHandle,
+		clearColor ? clearColor : defaultColor,
+		0,
+		nullptr
+	);
+}
+
 void GPUResource::CreateResource(
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+	const std::wstring& name,
+	std::shared_ptr<Device> pDevice,
 	const HeapData& heapData,
 	const ResourceData& resData,
 	const D3D12MA::ALLOCATION_FLAGS& allocationFlags
@@ -150,13 +202,14 @@ void GPUResource::CreateResource(
 		.ExtraHeapFlags{ heapData.heapFlags }
 	};
 
-	ThrowIfFailed(pAllocator->CreateResource(
+	ThrowIfFailed(pDevice->GetD3D12Allocator()->CreateResource(
 		&allocationDesc,
 		&resData.resDesc,
 		resData.resInitState,
 		resData.pResClearValue,
 		&m_pAllocation,
-		IID_NULL,
-		nullptr
+		IID_PPV_ARGS(&m_pResource)
 	));
+	m_pResource->SetName(name.c_str());
+	m_state = resData.resInitState;
 }

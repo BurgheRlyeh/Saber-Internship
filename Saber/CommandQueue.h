@@ -2,38 +2,31 @@
 
 #include "Headers.h"
 
-// To avoid conflicts and use only min/max defined in <algorithm>
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
-#include <queue>
-#include <vector>
-#include <unordered_set>
+#include <functional>
 #include <mutex>
+#include <unordered_set>
+#include <vector>
 
-#include "CommandList.h"
+#include "LockFreeQueue.h"
+
+class CommandList;
+class Device;
 
 class CommandQueue {
+	std::wstring m_name;
+
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_pCommandQueue{};
+
+	Microsoft::WRL::ComPtr<ID3D12Fence> m_pFence{};
+	uint64_t m_fenceValue{};
+	HANDLE m_fenceEvent{};
+	
 	struct CommandAllocatorEntry {
 		uint64_t fenceValue{};
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pCommandAllocator{};
 	};
-
-	D3D12_COMMAND_LIST_TYPE m_commandListType{ D3D12_COMMAND_LIST_TYPE_NONE };
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_pCommandQueue{};
-	Microsoft::WRL::ComPtr<ID3D12Fence> m_pFence{};
-	HANDLE m_fenceEvent{};
-	uint64_t m_fenceValue{};
-	
-	std::queue<CommandAllocatorEntry> m_commandAllocatorQueue{};
-	std::mutex m_commandAllocatorQueueMutex{};
-	std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
-	std::mutex m_commandListQueueMutex{};
+	ArrayLockFreeQueue<CommandAllocatorEntry> m_commandAllocatorQueue{};
+	ArrayLockFreeQueue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> m_commandListQueue{};
 
 	struct PrioritySet {
 		std::mutex mutex{};
@@ -46,22 +39,28 @@ public:
 	CommandQueue() = delete;
 	CommandQueue(CommandQueue&&) = delete;
 	CommandQueue(const CommandQueue&) = delete;
-	CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, D3D12_COMMAND_LIST_TYPE type);
+	CommandQueue(
+		const std::wstring& name,
+		std::shared_ptr<Device> pDevice,
+		D3D12_COMMAND_LIST_TYPE type
+	);
 	~CommandQueue();
+
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
 
 	D3D12_COMMAND_LIST_TYPE GetCommandListType() const;
 
-	// Get an available command list from the command queue.
 	std::shared_ptr<CommandList> GetCommandList(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		bool isDeffered = false,
-		uint8_t priority = 0,
-		std::function<void(void)> beforeExecuteTask = [=]() { return; },
-		std::function<void(void)> afterExecuteTask = [=]() { return; }
+		std::shared_ptr<Device> pDevice
+	);
+	std::shared_ptr<CommandList> GetDeferredCommandList(
+		const std::wstring& name,
+		std::shared_ptr<Device> pDevice,
+		size_t priority,
+		std::function<void()> beforeExecuteTask = []{},
+		std::function<void()> afterExecuteTask = []{}
 	);
 
-	// Execute a command list.
-	// Returns the fence value to wait for for this command list.
 	uint64_t ExecuteCommandList(std::shared_ptr<CommandList> commandList);
 	void ExecuteCommandListImmediately(std::shared_ptr<CommandList> commandList);
 
@@ -73,12 +72,28 @@ public:
 	void WaitForFenceValue(uint64_t fenceValue);
 	void Flush();
 
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
-
 private:
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice);
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator
+	static Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(
+		std::shared_ptr<Device> pDevice,
+		D3D12_COMMAND_LIST_TYPE type
 	);
+
+	// Get an available command list from the command queue.
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList(
+		std::shared_ptr<Device> pDevice
+	);
+
+	// Execute a command list.
+	// Returns the fence value to wait for for this command list.
+	uint64_t ExecuteD3D12CommandList(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pD3D12CommandList
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(
+		std::shared_ptr<Device> pDevice
+	) const;
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(
+		std::shared_ptr<Device> pDevice,
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> pAllocator
+	) const;
 };

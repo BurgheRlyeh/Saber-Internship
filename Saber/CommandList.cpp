@@ -1,18 +1,23 @@
 #include "CommandList.h"
 
 CommandList::CommandList(
+	const std::wstring& name,
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-	uint8_t priority,
-	std::function<void(void)> beforeExec,
-	std::function<void(void)> afterExec
-) : m_pCommandList(pCommandList)
-	, m_priority(priority)
-	, m_beforeExec(beforeExec)
-	, m_afterExec(afterExec)
-{}
+	std::function<void()> beforeExec,
+	std::function<void()> afterExec
+) : m_name(name),
+	m_pD3D12CommandList(pCommandList),
+	m_beforeExec(beforeExec),
+	m_afterExec(afterExec) {
+	m_pD3D12CommandList->SetName(name.c_str());
+}
 
-inline uint16_t CommandList::GetPriority() const {
-	return m_priority;
+Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandList::GetD3D12CommandList() const {
+	return m_pD3D12CommandList;
+}
+
+D3D12_COMMAND_LIST_TYPE CommandList::GetType() const {
+	return m_pD3D12CommandList->GetType();
 }
 
 bool CommandList::IsReadyForExection() const {

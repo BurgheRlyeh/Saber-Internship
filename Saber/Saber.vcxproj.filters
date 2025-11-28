@@ -51,9 +51,6 @@
     <ClInclude Include="CommandQueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Vertices.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="RenderObject.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -90,7 +87,7 @@
     <ClInclude Include="D3D12MemAlloc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Texture.h">
+    <ClInclude Include="TextureResource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ConstantBuffer.h">
@@ -126,16 +123,13 @@
     <ClInclude Include="DescriptorHeapManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GBuffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="DepthBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MaterialCB.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="HlslCppTypesRedefine.h">
+    <ClInclude Include="HlslTypesDef.h">
       <Filter>Common Files</Filter>
     </ClInclude>
     <ClInclude Include="SinglePassDownsampler.h">
@@ -144,16 +138,10 @@
     <ClInclude Include="IndirectCommandBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ModelBuffers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IndirectUpdater.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RenderSubsystem.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SeparateChainingMap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CppHlslTypesRedefine.h">
@@ -161,6 +149,42 @@
     </ClInclude>
     <ClInclude Include="IndirectCommand.h">
       <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelBuffer.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneBuffer.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LightBuffer.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Vertices.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Texture.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BufferUpdater.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DeviceContext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Device.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DeferredShading.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HlslTypesUndef.h">
+      <Filter>Common Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FencedQueue.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -209,7 +233,7 @@
     <ClCompile Include="GPUResource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Texture.cpp">
+    <ClCompile Include="TextureResource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="DynamicUploadRingBuffer.cpp">
@@ -227,9 +251,6 @@
     <ClCompile Include="DescriptorHeapRange.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GBuffer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="MaterialManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -239,11 +260,24 @@
     <ClCompile Include="SinglePassDownsampler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DeviceContext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ComputeObject.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Device.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DeferredShading.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+    <ClInclude Include="Vertices.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="small.ico">
@@ -254,10 +288,10 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="SimpleUVVertexShader.hlsl">
+    <FxCompile Include="SimpleVS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="SimpleUVPixelShader.hlsl">
+    <FxCompile Include="SimplePS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="CopyPostProcessingVS.hlsl">
@@ -269,29 +303,38 @@
     <FxCompile Include="DeferredShadingComputeShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="AlphaVS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="AlphaPS.hlsl">
+    <FxCompile Include="AlphaKillPS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">
       <Filter>Shaders\FidelityFX</Filter>
     </FxCompile>
-    <FxCompile Include="CbMesh4IndirectUpdater.hlsl">
+    <FxCompile Include="IndirectUpdaterCbMesh4.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="OcclusionCullingFirstPass.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="IndirectUpdaterConstMesh4.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="AlphaKillVS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="IndirectUpdaterCbConstMesh4.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="BlinnPhongLighting.hlsli">
-      <Filter>Shaders</Filter>
+    <None Include="packages.config" />
+    <None Include="IndirectCommandUpdater.hlsli">
+      <Filter>Shaders\Includes</Filter>
     </None>
     <None Include="Math.hlsli">
       <Filter>Shaders\Includes</Filter>
     </None>
-    <None Include="packages.config" />
-    <None Include="IndirectCommandUpdater.hlsli">
-      <Filter>Shaders</Filter>
+    <None Include="BlinnPhongLighting.hlsli">
+      <Filter>Shaders\Includes</Filter>
     </None>
   </ItemGroup>
 </Project>

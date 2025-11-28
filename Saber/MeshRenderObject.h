@@ -4,65 +4,73 @@
 
 #include "Headers.h"
 
-#include <filesystem>
 #include <initializer_list>
+#include <limits>
 
 #include "Atlas.h"
-#include "CommandQueue.h"
 #include "ConstantBuffer.h"
-#include "GBuffer.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
-#include "ModelBuffers.h"
 #include "Mesh.h"
-#include "PSOLibrary.h"
+#include "ModelBuffer.h"
 #include "RenderObject.h"
-#include "Resources.h"
+#include "Texture.h"
 #include "Vertices.h"
 
 template <typename ModelBuffer>
 class MeshRenderObject : public RenderObject {
 protected:
+    std::wstring m_name{};
+
     std::shared_ptr<Mesh> m_pMesh{};
 
     ModelBuffer m_modelBuffer{};
     std::shared_ptr<ConstantBuffer> m_pModelCb{};
+    size_t m_modelBufferId{ static_cast<size_t>(-1) };
 
 public:
     MeshRenderObject(
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+        const std::wstring& name,
+        std::shared_ptr<Device> pDevice,
         ModelBuffer* pModelBuffer = nullptr
-    ) {
+    ) : m_name(name) {
         if (pModelBuffer) {
             m_modelBuffer = *pModelBuffer;
         }
         m_pModelCb = std::make_shared<ConstantBuffer>(
-            pAllocator,
+            m_name + L"/ModelCb",
+            pDevice,
             sizeof(ModelBuffer),
             &m_modelBuffer
         );
     }
 
     struct MeshInitData {
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas;
         Mesh::MeshData meshData;
-        std::wstring meshFilename;
     };
     void InitMesh(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshInitData& meshInitData
     ) {
-        m_pMesh = meshInitData.pMeshAtlas->Assign(
-            meshInitData.meshFilename,
-            pDevice,
-            pAllocator,
-            pCommandQueueCopy,
+        m_pMesh = pDeviceContext->GetMeshAtlas()->Assign(
+            m_name + L"/Mesh",
+            pDeviceContext,
+            pCommandList,
             meshInitData.meshData
         );
     }
 
+    void SetModelBufferId(size_t id) {
+        m_modelBufferId = id;
+    }
+    void AllocateModelBufferCbv(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<DescHeapRange> pModelCBVsRange
+    ) {
+        m_modelBufferId = pModelCBVsRange->GetNextId();
+        m_pModelCb->CreateConstantBufferView(pDeviceContext->GetDevice(), pModelCBVsRange->GetCpuHandle(m_modelBufferId));
+    }
     ModelBuffer& GetModelBuffer() {
         return m_modelBuffer;
     }
@@ -111,35 +119,93 @@ public:
         };
     }
 
+    void FillIndirectCommand(ConstMesh4IndirectCommand& indirectCommand) override {
+        indirectCommand = ConstMesh4IndirectCommand{
+            .rootConstant{ DirectX::XMUINT4{ static_cast<uint32_t>(m_modelBufferId), 0, 0, 0 } },
+            .indexBufferView{
+                *m_pMesh->GetIndexBufferView()
+            },
+            .vertexBufferView{ *m_pMesh->GetVertexBufferView() },
+            .vertexBufferView1{ *m_pMesh->GetVertexBufferView(1) },
+            .vertexBufferView2{ *m_pMesh->GetVertexBufferView(2) },
+            .vertexBufferView3{ *m_pMesh->GetVertexBufferView(3) },
+            .drawArguments{
+                .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
+                .InstanceCount{ 1 }
+            },
+        };
+    }
+
+    void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) override {
+        indirectCommand = CbConstMesh4IndirectCommand{
+            .constantBufferView{
+                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+            },
+            .rootConstant{ DirectX::XMUINT4{ static_cast<uint32_t>(m_modelBufferId), 0, 0, 0 } },
+            .indexBufferView{
+                *m_pMesh->GetIndexBufferView()
+            },
+            .vertexBufferView{ *m_pMesh->GetVertexBufferView() },
+            .vertexBufferView1{ *m_pMesh->GetVertexBufferView(1) },
+            .vertexBufferView2{ *m_pMesh->GetVertexBufferView(2) },
+            .vertexBufferView3{ *m_pMesh->GetVertexBufferView(3) },
+            .drawArguments{
+                .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
+                .InstanceCount{ 1 }
+            },
+        };
+    }
+
+    std::function<void(void*, size_t)> VerticesPositionsBBHandler() {
+        return [&](void* data, size_t size) {
+            const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
+            for (size_t i{}; i < size; ++i) {
+                m_modelBuffer.bbmin.x = std::min(m_modelBuffer.bbmin.x, positions[i].x);
+                m_modelBuffer.bbmin.y = std::min(m_modelBuffer.bbmin.y, positions[i].y);
+                m_modelBuffer.bbmin.z = std::min(m_modelBuffer.bbmin.z, positions[i].z);
+                m_modelBuffer.bbmax.x = std::max(m_modelBuffer.bbmax.x, positions[i].x);
+                m_modelBuffer.bbmax.y = std::max(m_modelBuffer.bbmax.y, positions[i].y);
+                m_modelBuffer.bbmax.z = std::max(m_modelBuffer.bbmax.z, positions[i].z);
+            }
+        };
+    }
+
 protected:
     void RenderJob(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
+        std::shared_ptr<CommandList> pCommandListDirect
     ) const override {
         assert(m_pMesh);
+        auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
         if (m_pMesh) {
-            pCommandListDirect->IASetVertexBuffers(
+            pD3D12CommandList->IASetVertexBuffers(
                 0,
                 static_cast<UINT>(m_pMesh->GetVertexBuffersCount()),
                 m_pMesh->GetVertexBufferViews()
             );
-            pCommandListDirect->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
+            pD3D12CommandList->IASetIndexBuffer(m_pMesh->GetIndexBufferView());
         }
     }
 
     void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
         UINT& rootParamId
     ) const override {
-        pCommandListDirect->SetGraphicsRootConstantBufferView(
-            rootParamId++,
-            m_pModelCb->GetResource()->GetGPUVirtualAddress()
-        );
+        auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
+        if (m_modelBufferId == static_cast<size_t>(-1)) {
+            pD3D12CommandList->SetGraphicsRootConstantBufferView(
+                rootParamId++,
+                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+            );
+        }
+        else {
+            pD3D12CommandList->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
+        }
     }
 
     void DrawCall(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
     ) const override {
-        pCommandList->DrawIndexedInstanced(
+        pCommandList->GetD3D12CommandList()->DrawIndexedInstanced(
             static_cast<UINT>(m_pMesh->GetIndicesCount()),
             1,
             0, 0, 0
@@ -151,25 +217,18 @@ class TestRenderObject : protected MeshRenderObject<ModelBuffer> {
 protected:
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        {   "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {  "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0,    DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 };
 
 class TestTextureRenderObject : protected TestRenderObject {
 public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateTextureCube(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
-        std::shared_ptr<MaterialManager> pMaterialManager,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         DirectX::XMFLOAT3 positions[24]{
@@ -213,7 +272,11 @@ public:
             20, 22, 21, 20, 23, 22
         };
 
-        Mesh::MeshDataVerticesIndices meshData{
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"SimpleTextureCube", pDeviceContext->GetDevice())
+        };
+
+        Mesh::MeshDataIndicesVertices meshData{
             // indices data
             .indices{ indices },
             .indicesCnt{ _countof(indices) },
@@ -221,71 +284,63 @@ public:
             .indexFormat{ DXGI_FORMAT_R32_UINT },
             // vertices data
             .verticesCnt{ 24 },
-			.verticesData{
-				{ .data{ positions }, .size{ sizeof(*positions) } },
-				{ .data{ normals }, .size{ sizeof(*normals) } },
-				{ .data{ tangents }, .size{ sizeof(*tangents) } },
-				{ .data{ uvs }, .size{ sizeof(*uvs) } }
-			}
+            .verticesData{
+                {
+                    .data{ positions },
+                    .size{ sizeof(*positions) },
+                    .handler{ pObj->VerticesPositionsBBHandler() }
+                },
+                {.data{ normals }, .size{ sizeof(*normals) } },
+                {.data{ tangents }, .size{ sizeof(*tangents) } },
+                {.data{ uvs }, .size{ sizeof(*uvs) } }
+            }
         };
-
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
-        };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, meshData, L"SimpleTextureCube"));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(meshData));
         pObj->InitMaterial(
-            pDevice,
+            pDeviceContext,
             RootSignatureData{
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+                CreateRootSignatureBlob(),
                 L"GLTFRootSignature"
             },
             ShaderData{
-                pShaderAtlas,
-                L"SimpleUVVertexShader.cso",
-                L"SimpleUVPixelShader.cso"
+                L"SimpleVS.cso",
+                L"SimplePS.cso"
             },
             PipelineStateData{
-                pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"Brick.dds",
-                L"BrickNM.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+            pDeviceContext,
+            pCommandList,
+            L"Brick.dds",
+            L"BrickNM.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
 
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
-        std::shared_ptr<MaterialManager> pMaterialManager,
+        std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"MeshGLTF", pDeviceContext->GetDevice())
+        };
+
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) }
+                    .size{ sizeof(DirectX::XMFLOAT3) },
+                    .handler{ pObj->VerticesPositionsBBHandler() }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -302,73 +357,59 @@ public:
             }
         };
 
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
-        };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"MeshGLTF"));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(data));
         pObj->InitMaterial(
-            pDevice,
+            pDeviceContext,
             RootSignatureData{
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+                CreateRootSignatureBlob(),
                 L"GLTFRootSignature"
             },
             ShaderData{
-                pShaderAtlas,
-                L"SimpleUVVertexShader.cso",
-                L"SimpleUVPixelShader.cso"
+                L"SimpleVS.cso",
+                L"SimplePS.cso"
             },
             PipelineStateData{
-                pPSOLibrary,
                 CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"barbarian_diffuse.dds",
-                L"barb2_n.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+            pDeviceContext,
+            pCommandList,
+            L"barbarian_diffuse.dds",
+            L"barb2_n.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
         };
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[2]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // model CB
+        size_t rp{}, spCbv{}, srSrv{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
+        rootParameters[rp++].InitAsConstantBufferView(spCbv++); // scene CB
+
+        rootParameters[rp++].InitAsConstants(4, spCbv++);       // model CB ID
+        rootParameters[rp++].InitAsShaderResourceView(srSrv++); // model CBs
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
 
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
-            featureData.HighestVersion,
+            D3D_ROOT_SIGNATURE_VERSION_1_1,
             &rootSignatureBlob,
             &errorBlob
         ));
@@ -402,25 +443,23 @@ private:
 class TestAlphaRenderObject : protected TestRenderObject {
 public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateAlphaModelFromGLTF(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        std::shared_ptr<CommandQueue> const& pCommandQueueDirect,
-        std::shared_ptr<Atlas<Mesh>> pMeshAtlas,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-        std::shared_ptr<PSOLibrary> pPSOLibrary,
-        std::shared_ptr<GBuffer> pGBuffer,
-        std::shared_ptr<MaterialManager> pMaterialManager,
+        std::shared_ptr<Texture> pGBuffer,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(L"AlphaGrassGLTF", pDeviceContext->GetDevice())
+        };
+
         Mesh::MeshDataGLTF data{
             .filepath{ filepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) }
+                    .size{ sizeof(DirectX::XMFLOAT3) },
+                    .handler{ pObj->VerticesPositionsBBHandler() }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -437,67 +476,59 @@ public:
             }
         };
 
-        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(pAllocator)
-        };
-        pObj->InitMesh(pDevice, pAllocator, pCommandQueueCopy, MeshInitData(pMeshAtlas, data, L"AlphaGrassGLTF"));
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(data));
         pObj->InitMaterial(
-            pDevice,
+            pDeviceContext,
             RootSignatureData{
-                pRootSignatureAtlas,
-                CreateRootSignatureBlob(pDevice),
+                CreateRootSignatureBlob(),
                 L"AlphaGrassGLTFRootSignature"
             },
             ShaderData{
-                pShaderAtlas,
-                L"AlphaVS.cso",
-                L"AlphaPS.cso"
+                L"AlphaKillVS.cso",
+                L"AlphaKillPS.cso"
             },
             PipelineStateData{
-                pPSOLibrary,
                 CreateAlphaPipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
             }
         );
 
-        pObj->SetModelBuffer(ModelBuffer{
-            modelMatrix,
-            pMaterialManager->AddMaterial(
-                pDevice,
-                pAllocator,
-                pCommandQueueCopy,
-                pCommandQueueDirect,
-                L"grassAlbedo.dds",
-                L"grassNormal.dds"
-            )
-        });
+        pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+            pDeviceContext,
+            pCommandList,
+            L"grassAlbedo.dds",
+            L"grassNormal.dds"
+        ));
+        pObj->UpdateModelBuffer();
 
         return pObj;
     }
 
 protected:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice
-    ) {
+    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+            D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
         };
 
-        CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
-        rootParameters[0].InitAsConstantBufferView(0);  // scene CB
-        rootParameters[1].InitAsConstantBufferView(1);  // model CB
+        size_t rp{}, srCbv{}, srSrv{};
+        CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
+        rootParameters[rp++].InitAsConstantBufferView(srCbv++); // scene CB
+
+        rootParameters[rp++].InitAsConstants(4, srCbv++);       // model CB id
+        rootParameters[rp++].InitAsShaderResourceView(srSrv++); // model CBs id
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeCbvsMaterials[1]{};
-        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);
-        rootParameters[2].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials, D3D12_SHADER_VISIBILITY_PIXEL);
+        rangeCbvsMaterials[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, srCbv++);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvsMaterials), rangeCbvsMaterials/*, D3D12_SHADER_VISIBILITY_PIXEL*/);
+
 
         CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
-        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
-        rootParameters[3].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial, D3D12_SHADER_VISIBILITY_PIXEL);
+        rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, srSrv++, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+        rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_STATIC_SAMPLER_DESC sampler{
             .Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },
@@ -518,16 +549,11 @@ protected:
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
-        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-        if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
-            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-        }
-
         // Serialize the root signature.
         Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
-            featureData.HighestVersion,
+            D3D_ROOT_SIGNATURE_VERSION_1_1,
             &rootSignatureBlob,
             &errorBlob
         ));

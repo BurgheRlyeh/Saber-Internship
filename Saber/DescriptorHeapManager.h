@@ -5,7 +5,9 @@
 #include <optional>
 
 #include "Atlas.h"
-#include "DescriptorHeapRange.h"
+
+class DescHeapRange;
+class Device;
 
 class DescriptorHeapManager {
 	D3D12_DESCRIPTOR_HEAP_DESC m_heapDesc{};
@@ -19,13 +21,13 @@ class DescriptorHeapManager {
 public:
 	DescriptorHeapManager(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_DESCRIPTOR_HEAP_DESC& heapDesc
 	);
 
 	DescriptorHeapManager(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+		std::shared_ptr<Device> pDevice,
 		const D3D12_DESCRIPTOR_HEAP_TYPE& type,
 		const size_t& size,
 		const D3D12_DESCRIPTOR_HEAP_FLAGS& flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE

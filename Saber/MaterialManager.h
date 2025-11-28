@@ -3,15 +3,20 @@
 #include "Headers.h"
 
 #include "Atlas.h"
-#include "ConstantBuffer.h"
-#include "DDSTexture.h"
-#include "DescriptorHeapManager.h"
-#include "Texture.h"
-
 #include "MaterialCB.h"
 
+class CommandList;
+class ConstantBuffer;
+class DDSTexture;
+class DescriptorHeapManager;
+class DescHeapRange;
+class Device;
+class DeviceContext;
+class TextureResource;
+
 class MaterialManager {
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
+	static const std::wstring BASE_NAME;
+
 	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
 	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
 
@@ -19,8 +24,8 @@ class MaterialManager {
 	std::shared_ptr<ConstantBuffer> m_pMaterialCB{};
 
 	struct RenderMaterial {
-		std::shared_ptr<Texture> pAlbedo{};
-		std::shared_ptr<Texture> pNormal{};
+		std::shared_ptr<TextureResource> pAlbedo{};
+		std::shared_ptr<TextureResource> pNormal{};
 	};
 	std::vector<std::shared_ptr<RenderMaterial>> m_pMaterials{};
 
@@ -29,28 +34,25 @@ class MaterialManager {
 public:
 	MaterialManager(
 		const std::wstring& resourceFolder,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+		std::shared_ptr<Device> pDevice,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
 		const size_t& capacity
 	);
 	~MaterialManager();
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetDescHeap() const {
-		return m_pDescHeap;
-	}
 	std::shared_ptr<DescHeapRange> GetMaterialCBVsRange() const;
 	std::shared_ptr<DescHeapRange> GetMaterialSRVsRange() const;
 
 	size_t AddMaterial(
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect,
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		std::shared_ptr<CommandList> pCommandListDirect,
 		const std::wstring& albedoFilepath,
 		const std::wstring& normalFilepath
 	);
 
 private:
-	size_t AddTexture(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice, std::shared_ptr<Texture> pTex);
+	size_t AddTexture(
+		std::shared_ptr<Device> pDevice,
+		std::shared_ptr<TextureResource> pTex
+	);
 };

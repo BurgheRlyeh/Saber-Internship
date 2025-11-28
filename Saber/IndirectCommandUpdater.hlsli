@@ -1,6 +1,8 @@
 #ifndef INDIRECT_COMMAND_UPDATER_HLSLI
 #define INDIRECT_COMMAND_UPDATER_HLSLI
 
+#include "IndirectCommand.h"
+
 #define threadBlockSize 128
 
 cbuffer UpdateCountBuffer : register(b0)

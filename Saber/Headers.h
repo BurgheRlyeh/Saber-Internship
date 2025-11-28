@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 // Windows Header Files
+#define NOMINMAX
 #include <Windows.h> // For HRESULT
 
 // Windows Runtime Library. Needed for Microsoft::WRL::ComPtr<> template class.
@@ -31,13 +32,32 @@
 #include <cassert>
 #include <exception>
 
-inline void ThrowIfFailed(HRESULT hr) {
-    if (FAILED(hr)) {
-        _com_error err(hr);
-        OutputDebugString(L"HRESULT: ");
-        OutputDebugString(err.ErrorMessage());
-        OutputDebugString(L"\n");
-
-       throw std::exception();
+inline void ThrowIfFailed(HRESULT hr, Microsoft::WRL::ComPtr<ID3D12Device> pDevice = nullptr) {
+    if (SUCCEEDED(hr)) {
+        return;
     }
+
+    // todo
+    if (Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> pDred;
+        pDevice && SUCCEEDED(pDevice.As(&pDred))
+        ) {
+        if (D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
+            SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput))
+            ) {
+            OutputDebugString(L"AutoBreadcrumbs are gotten\n");
+        }
+
+        if (D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
+            SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput))
+            ) {
+            OutputDebugString(L"PageFaultAllocation is gotten\n");
+        }
+    }
+
+    _com_error err(hr);
+    OutputDebugString(L"HRESULT: ");
+    OutputDebugString(err.ErrorMessage());
+    OutputDebugString(L"\n");
+
+    throw std::exception();
 }

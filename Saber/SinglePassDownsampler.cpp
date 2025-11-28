@@ -1,42 +1,47 @@
 #include "SinglePassDownsampler.h"
 
+#include "CommandList.h"
+#include "ConstantBuffer.h"
+#include "DescriptorHeapManager.h"
+#include "DescriptorHeapRange.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "GPUResource.h"
+
+#define FFX_CPU
+#include "FidelityFX/gpu/ffx_core.h"
+#include "FidelityFX/gpu/spd/ffx_spd.h"
+
+const std::wstring SinglePassDownsampler::BASE_NAME = L"SinglePassDownsampler";
+
 SinglePassDownsampler::SinglePassDownsampler(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas,
-    std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas,
-    std::shared_ptr<PSOLibrary> pPSOLibrary,
-    std::shared_ptr<DescriptorHeapManager> pDescHeapManagerCbvSrvUav,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     UINT64 width,
     UINT height
 ) {
     InitMaterial(
-        pDevice,
-        RootSignatureData(
-            pRootSignatureAtlas,
-            CreateRootSignatureBlob(pDevice),
+        pDeviceContext,
+        RootSignatureData{
+            CreateRootSignatureBlob(),
             L"AmdFfxSpdDownsamplePassRootSignature"
-        ),
-        ComputeShaderData(
-            pShaderAtlas,
+        },
+        ComputeShaderData{
             L"SinglePassDownsamplerCS.cso"
-        ),
-        pPSOLibrary
+        }
     );
 
-    m_pSpdCounterBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
-        L"SPDCounterBuffer", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+    m_pSpdCounterBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
+        BASE_NAME + L"/SpdCounterBuffer/Uav", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
     );
-    m_pSpdConstantBufferRange = pDescHeapManagerCbvSrvUav->AllocateRange(
-        L"SPDConstantBuffer", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+    m_pSpdConstantBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
+        BASE_NAME + L"/SpdConstantBuffer/Cbv", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
     );
 
-    Resize(pDevice, pAllocator, width, height);
+    Resize(pDeviceContext->GetDevice(), width, height);
 }
 
 void SinglePassDownsampler::Resize(
-    Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<Device> pDevice,
     UINT64 width,
     UINT height
 ) {
@@ -45,7 +50,8 @@ void SinglePassDownsampler::Resize(
 
     // global atomic counter buffer
     m_pSpdCounterBuffer = std::make_shared<GPUResource>(
-        pAllocator,
+        BASE_NAME + L"/SpdCounterBuffer",
+        pDevice,
         GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
         GPUResource::ResourceData{
             .resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
@@ -57,7 +63,7 @@ void SinglePassDownsampler::Resize(
     );
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
         .ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
-        .Buffer{ .NumElements{ 6 }, .StructureByteStride{ sizeof(FfxUInt32) }, }
+        .Buffer{ .NumElements{ 1 }, .StructureByteStride{ 6 * sizeof(FfxUInt32) }, }
     };
     m_pSpdCounterBuffer->CreateUnorderedAccessView(
         pDevice,
@@ -81,15 +87,19 @@ void SinglePassDownsampler::Resize(
     m_spdConstantBuffer.workGroupOffset[0] = workGroupOffset[0];
     m_spdConstantBuffer.workGroupOffset[1] = workGroupOffset[1];
     m_pSpdConstantBuffer = std::make_shared<ConstantBuffer>(
-        pAllocator,
-        sizeof(SPDConstantBuffer),
+        BASE_NAME + L"/SpdConstantBuffer",
+        pDevice,
+		sizeof(SPDConstantBuffer),
         &m_spdConstantBuffer
     );
-    m_pSpdConstantBuffer->CreateConstantBufferView(pDevice, m_pSpdConstantBufferRange->GetNextCpuHandle());
+    m_pSpdConstantBuffer->CreateConstantBufferView(
+        pDevice,
+        m_pSpdConstantBufferRange->GetNextCpuHandle()
+    );
 }
 
 void SinglePassDownsampler::Dispatch(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+    std::shared_ptr<CommandList> pCommandListCompute,
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
     D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
@@ -97,34 +107,34 @@ void SinglePassDownsampler::Dispatch(
 ) {
     ComputeObject::Dispatch(
         pCommandListCompute,
-        m_dispatchX,
-        m_dispatchY,
-        1,
-        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
-            pCommandListCompute->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(1, srvHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(3, midMipUavHandle);
-            pCommandListCompute->SetComputeRootDescriptorTable(4, mipsUavsHandle);
+        { m_dispatchX, m_dispatchY, 1 },
+        [&](std::shared_ptr<CommandList> pCommandListCompute, UINT& rootParamId) {
+            auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
+            pD3D12CommandList->SetDescriptorHeaps(1, pDescHeap.GetAddressOf());
+            pD3D12CommandList->SetComputeRootDescriptorTable(1, srvHandle);
+            pD3D12CommandList->SetComputeRootDescriptorTable(3, midMipUavHandle);
+            pD3D12CommandList->SetComputeRootDescriptorTable(4, mipsUavsHandle);
         }
     );
 }
 
 void SinglePassDownsampler::InnerRootParametersSetter(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+    std::shared_ptr<CommandList> pCommandList,
     UINT& rootParamId
 ) const {
-    pCommandListDirect->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
-    pCommandListDirect->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
+    auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+    pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
+	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(Microsoft::WRL::ComPtr<ID3D12Device2> pDevice) {
+Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob() {
     size_t rp{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
 
     // SPD ConstantBuffer
-    CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
-    rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
+	CD3DX12_DESCRIPTOR_RANGE1 rangeCbvSpd[1]{};
+	rangeCbvSpd[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+	rootParameters[rp++].InitAsDescriptorTable(_countof(rangeCbvSpd), rangeCbvSpd);
 
     // input texture
     CD3DX12_DESCRIPTOR_RANGE1 rangeSrvInput[1]{};
@@ -132,9 +142,9 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvInput), rangeSrvInput);
 
     // global atomic counter
-    CD3DX12_DESCRIPTOR_RANGE1 rangeUavCounter[1]{};
-    rangeUavCounter[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-    rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavCounter), rangeUavCounter);
+	CD3DX12_DESCRIPTOR_RANGE1 rangeUavCounter[1]{};
+	rangeUavCounter[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	rootParameters[rp++].InitAsDescriptorTable(_countof(rangeUavCounter), rangeUavCounter);
 
     // mid mipmap
     CD3DX12_DESCRIPTOR_RANGE1 rangeUavMidMipmap[1]{};
@@ -165,20 +175,11 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
-    if (FAILED(pDevice->CheckFeatureSupport(
-        D3D12_FEATURE_ROOT_SIGNATURE,
-        &featureData,
-        sizeof(featureData)
-    ))) {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
     // Serialize the root signature.
     Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
     HRESULT hr{ D3DX12SerializeVersionedRootSignature(
         &rootSignatureDescription,
-        featureData.HighestVersion,
+        D3D_ROOT_SIGNATURE_VERSION_1_1,
         &rootSignatureBlob,
         &errorBlob
     ) };

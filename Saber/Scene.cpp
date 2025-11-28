@@ -1,40 +1,84 @@
 #include "Scene.h"
-#include "Scene.h"
-#include "Scene.h"
+
+#include <functional>
+
+#include "Camera.h"
+#include "CommandList.h"
+#include "ComputeObject.h"
+#include "ConstantBuffer.h"
+#include "DepthBuffer.h"
+#include "DescriptorHeapManager.h"
+#include "Device.h"
+#include "DeviceContext.h"
+#include "MaterialManager.h"
+#include "RenderObject.h"
+#include "RenderSubsystem.h"
+#include "Texture.h"
 
 Scene::Scene(
     const std::wstring& name,
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapCpu,
-    std::shared_ptr<DynamicUploadHeap> pDynamicUploadHeapGpu,
+    std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
-    std::shared_ptr<GBuffer> pGBuffer
+    std::shared_ptr<Texture> pGBuffer
 ) : m_name(name),
-	m_pDynamicUploadHeapCpu(pDynamicUploadHeapCpu),
-	m_pDynamicUploadHeapGpu(pDynamicUploadHeapGpu),
 	m_pDepthBuffer(pDepthBuffer),
 	m_pGBuffer(pGBuffer)
 {
-    m_pRenderSubsystems.resize(RenderSubsystemId::Count);
-    m_pRenderSubsystems[RenderSubsystemId::Static] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static");
-    m_pRenderSubsystems[RenderSubsystemId::Dynamic] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic");
-    m_pRenderSubsystems[RenderSubsystemId::StaticAlphaKill] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Static/AlphaKill");
-    m_pRenderSubsystems[RenderSubsystemId::DynamicAlphaKill] =
-        std::make_shared<RenderSubsystem<CbMesh4IndirectCommand>>(m_name + L"/Dynamic/AlphaKill");
+    for (size_t i{}; i < RenderSubsystemType::Count; ++i) {
+        m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
+            m_name + L"/RenderSubsystem" + std::to_wstring(i + 1)
+        );
+    }
 	
     m_pSceneCb = std::make_shared<ConstantBuffer>(
-        pAllocator,
+        m_name + L"/SceneCb",
+        pDeviceContext->GetDevice(),
         sizeof(SceneBuffer),
         nullptr,
         GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT }
     );
+    m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
     m_pLightCB = std::make_shared<ConstantBuffer>(
-        pAllocator,
-        sizeof(LightBuffer)
+        m_name + L"/LightCB",
+        pDeviceContext->GetDevice(),
+        sizeof(LightBuffer),
+        &m_lightBuffer
     );
+
+    m_pTargetTexture = std::make_shared<Texture>(
+        m_name + L"/TargetTexture",
+        pDeviceContext,
+        CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            pGBuffer->GetWidth(), pGBuffer->GetHeight(), 1, 0, 1, 0,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+        ),
+        1
+    );
+}
+
+void Scene::Resize(
+    std::shared_ptr<Device> pDevice,
+    uint64_t width, uint32_t height
+) {
+    m_pTargetTexture->Resize(pDevice, width, height);
+    UpdateCamerasAspectRatio(static_cast<float>(width) / height);
+}
+
+void Scene::InitializeRenderSubsystems(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<ComputeObject> pIndirectUpdater
+) const {
+	for (size_t i{}; i < RenderSubsystemType::Count; ++i) {
+		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
+            pDeviceContext,
+			i & Dynamic ? pIndirectUpdater : nullptr
+		);
+        m_pRenderSubsystems[i]->InitializeModelBuffer(
+            pDeviceContext,
+            nullptr
+        );
+	}
 }
 
 /* scene readiness */
@@ -54,16 +98,28 @@ std::shared_ptr<DepthBuffer> Scene::GetDepthBuffer() {
 }
 
 /* g-buffer */
-void Scene::SetGBuffer(std::shared_ptr<GBuffer> pGBuffer) {
+void Scene::SetGBuffer(std::shared_ptr<Texture> pGBuffer) {
     m_pGBuffer = pGBuffer;
 }
-std::shared_ptr<GBuffer> Scene::GetGBuffer() {
+std::shared_ptr<Texture> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 
-void Scene::Update(float deltaTime, std::shared_ptr<CommandList> pCommandList) {
+void Scene::Update(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    float deltaTime
+) {
     TryUpdateCamera(deltaTime);
-    UpdateSceneBuffer(pCommandList->m_pCommandList);
+    UpdateSceneBuffer(pDeviceContext, pCommandList);
+}
+
+void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
+    m_pDepthBuffer->Clear(pCommandList);
+    if (m_pGBuffer) {
+        m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        m_pGBuffer->Clear(pCommandList);
+    }
 }
 
 void Scene::AddCamera(const std::shared_ptr<Camera>&& pCamera) {
@@ -126,14 +182,7 @@ void Scene::SetAmbientLight(
     const float& power
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-
-    m_lightBuffer.ambientColorAndPower = {
-        color.x,
-        color.y,
-        color.z,
-        power
-    };
-
+    m_lightBuffer.SetAmbientLight(color, power);
     m_isUpdateLightCB.store(true);
 }
 bool Scene::AddLightSource(
@@ -144,220 +193,70 @@ bool Scene::AddLightSource(
     const float& specularPower
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-    if (m_lightBuffer.lightsCount.x == LIGHTS_MAX_COUNT) {
-        return false;
+    bool result{ m_lightBuffer.Add(
+        position,
+        diffuseColor,
+        diffusePower,
+        specularColor,
+        specularPower
+    ) };
+
+    if (result) {
+        m_isUpdateLightCB.store(true);
+    }
+    return result;
+}
+
+void Scene::AddObject(
+    const RenderSubsystemType type,
+    std::shared_ptr<RenderObject> pObject
+) const {
+    m_pRenderSubsystems[type]->Add(pObject);
+}
+void Scene::RenderObjects(
+    const RenderSubsystemType type,
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    if (m_pRenderSubsystems[type]->IsUpdatePending()) {
+        m_pRenderSubsystems[type]->PerformUpdate(pDeviceContext, pCommandList);
     }
 
-    m_lightBuffer.lights[m_lightBuffer.lightsCount.x++] = {
-        position,
-        {
-            diffuseColor.x,
-            diffuseColor.y,
-            diffuseColor.z,
-            diffusePower
-        },
-        {
-            specularColor.x,
-            specularColor.y,
-            specularColor.z,
-            specularPower
+    auto commandListPrepare = [&] {
+        auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+        pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        pD3D12CommandList->RSSetViewports(1, &viewport);
+        pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+
+        std::shared_ptr<Texture> rts{ m_pGBuffer ? m_pGBuffer : m_pTargetTexture };
+        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{ rts->GetRtvs() };
+        pD3D12CommandList->OMSetRenderTargets(
+            static_cast<UINT>(rtvs.size()),
+            rtvs.data(),
+            FALSE,
+            &m_pDepthBuffer->GetDsvCpuDescHandle()
+        );
+
+        pD3D12CommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_sceneCBDynamicAllocation.gpuAddress
+        );
+        pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap().GetAddressOf());
+        if (type & AlphaKill) {
+            const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
+            pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+            pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         }
     };
 
-    m_isUpdateLightCB.store(true);
-    return true;
-}
-
-void Scene::AddStaticObject(std::shared_ptr<RenderObject> pObject) const {
-    m_pRenderSubsystems[Static]->Add(pObject);
-}
-void Scene::AddDynamicObject(std::shared_ptr<RenderObject> pObject) const {
-    m_pRenderSubsystems[Dynamic]->Add(pObject);
-}
-void Scene::AddStaticAlphaKillObject(std::shared_ptr<RenderObject> pObject) const {
-    m_pRenderSubsystems[StaticAlphaKill]->Add(pObject);
-}
-void Scene::AddDynamicAlphaKillObject(std::shared_ptr<RenderObject> pObject) const {
-    m_pRenderSubsystems[DynamicAlphaKill]->Add(pObject);
-}
-
-void Scene::RenderStaticObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
-) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
-        return;
-
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
-    if (m_pGBuffer) {
-        rtvs = m_pGBuffer->GetRtvs();
-    }
-    else {
-        rtvs.push_back(renderTargetView);
-    }
-
-    auto commandListPrepare = [&] {
-        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        pCommandList->RSSetViewports(1, &viewport);
-        pCommandList->RSSetScissorRects(1, &scissorRect);
-
-        pCommandList->OMSetRenderTargets(
-            static_cast<UINT>(rtvs.size()),
-            rtvs.data(),
-            FALSE,
-            &m_pDepthBuffer->GetDsvCpuDescHandle()
-        );
-
-        pCommandList->SetGraphicsRootConstantBufferView(
-            0,
-            m_sceneCBDynamicAllocation.gpuAddress
-        );
-    };
-
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pRenderSubsystems[Static]->Render(
-        pCommandList,
-        commandListPrepare
-    );
-}
-
-void Scene::RenderDynamicObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
-) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
-        return;
-
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
-    if (m_pGBuffer) {
-        rtvs = m_pGBuffer->GetRtvs();
-    }
-    else {
-        rtvs.push_back(renderTargetView);
-    }
-
-    auto commandListPrepare = [&] {
-        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        pCommandList->RSSetViewports(1, &viewport);
-        pCommandList->RSSetScissorRects(1, &scissorRect);
-
-        pCommandList->OMSetRenderTargets(
-            static_cast<UINT>(rtvs.size()),
-            rtvs.data(),
-            FALSE,
-            &m_pDepthBuffer->GetDsvCpuDescHandle()
-        );
-
-        pCommandList->SetGraphicsRootConstantBufferView(
-            0,
-            m_sceneCBDynamicAllocation.gpuAddress
-        );
-        };
-
-    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pRenderSubsystems[Dynamic]->Render(
-        pCommandList,
-        commandListPrepare
-    );
-}
-
-void Scene::RenderStaticAlphaKillObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
-    std::shared_ptr<MaterialManager> pMaterialManager
-) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
-        return;
-
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
-    if (m_pGBuffer) {
-        rtvs = m_pGBuffer->GetRtvs();
-    }
-    else {
-        rtvs.push_back(renderTargetView);
-    }
-
-    auto commandListPrepare = [&] {
-        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        pCommandList->RSSetViewports(1, &viewport);
-        pCommandList->RSSetScissorRects(1, &scissorRect);
-
-        pCommandList->OMSetRenderTargets(
-            static_cast<UINT>(rtvs.size()),
-            rtvs.data(),
-            FALSE,
-            &m_pDepthBuffer->GetDsvCpuDescHandle()
-        );
-
-        pCommandList->SetGraphicsRootConstantBufferView(
-            0,
-            m_sceneCBDynamicAllocation.gpuAddress
-        );
-        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-        pCommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
-        };
-
-    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pRenderSubsystems[StaticAlphaKill]->Render(
-        pCommandList,
-        commandListPrepare
-    );
-}
-
-void Scene::RenderDynamicAlphaKillObjects(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-    D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect,
-    D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView,
-    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
-    std::shared_ptr<MaterialManager> pMaterialManager
-) {
-    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
-        return;
-
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
-    if (m_pGBuffer) {
-        rtvs = m_pGBuffer->GetRtvs();
-    }
-    else {
-        rtvs.push_back(renderTargetView);
-    }
-
-    auto commandListPrepare = [&] {
-        pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        pCommandList->RSSetViewports(1, &viewport);
-        pCommandList->RSSetScissorRects(1, &scissorRect);
-
-        pCommandList->OMSetRenderTargets(
-            static_cast<UINT>(rtvs.size()),
-            rtvs.data(),
-            FALSE,
-            &m_pDepthBuffer->GetDsvCpuDescHandle()
-        );
-
-        pCommandList->SetGraphicsRootConstantBufferView(
-            0,
-            m_sceneCBDynamicAllocation.gpuAddress
-        );
-        pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-        pCommandList->SetGraphicsRootDescriptorTable(2, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-        pCommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
-        };
-
-    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pRenderSubsystems[DynamicAlphaKill]->Render(
+    m_pRenderSubsystems[type]->Render(
         pCommandList,
         commandListPrepare
     );
@@ -368,7 +267,7 @@ void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDefe
 }
 
 void Scene::RunDeferredShading(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute,
+    std::shared_ptr<CommandList> pCommandListCompute,
     std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
     std::shared_ptr<MaterialManager> pMaterialManager,
     UINT width,
@@ -377,6 +276,10 @@ void Scene::RunDeferredShading(
     if (!m_pDeferredShadingComputeObject) {
         return;
     }
+
+    m_pGBuffer->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
     UpdateLightBuffer();
 
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
@@ -384,59 +287,62 @@ void Scene::RunDeferredShading(
     constexpr int block_size{ 8 };
     m_pDeferredShadingComputeObject->Dispatch(
         pCommandListCompute,
-        (width + block_size - 1) / block_size,
-        (height + block_size - 1) / block_size,
-        1,
-        [&](Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListCompute, UINT& rootParamId) {
-            pCommandListCompute->SetComputeRootConstantBufferView(
+        { (width + block_size - 1) / block_size, (height + block_size - 1) / block_size, 1 },
+        [&](std::shared_ptr<CommandList> pCommandListCompute, UINT& rootParamId) {
+            auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
+            pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
                 m_sceneCBDynamicAllocation.gpuAddress
             );
-            pCommandListCompute->SetComputeRootConstantBufferView(
+            pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
                 m_pLightCB->GetResource()->GetGPUVirtualAddress()
             );
-            pCommandListCompute->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetUavDescHandle());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
-            pCommandListCompute->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
+            pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pTargetTexture->GetUavDescHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         }
     );
 }
 
-void Scene::SetPostProcessing(std::shared_ptr<PostProcessing> pPostProcessing) {
+void Scene::SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing) {
     m_pPostProcessing = pPostProcessing;
 }
 
 void Scene::RenderPostProcessing(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+    std::shared_ptr<CommandList> pCommandList,
     std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
 ) {
-    if (!m_pPostProcessing || !m_pGBuffer) {
+    if (!m_pPostProcessing) {
         return;
     }
+
+    m_pTargetTexture->ChangeState(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 	// prepare command list
 	UINT rootParameterIndex{};
 	{
+        auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+
 		m_pPostProcessing->SetPipelineStateAndRootSignature(pCommandList);
 
-		pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		pCommandList->RSSetViewports(1, &viewport);
-		pCommandList->RSSetScissorRects(1, &scissorRect);
+		pD3D12CommandList->RSSetViewports(1, &viewport);
+		pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
 
-		pCommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
+        pD3D12CommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
 
-		pCommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-		pCommandList->SetGraphicsRootDescriptorTable(
+		pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+		pD3D12CommandList->SetGraphicsRootDescriptorTable(
             rootParameterIndex++,
-			m_pGBuffer->GetSrvDescHandle(m_pGBuffer->GetSize() - 1)
+			m_pTargetTexture->GetSrvDescHandle()
 		);
     }
 
@@ -458,42 +364,43 @@ bool Scene::TryUpdateCamera(float deltaTime) {
     return true;
 }
 
-void Scene::UpdateSceneBuffer(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList) {
-    std::scoped_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
-    std::scoped_lock<std::mutex> camerasMutexLock(m_camerasMutex);
+void Scene::UpdateSceneBuffer(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+	std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
-    std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+	std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+	DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
+
+	std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
 
     m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
     m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-
-
-    DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
     m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+	m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
 
-    DynamicAllocation cpuAlloc = m_pDynamicUploadHeapCpu->Allocate(sizeof(SceneBuffer));
+    camerasMutexLock.unlock();
 
-    memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+    DynamicAllocation cpuAlloc = pDeviceContext->GetRingBuffer()->Allocate(sizeof(SceneBuffer));
+	memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
 
-    m_sceneCBDynamicAllocation = m_pDynamicUploadHeapGpu->Allocate(sizeof(SceneBuffer));
-    ResourceTransition(
+    sceneBufferMutexLock.unlock();
+
+    m_sceneCBDynamicAllocation = pDeviceContext->GetRingBuffer(RingBufferType::GPU)->Allocate(sizeof(SceneBuffer));
+    m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(
         pCommandList,
-        m_sceneCBDynamicAllocation.pBuffer->GetResource(),
-        D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_COPY_DEST
     );
-    pCommandList->CopyBufferRegion(
+    pCommandList->GetD3D12CommandList()->CopyBufferRegion(
         m_sceneCBDynamicAllocation.pBuffer->GetResource().Get(),
         m_sceneCBDynamicAllocation.offset,
         cpuAlloc.pBuffer->GetResource().Get(),
         cpuAlloc.offset,
         sizeof(SceneBuffer)
     );
-    ResourceTransition(
+    m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(
         pCommandList,
-        m_sceneCBDynamicAllocation.pBuffer->GetResource(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_GENERIC_READ
     );
 }

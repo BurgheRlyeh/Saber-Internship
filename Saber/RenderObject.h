@@ -1,20 +1,13 @@
 #pragma once
 
-#include <GLTFSDK/GLTF.h>
-
 #include "Headers.h"
 
-#include <filesystem>
-#include <initializer_list>
-
-#include "Atlas.h"
-#include "CommandQueue.h"
-#include "ConstantBuffer.h"
 #include "IndirectCommand.h"
-#include "Mesh.h"
-#include "PSOLibrary.h"
-#include "Resources.h"
-#include "Vertices.h"
+
+class CommandList;
+class DeviceContext;
+class RootSignatureResource;
+class ShaderResource;
 
 class RenderObject {
 protected:
@@ -29,21 +22,18 @@ protected:
 
 public:
     struct RootSignatureData {
-        std::shared_ptr<Atlas<RootSignatureResource>> pRootSignatureAtlas{};
         Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
     };
     struct ShaderData {
-        std::shared_ptr<Atlas<ShaderResource>> pShaderAtlas{};
-        LPCWSTR vertexShaderFilepath{};
-        LPCWSTR pixelShaderFilepath{};
+        std::wstring vertexShaderFilepath{};
+        std::wstring pixelShaderFilepath{};
     };
     struct PipelineStateData {
-        std::shared_ptr<PSOLibrary> pPSOLibrary{};
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     };
     void InitMaterial(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+        std::shared_ptr<DeviceContext> pDeviceContext,
         const RootSignatureData& rootSignatureData,
         const ShaderData& shaderData,
         PipelineStateData& pipelineStateData
@@ -51,9 +41,11 @@ public:
 
     virtual void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) {}
     virtual void FillIndirectCommand(CbMesh4IndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(ConstMesh4IndirectCommand& indirectCommand) {}
+    virtual void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) {}
 
 	virtual void Render(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect,
+        std::shared_ptr<CommandList> pCommandListDirect,
 		UINT rootParameterIndex
     ) const;
 
@@ -61,20 +53,27 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature() const;
 
 	void SetPipelineStateAndRootSignature(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
 	) const;
 
 protected:
     virtual void RenderJob(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandListDirect
+        std::shared_ptr<CommandList> pCommandList
     ) const;
 
     virtual void InnerRootParametersSetter(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+        std::shared_ptr<CommandList> pCommandList,
         UINT& rootParamId
     ) const;
 
     virtual void DrawCall(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList
+        std::shared_ptr<CommandList> pCommandList
     ) const = 0;
+};
+
+class FullscreenDrawPass : public RenderObject {
+protected:
+    virtual void DrawCall(
+        std::shared_ptr<CommandList> pCommandList
+    ) const override;
 };

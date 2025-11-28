@@ -1,21 +1,22 @@
 #include "DDSTexture.h"
 
+#include "DirectXTex.h"
+
+#include "CommandList.h"
+#include "DeviceContext.h"
+
 DDSTexture::DDSTexture(
 	const std::wstring& filename,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<CommandQueue> pCommandQueueCopy,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect
+	std::shared_ptr<DeviceContext> pDeviceContext,
+	std::shared_ptr<CommandList> pCommandListDirect
 ) {
-	LoadFromDDS(filename, pDevice, pAllocator, pCommandQueueCopy, pCommandQueueDirect);
+	LoadFromDDS(filename, pDeviceContext, pCommandListDirect);
 }
 
 void DDSTexture::LoadFromDDS(
 	const std::wstring& filename,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-	std::shared_ptr<CommandQueue> pCommandQueueCopy,
-	std::shared_ptr<CommandQueue> pCommandQueueDirect
+	std::shared_ptr<DeviceContext> pDeviceContext,
+	std::shared_ptr<CommandList> pCommandListDirect
 ) {
 	// load texture from dds
 	DirectX::ScratchImage image{};
@@ -23,7 +24,8 @@ void DDSTexture::LoadFromDDS(
 	
 	// create texture resource
 	CreateResource(
-		pAllocator,
+		filename,
+		pDeviceContext->GetDevice(),
 		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
 		ResourceData{
 			CD3DX12_RESOURCE_DESC::Tex2D(
@@ -32,8 +34,7 @@ void DDSTexture::LoadFromDDS(
 				image.GetMetadata().height,
 				static_cast<UINT16>(image.GetMetadata().arraySize),
 				static_cast<UINT16>(image.GetMetadata().mipLevels)
-			),
-			D3D12_RESOURCE_STATE_COPY_DEST
+			)
 		}
 	);
 	
@@ -46,28 +47,21 @@ void DDSTexture::LoadFromDDS(
 		}
 	}
 
-	std::shared_ptr<CommandList> pCommandListCopy{
-		pCommandQueueCopy->GetCommandList(pDevice)
+	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_DEST);
+	}
+	std::shared_ptr<GPUResource> pIntermediate{
+		CreateIntermediate(pDeviceContext->GetDevice(), 0, subresources.size())
 	};
-	std::shared_ptr<GPUResource> pIntermediate{};
-	UpdateSubresource(
-		pAllocator,
-		pCommandListCopy,
-		0,
-		subresources.size(),
+	UpdateSubresources(
+		pCommandListDirect,
+		pIntermediate,
 		subresources.data(),
-		pIntermediate
+		0, 0, subresources.size()
 	);
-	pCommandQueueCopy->ExecuteCommandListImmediately(pCommandListCopy);
+	pDeviceContext->AddIntermediate(pIntermediate);
 
-	std::shared_ptr<CommandList> pCommandListDirect{
-		pCommandQueueDirect->GetCommandList(pDevice)
-	};
-	ResourceTransition(
-		pCommandListDirect->m_pCommandList,
-		GetResource(),
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-	);
-	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
+	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	}
 }

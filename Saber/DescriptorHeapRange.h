@@ -5,7 +5,7 @@
 #include <optional>
 
 class DescHeapRange {
-	const std::wstring& m_name{};
+	const std::wstring m_name{};
 
 	UINT m_handleIncSize{};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_cpuHandle{};

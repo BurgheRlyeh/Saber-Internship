@@ -1,25 +1,14 @@
 #include "Math.hlsli"
-
-struct SceneBuffer
-{
-    matrix vpMatrix;
-    matrix invViewProjMatrix;
-    float4 cameraPosition;
-    float4 nearFar;
-};
+#include "ModelBuffer.h"
+#include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
 
-struct ModelBuffer
+cbuffer RootConstants : register(b1)
 {
-    matrix modelMatrix;
-    matrix normalMatrix;
-    uint4 materialId;
-};
-
-ConstantBuffer<ModelBuffer> ModelCB : register(b1);
-
-SamplerState s1 : register(s0);
+    uint modelCbId;
+}
+StructuredBuffer<ModelBuffer> ModelCBs : register(t0);
 
 struct PSInput
 {
@@ -50,7 +39,7 @@ PSOutput main(PSInput input)
     float4 tbnQuat = matrix_to_quaternion(tbnMatrix);
     
     PSOutput output;
-    output.uvMaterialId = float4(input.uv, ModelCB.materialId.x, 0.f);
+    output.uvMaterialId = float4(input.uv, ModelCBs[modelCbId].materialId.x, 0.f);
     output.tbn = tbnQuat;
     
     return output;

@@ -1,21 +1,12 @@
-struct SceneBuffer
-{
-    matrix vpMatrix;
-    matrix invViewProjMatrix;
-    float4 cameraPosition;
-    float4 nearFar;
-};
+#include "ModelBuffer.h"
+#include "SceneBuffer.h"
 
 ConstantBuffer<SceneBuffer> SceneCB : register(b0);
 
-struct ModelBuffer
-{
-    matrix modelMatrix;
-    matrix normalMatrix;
-    uint4 materialId;
-};
-
-ConstantBuffer<ModelBuffer> ModelCB : register(b1);
+cbuffer RootConstants : register(b1) {
+    uint modelCbId;
+}
+StructuredBuffer<ModelBuffer> ModelCBs : register(t0);
 
 struct VSOutput
 {
@@ -36,16 +27,16 @@ VSOutput main(
     VSOutput vtxOut;
     
     float4 pos = float4(position.xyz, 1.f);
-    vtxOut.worldPos = mul(ModelCB.modelMatrix, pos);
+    vtxOut.worldPos = mul(ModelCBs[modelCbId].modelMatrix, pos);
     
-    vtxOut.norm = mul(ModelCB.normalMatrix, float4(norm.xyz, 0.f)).xyz;
-    vtxOut.tang.xyz = mul(ModelCB.normalMatrix, float4(tang.xyz, 0.f)).xyz;
+    vtxOut.norm = mul(ModelCBs[modelCbId].normalMatrix, float4(norm.xyz, 0.f)).xyz;
+    vtxOut.tang.xyz = mul(ModelCBs[modelCbId].normalMatrix, float4(tang.xyz, 0.f)).xyz;
     vtxOut.tang.w = tang.w;
     
     vtxOut.uv = uv;
     
     pos = float4(vtxOut.worldPos, 1.f);
-    vtxOut.position = mul(SceneCB.vpMatrix, pos);
+    vtxOut.position = mul(SceneCB.viewProjMatrix, pos);
     
     return vtxOut;
 }

@@ -9,10 +9,13 @@
 #include <initializer_list>
 #include <variant>
 
-#include "CommandQueue.h"
+#include "DeviceContext.h"
 #include "CommandList.h"
 #include "GPUResource.h"
-#include "GLTFLoader.h"
+
+class CommandList;
+class DeviceContext;
+class GPUResource;
 
 class Mesh {
     std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};
@@ -27,18 +30,15 @@ class Mesh {
         void* data{};
         size_t count{};
         size_t size{};
-        DXGI_FORMAT format{};
     };
 
 public:
     struct VertexData {
         void* data{};
         size_t size{};
+        std::function<void(void*, size_t)> handler{};
     };
-    struct MeshDataVerticesIndices {
-        //void* vertices{};
-        //size_t verticesCnt{};
-        //size_t vertexSize{};
+    struct MeshDataIndicesVertices {
         // indices data
         void* indices{};
         size_t indicesCnt{};
@@ -50,8 +50,9 @@ public:
     };
 
     struct Attribute {
-        const std::string& name{};
+        const std::string name{};
         const size_t& size{};
+        std::function<void(void*, size_t)> handler{};
     };
 
     struct MeshDataGLTF {
@@ -61,12 +62,12 @@ public:
 
     struct MeshData {
         std::variant<
-            MeshDataVerticesIndices,
+            MeshDataIndicesVertices,
             MeshDataGLTF
         > data{};
 
         MeshData() = delete;
-        MeshData(const MeshDataVerticesIndices& vertexIndexData)
+        MeshData(const MeshDataIndicesVertices& vertexIndexData)
             : data(vertexIndexData)
         {}
         MeshData(const MeshDataGLTF & gltfData)
@@ -77,9 +78,8 @@ public:
     Mesh() = delete;
     Mesh(
         const std::wstring& filename,
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshData& meshData
     );
 
@@ -95,37 +95,37 @@ public:
 
 private:
     void InitFromVerticesIndices(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const MeshDataVerticesIndices& meshData
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        const MeshDataIndicesVertices& meshData
     );
     void InitFromGLTF(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         const MeshDataGLTF& meshData
     );
 
-    void AddVertexBuffer(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
-        const BufferData& bufferData
-    );
-
     void AddIndexBuffer(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData,
         DXGI_FORMAT indexFormat
     );
 
+    void AddVertexBuffer(
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        const BufferData& bufferData
+    );
+
     std::shared_ptr<GPUResource> CreateBuffer(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-        std::shared_ptr<CommandQueue> const& pCommandQueueCopy,
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData
     );
 };

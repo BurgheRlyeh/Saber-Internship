@@ -2,27 +2,25 @@
 
 #include "Headers.h"
 
-#include "DirectXTex.h"
+#include "TextureResource.h"
 
-#include "CommandQueue.h"
-#include "Texture.h"
+class CommandList;
+class DeviceContext;
 
-class DDSTexture : public Texture {
+class DDSTexture : public TextureResource {
+protected:
+	using TextureResource::TextureResource;
+
 public:
-	using Texture::Texture;
 	DDSTexture(
 		const std::wstring& filename,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		std::shared_ptr<CommandList> pCommandListDirect
 	);
 
 	void LoadFromDDS(
 		const std::wstring& filename,
-		Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-		Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-		std::shared_ptr<CommandQueue> pCommandQueueCopy,
-		std::shared_ptr<CommandQueue> pCommandQueueDirect
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		std::shared_ptr<CommandList> pCommandListDirect
 	);
 };

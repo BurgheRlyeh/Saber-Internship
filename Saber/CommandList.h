@@ -5,37 +5,29 @@
 #include <functional>
 
 class CommandList {
-	uint8_t m_priority{};
-	std::function<void(void)> m_beforeExec{};
-	std::function<void(void)> m_afterExec{};
+	std::wstring m_name{};
+
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pD3D12CommandList{};
+
 	std::atomic<bool> m_isReadyForExecution{};
 
-public:
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pCommandList{};
+	std::function<void()> m_beforeExec{};
+	std::function<void()> m_afterExec{};
 
+public:
 	CommandList(
+		const std::wstring& name,
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
-		uint8_t priority = 0,
-		std::function<void(void)> beforeExec = [=]() { return; },
-		std::function<void(void)> afterExec = [=]() { return; }
+		std::function<void()> beforeExec = []{},
+		std::function<void()> afterExec = []{}
 	);
 
-	template <typename T>
-	inline T operator->() const {
-		return m_pCommandList;
-	}
-
-	inline operator Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>() const {
-		return m_pCommandList;
-	}
-
-	uint16_t GetPriority() const;
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList() const;
+	D3D12_COMMAND_LIST_TYPE GetType() const;
 
 	bool IsReadyForExection() const;
-
 	void SetReadyForExection();
 
 	void BeforeExecute() const;
-
 	void AfterExecute() const;
 };

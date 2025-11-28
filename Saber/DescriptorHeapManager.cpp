@@ -1,16 +1,19 @@
 #include "DescriptorHeapManager.h"
 
+#include "DescriptorHeapRange.h"
+#include "Device.h"
+
 DescriptorHeapManager::DescriptorHeapManager(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
+	std::shared_ptr<Device> pDevice,
 	const D3D12_DESCRIPTOR_HEAP_DESC& heapDesc
 ) : m_heapDesc(heapDesc) {
 	m_pRangesAtlas = std::make_shared<Atlas<DescHeapRange>>(name);
 
-	ThrowIfFailed(pDevice->CreateDescriptorHeap(&m_heapDesc, IID_PPV_ARGS(&m_pDescHeap)));
+	ThrowIfFailed(pDevice->GetD3D12Device()->CreateDescriptorHeap(&m_heapDesc, IID_PPV_ARGS(&m_pDescHeap)));
 	m_pDescHeap->SetName(name.c_str());
 
-	m_handleIncSize = pDevice->GetDescriptorHandleIncrementSize(m_heapDesc.Type);
+	m_handleIncSize = pDevice->GetD3D12Device()->GetDescriptorHandleIncrementSize(m_heapDesc.Type);
 }
 
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeapManager::GetDescriptorHeap() const {

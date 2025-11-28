@@ -2,39 +2,22 @@
 
 #include "Headers.h"
 
-// To avoid conflicts and use only min/max defined in <algorithm>
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
 #include <algorithm>
 #include <chrono>
 #include <vector>
 
 #include <atomic>
 #include <mutex>
-#include <thread>
 
-#include "Atlas.h"
-#include "Camera.h"
-#include "CommandQueue.h"
-#include "CommandList.h"
-#include "DepthBuffer.h"
-#include "GBuffer.h"
-#include "IndirectUpdater.h"
-#include "PostProcessing.h"
-#include "PSOLibrary.h"
-#include "RenderObject.h"
-#include "Resources.h"
-#include "Scene.h"
-#include "SinglePassDownSampler.h"
-#include "MaterialManager.h"
 #include "JobSystem.h"
-#include "DynamicUploadRingBuffer.h"
+
+class DepthBuffer;
+class DescHeapRange;
+class Device;
+class DeviceContext;
+class Scene;
+class Texture;
+class TextureResource;
 
 class Renderer {
     // The number of swap chain back buffers.
@@ -50,20 +33,17 @@ class Renderer {
     // Set to true once the DX12 objects have been initialized.
     bool m_isInitialized{};
 
-    // DirectX 12 Objects
-    Microsoft::WRL::ComPtr<ID3D12Device2> m_pDevice{};
+    std::shared_ptr<DeviceContext> m_pDeviceContext{};
 
-    // Memory Allocator
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> m_pAllocator{};
-
+    // todo: move to some swapchain wrapper
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_pBackBuffers{};
+    std::vector<std::shared_ptr<TextureResource>> m_pBackBuffers{};
     std::shared_ptr<DescHeapRange> m_pBackBuffersDescHeapRange{};
     UINT m_currBackBufferId{};
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
 
-	// By default, enable V-Sync.
-	// Can be toggled with the V key.
+    // By default, enable V-Sync.
+    // Can be toggled with the V key.
     bool m_isTearingSupported{};
     bool m_isVSync{};
 
@@ -71,6 +51,7 @@ class Renderer {
     double m_elapsedSeconds{};
     std::chrono::high_resolution_clock m_clock{};
     std::chrono::steady_clock::time_point m_time{};
+    std::chrono::steady_clock::time_point m_sceneTime{};
 
     // render thread sync
     std::thread m_renderThread{};
@@ -82,10 +63,6 @@ class Renderer {
     std::atomic<uint32_t> m_resolutionWidthForResize{};
     std::atomic<uint32_t> m_resolutionHeightForResize{};
 
-    std::shared_ptr<CommandQueue> m_pCommandQueueDirect{};
-    std::shared_ptr<CommandQueue> m_pCommandQueueCompute{};
-    std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
-
     // Depth buffer.
     std::vector<std::shared_ptr<DepthBuffer>> m_pDepthBuffers{};
 
@@ -93,31 +70,12 @@ class Renderer {
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
 
     std::vector<std::unique_ptr<Scene>> m_pScenes{};
-    size_t m_currSceneId{ 2 };
+    size_t m_currSceneId{ 0 };
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
 
-    std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
-
-    std::shared_ptr<DescriptorHeapManager> m_pDsvDescHeapManager{};
-    std::shared_ptr<DescriptorHeapManager> m_pRtvDescHeapManager{};
-    std::shared_ptr<DescriptorHeapManager> m_pResourceDescHeapManager{};
-
-    enum RingBufferId {
-	    Cpu = 0,
-        Gpu = 1,
-        GpuWritable = 2,
-        Count = 3
-    };
-    std::vector<std::shared_ptr<DynamicUploadHeap>> m_pRingBuffers{};
-
-    // Atlases
-    std::shared_ptr<Atlas<Mesh>> m_pMeshAtlas{};
-    std::shared_ptr<Atlas<ShaderResource>> m_pShaderAtlas{};
-    std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
-    std::shared_ptr<PSOLibrary> m_pPSOLibrary{};
-    std::shared_ptr<MaterialManager> m_pMaterialManager{};
+    std::vector<std::shared_ptr<Texture>> m_pGBuffers{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
@@ -161,16 +119,26 @@ private:
 
 #if defined(_DEBUG)
     void EnableDebugLayer();
-    void SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice);
+    void EnableGPUBasedValidation();
+    void EnableDRED();
 #endif
 
-    Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+	Microsoft::WRL::ComPtr<IDXGIFactory6> CreateDxgiFactory(UINT createFlags = 0) const;
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterWarp(
+		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory
+	) const;
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterByPreference(
+		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+		const DXGI_GPU_PREFERENCE& preference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+		size_t id = 0,
+		const DXGI_ADAPTER_FLAG& flags = DXGI_ADAPTER_FLAG_NONE
+	) const;
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterByVideoMemory(
+		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+		size_t id = 0,
+		const DXGI_ADAPTER_FLAG& flags = DXGI_ADAPTER_FLAG_NONE
+	) const;
 
-    Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter);
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> CreateAllocator(
-        Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-        Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
-    );
     Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain(
         HWND hWnd,
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
@@ -178,8 +146,8 @@ private:
         uint32_t height,
         uint32_t bufferCount
     );
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> CreateBackBuffers(
-        Microsoft::WRL::ComPtr<ID3D12Device2> device,
+    std::vector<std::shared_ptr<TextureResource>> CreateBackBuffers(
+        std::shared_ptr<Device> pDevice,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
         std::shared_ptr<DescHeapRange> pDescHeapRange
     );

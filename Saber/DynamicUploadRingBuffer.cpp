@@ -1,110 +1,97 @@
 #include "DynamicUploadRingBuffer.h"
 
-RingBuffer::RingBuffer(size_t capacity)
-    : m_completedFramesAttribs(0, FrameAttribs(0, 0, 0))
-    , m_capacity(capacity)
+#include <stdexcept>
+
+#include "Device.h"
+#include "GPUResource.h"
+
+FenceBasedRawRingBuffer::FenceBasedRawRingBuffer(size_t numFrames, size_t capacity) :
+    FencedQueue(numFrames),
+    m_capacity(capacity)
 {}
 
-bool RingBuffer::Allocate(size_t size, size_t & offset) {
+bool FenceBasedRawRingBuffer::Allocate(size_t size, size_t & offset) {
     if (IsFull()) {
         return false;
     }
 
-    if (m_head <= m_tail) {
-        if (m_tail + size <= GetCapacity()) {
-            offset = m_tail;
+    //        tail          head                  
+    //        |             |                     
+    //  [xxxxx              xxxxxxxxxxxxxxxxxxx]  
+    if (m_tail < m_head && m_tail + size > m_head)
+        return false;
 
-            m_tail += size;
-            m_size += size;
-            m_currFrameSize += size;
+    //           head             tail        capacity  
+    //           |                |           |         
+    //  [        xxxxxxxxxxxxxxxxx            ]         
+    if (m_head < m_tail && m_tail + size > m_capacity) {
+        if (size > m_head)
+            return false;
 
-            return true;
-        }
-        else if (size <= m_head) {
-            offset = 0;
-
-            size_t addSize{ (GetCapacity() - m_tail) + size };
-            m_tail = size;
-            m_size += addSize;
-            m_currFrameSize += addSize;
-
-            return true;
-        }
-    }
-    else if (m_tail + size <= m_head) {
-        offset = m_tail;
-
-        m_tail += size;
-        m_size += size;
-        m_currFrameSize += size;
-
-        return true;
+        size += (m_capacity - m_tail);
+        m_tail = 0;
     }
 
-    return false;
+    offset = m_tail;
+    m_tail += size;
+    m_size += size;
+    m_currFrameSize += size;
+
+    return true;
 }
 
-void RingBuffer::FinishCurrentFrame(uint64_t fenceValue) {
-    m_completedFramesAttribs.emplace_back(fenceValue, m_tail, m_currFrameSize);
+MemorySegment FenceBasedRawRingBuffer::ProduceForPush() {
+    MemorySegment forPush{ m_tail, m_currFrameSize };
     m_currFrameSize = 0;
+    return forPush;
 }
 
-void RingBuffer::ReleaseCompletedFrames(uint64_t completedFenceValue) {
-    while (!m_completedFramesAttribs.empty() && m_completedFramesAttribs.front().fenceValue <= completedFenceValue) {
-        const FrameAttribs& oldestFrameTail{ m_completedFramesAttribs.front() };
-        assert(oldestFrameTail.size <= m_size);
-
-        m_size -= oldestFrameTail.size;
-        m_head = oldestFrameTail.offset;
-
-        m_completedFramesAttribs.pop_front();
-    }
+void FenceBasedRawRingBuffer::BeforePop(const MemorySegment& forPop) {
+    assert(forPop.size <= m_size);
+    m_size -= forPop.size;
+    m_head = forPop.offset;
 }
 
+// GPURingBuffer
 GPURingBuffer::GPURingBuffer(
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
+    std::shared_ptr<Device> pDevice,
     size_t capacity,
-    bool isCPUAccessable,
-    bool isGPUWritable
-) : RingBuffer(capacity),
+    const RingBufferType& type
+) : FenceBasedRawRingBuffer(3, capacity),
     m_cpuVirtualAddress(nullptr),
     m_gpuVirtualAddress(0)
 {
-
-    if (isCPUAccessable) {
-        m_pBuffer = std::make_shared<GPUResource>(
-            pAllocator,
-            GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-            GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
-                D3D12_RESOURCE_STATE_GENERIC_READ
-            }
-        );
-
-        m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+    switch (type) {
+    case RingBufferType::CPU: {
+		m_pBuffer = std::make_shared<GPUResource>(
+			L"RingBuffer/Upload",
+			pDevice,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceData{
+				CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
+				D3D12_RESOURCE_STATE_GENERIC_READ
+			}
+		);
+		m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+        break;
     }
-    else if (isGPUWritable) {
-        m_pBuffer = std::make_shared<GPUResource>(
-            pAllocator,
-            GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-            GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(
-                    GetCapacity(),
-                    D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-                ),
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-            }
-        );
+    case RingBufferType::GPU: {
+		m_pBuffer = std::make_shared<GPUResource>(
+			L"RingBuffer/Default",
+			pDevice,
+			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceData{
+				CD3DX12_RESOURCE_DESC::Buffer(
+					GetCapacity(),
+					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+				),
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+			}
+		);
+		break;
     }
-    else {
-        m_pBuffer = std::make_shared<GPUResource>(
-            pAllocator,
-            GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-            GPUResource::ResourceData{
-                CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
-                D3D12_RESOURCE_STATE_GENERIC_READ
-            }
-        );
+    default:
+        throw std::runtime_error("An attempt was made to create a ring buffer with unknown type");
     }
 
     m_gpuVirtualAddress = m_pBuffer->GetResource()->GetGPUVirtualAddress();
@@ -116,11 +103,11 @@ GPURingBuffer::~GPURingBuffer() {
 
 DynamicAllocation GPURingBuffer::Allocate(size_t size) {
     size_t offset{};
-    if (!RingBuffer::Allocate(size, offset)) {
-        return DynamicAllocation(nullptr, 0, 0);
+    if (!FenceBasedRawRingBuffer::Allocate(size, offset)) {
+        return DynamicAllocation{ nullptr, 0, 0 };
     }
 
-    DynamicAllocation DynAlloc(m_pBuffer, offset, size);
+    DynamicAllocation DynAlloc{ m_pBuffer, offset, size };
     DynAlloc.gpuAddress = m_gpuVirtualAddress + offset;
     if (DynAlloc.cpuAddress = m_cpuVirtualAddress) {
         DynAlloc.cpuAddress = reinterpret_cast<char*>(DynAlloc.cpuAddress) + offset;
@@ -138,16 +125,11 @@ void GPURingBuffer::Destroy() {
 }
 
 DynamicUploadHeap::DynamicUploadHeap(
-    Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator,
-    size_t initialCapacity,
-    bool isCPUAccessible,
-    bool isGPUWritable
-)
-    : m_pAllocator(pAllocator)
-    , m_isCPUAccessible(isCPUAccessible)
-	, m_isGPUWritable(isGPUWritable)
-{
-    m_ringBuffers.emplace_back(m_pAllocator, initialCapacity, m_isCPUAccessible, m_isGPUWritable);
+    std::shared_ptr<Device> pDevice,
+	size_t initialCapacity,
+	const RingBufferType& type
+) : m_pDevice(pDevice), m_type(type) {
+    m_ringBuffers.emplace_back(pDevice, initialCapacity, m_type);
 }
 
 DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
@@ -162,7 +144,7 @@ DynamicAllocation DynamicUploadHeap::Allocate(size_t size, size_t alignment) {
         while (newCapacity < alignedSize) {
             newCapacity <<= 1;
         }
-        m_ringBuffers.emplace_back(m_pAllocator, newCapacity, m_isCPUAccessible, m_isGPUWritable);
+        m_ringBuffers.emplace_back(m_pDevice, newCapacity, m_type);
         dynamicAllocation = m_ringBuffers.back().Allocate(alignedSize);
     }
 
@@ -173,12 +155,8 @@ void DynamicUploadHeap::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedF
     auto lastForDeleting = m_ringBuffers.begin();
 
     for (auto iter = m_ringBuffers.begin(); iter != m_ringBuffers.end(); ++iter) {
-        GPURingBuffer& RingBuff{ *iter };
-
-        RingBuff.FinishCurrentFrame(fenceValue);
-        RingBuff.ReleaseCompletedFrames(lastCompletedFenceValue);
-
-        if (RingBuff.IsEmpty() && iter == lastForDeleting && iter != --m_ringBuffers.end()) {
+        (*iter).FinishFrame(fenceValue, lastCompletedFenceValue);
+        if ((*iter).IsEmpty() && iter == lastForDeleting && iter != --m_ringBuffers.end()) {
             ++lastForDeleting;
         }
     }
