@@ -72,7 +72,7 @@ void Scene::InitializeRenderSubsystems(
 	for (size_t i{}; i < RenderSubsystemType::Count; ++i) {
 		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
             pDeviceContext,
-			i & Dynamic ? nullptr : pIndirectUpdater
+			i & Dynamic ? pIndirectUpdater : nullptr
 		);
         m_pRenderSubsystems[i]->InitializeModelBuffer(
             pDeviceContext,

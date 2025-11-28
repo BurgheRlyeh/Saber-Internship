@@ -97,6 +97,8 @@ void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pD
 
 		D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_HAS_NO_RESOURCE,            // For D3D12MA compatibility
 
+		D3D12_MESSAGE_ID_GPU_BASED_VALIDATION_INCOMPATIBLE_RESOURCE_STATE,	// TODO
+
 		D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
 
 		D3D12_MESSAGE_ID_GPU_BASED_VALIDATION_RESOURCE_STATE_IMPRECISE, // Occured by GBV when ExecuteIndirect is used
