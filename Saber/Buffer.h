@@ -2,13 +2,16 @@
 
 #include "Headers.h"
 
+#include <array>
+#include <bit>
+
+#include "BufferResource.h"
 #include "BufferUpdater.h"
 #include "ComputeObject.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "DynamicUploadRingBuffer.h"
-#include "GPUResource.h"
 
 template <typename T>
 class Buffer {
@@ -17,68 +20,76 @@ class Buffer {
 protected:
 	std::wstring m_name{};
 
-	std::shared_ptr<GPUResource> m_pResource{};
+	std::shared_ptr<BufferResource<T>> m_pResource{};
 
-	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
-	std::shared_ptr<DescHeapRange> m_pRtvsRange{};
-	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+	std::array<std::shared_ptr<DescRange>, static_cast<size_t>(DescRangeType::ResNumTypes)> m_pDescHeapRanges{};
 
-	size_t m_capacity{};
 	std::vector<T> m_data{};
 
 	std::unique_ptr<BufferUpdater<T>> m_pUpdater{};
 
-	GPUResource::HeapData m_heapData{};
-	GPUResource::ResourceData m_resData{};
-	D3D12MA::ALLOCATION_FLAGS m_allocFlags{};
+	D3D12MA::ALLOCATION_FLAGS m_allocationFlags{};
 
 public:
 	Buffer(
 		const std::wstring& name,
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		size_t capacity,
-		const GPUResource::HeapData& heapData = GPUResource::HeapData{},
-		const GPUResource::ResourceData& resData = GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0) },
-		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
-	) : m_name(name),
-		m_capacity(capacity),
-		m_heapData(heapData),
-		m_resData(resData),
-		m_allocFlags(allocationFlags)
-	{
-		
-		if (IsSrvDesc(resData.resDesc)) {
-			m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
-				m_name + L"/Ranges/Srv",
-				1,
-				D3D12_DESCRIPTOR_RANGE_TYPE_SRV
-			);
-		}
-		if (IsUavDesc(resData.resDesc)) {
-			m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
-				m_name + L"/Ranges/Uav",
-				1,
-				D3D12_DESCRIPTOR_RANGE_TYPE_UAV
-			);
-		}
-		if (IsRtvDesc(resData.resDesc)) {
-			m_pRtvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(
-				m_name + L"/Ranges/Rtv",
-				1
-			);
+		const GPUResource::AllocationDesc& allocDesc = {},
+		const GPUResource::ResourceDesc& resDesc = { CD3DX12_RESOURCE_DESC::Buffer(0) },
+		const EnumFlags<ResourceView> views = ResourceView::Any
+	) : m_name(name) {
+		for (size_t rangeTypeId{}; rangeTypeId < static_cast<size_t>(DescRangeType::ResNumTypes); ++rangeTypeId) {
+			ResourceView view{ FromId<ResourceView>(rangeTypeId) };
+			if ((view & views) && SupportsView(view, resDesc.resDesc)) {
+				m_pDescHeapRanges[rangeTypeId] = pDeviceContext->GetDescriptorHeap()->AllocateRange(
+					m_name + L"/Ranges/" + ToName(FromId<DescRangeType>(rangeTypeId)), 1
+				);
+			}
 		}
 
-		CreateBuffersAndViews(pDeviceContext->GetDevice(), capacity);
+		GPUResource::ResourceDesc resDescCopy{ resDesc };
+		CreateBufferAndViews(
+			pDeviceContext->GetDevice(),
+			capacity,
+			allocDesc,
+			resDescCopy
+		);
+	}
+
+	template <typename T, typename UploadBufferUpdater = InstUploadBufferUpdater>
+	static std::shared_ptr<Buffer<T>> CreateUploadBufferWithUpdater(
+		const std::wstring& name,
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		const EnumFlags<ResourceView> views = ResourceView::None
+	) {
+		auto pBuffer{ std::make_shared<Buffer<T>>(
+			name,
+			pDeviceContext,
+			1,
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceDesc{
+				CD3DX12_RESOURCE_DESC::Buffer(0),
+				D3D12_RESOURCE_STATE_GENERIC_READ
+			},
+			views
+		) };
+		pBuffer->CreateUpdater<UploadBufferUpdater<T>>();
+		return pBuffer;
+	}
+
+	std::shared_ptr<DescRange> GetDescRange(DescRangeType type) const {
+		return m_pDescHeapRanges[ToId(type)];
 	}
 
 	virtual ~Buffer() = default;
 
-	std::shared_ptr<GPUResource> GetResource() const {
+	std::shared_ptr<BufferResource<T>> GetResource() const {
 		return m_pResource;
 	}
 
 	size_t GetCapacity() const {
-		return m_capacity;
+		return GetResource()->GetCapacity();
 	}
 
 	template<std::derived_from<BufferUpdater<T>> Updater, typename... Args>
@@ -114,30 +125,33 @@ public:
 		std::shared_ptr<CommandList> pCommandListDirect,
 		uint32_t numElements
 	) {
-		if (numElements <= m_capacity) {
+		if (numElements <= GetCapacity()) {
 			return false;
 		}
 
 		std::shared_ptr<GPUResource> pOldResource{ m_pResource };
-		uint32_t oldCapacity{ static_cast<uint32_t>(m_capacity) };
+		uint32_t oldCapacity{ static_cast<uint32_t>(GetCapacity()) };
+		D3D12_RESOURCE_STATES oldState{ pOldResource->GetState() };
 
-		CreateBuffersAndViews(pDeviceContext->GetDevice(), numElements);
+		RecreateBufferAndViews(
+			pDeviceContext->GetDevice(),
+			numElements,
+			pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+				? D3D12_RESOURCE_STATE_COMMON
+				: D3D12_RESOURCE_STATE_COPY_DEST
+		);
 
 		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
 			pOldResource->ResourceTransition(
 				pCommandListDirect,
 				D3D12_RESOURCE_STATE_COPY_SOURCE
 			);
-			m_pResource->ResourceTransition(
-				pCommandListDirect,
-				D3D12_RESOURCE_STATE_COPY_DEST
-			);
 		}
 
 		pCommandListDirect->GetD3D12CommandList()->CopyBufferRegion(
-			m_pResource->GetResource().Get(),
+			m_pResource->GetD3D12Resource().Get(),
 			0,
-			pOldResource->GetResource().Get(),
+			pOldResource->GetD3D12Resource().Get(),
 			0,
 			oldCapacity * sizeof(T)
 		);
@@ -146,7 +160,7 @@ public:
 		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
 			m_pResource->ResourceTransition(
 				pCommandListDirect,
-				m_resData.resInitState
+				oldState
 			);
 		}
 
@@ -154,67 +168,54 @@ public:
 	}
 
 protected:
-	void CreateBuffersAndViews(
+	void CreateBufferAndViews(
 		std::shared_ptr<Device> pDevice,
-		uint32_t numElements
+		uint32_t numElements,
+		const GPUResource::AllocationDesc& allocDesc,
+		GPUResource::ResourceDesc& resDesc
 	) {
-		m_capacity = numElements;
-		
-		m_resData.resDesc.Width = m_capacity * sizeof(T);
-		m_pResource = std::make_shared<GPUResource>(
+		resDesc.resDesc.Width = numElements * sizeof(T);
+		m_pResource = std::make_shared<BufferResource<T>>(
 			m_name,
 			pDevice,
-			m_heapData,
-			m_resData,
-			m_allocFlags
+			numElements,
+			allocDesc,
+			resDesc
 		);
 
-		if (m_pSrvsRange) {
-			m_pSrvsRange->Clear();
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
-				.ViewDimension{ D3D12_SRV_DIMENSION_BUFFER },
-				.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
-				.Buffer{
-					.NumElements{ static_cast<uint32_t>(m_capacity) },
-					.StructureByteStride{ sizeof(T) }
-				}
-			};
-			m_pResource->CreateShaderResourceView(
-				pDevice,
-				m_pSrvsRange->GetNextCpuHandle(),
-				&srvDesc
-			);
+		for (size_t rangeTypeId{}; rangeTypeId < static_cast<size_t>(DescRangeType::ResNumTypes); ++rangeTypeId) {
+			if (auto& pRange = m_pDescHeapRanges[rangeTypeId]) {
+				pRange->Clear();
+				m_pResource->CreateResourceView(
+					FromId<ResourceView>(rangeTypeId),
+					pDevice,
+					pRange->GetNextCpuHandle()
+				);
+			}
 		}
+	}
 
-		if (m_pUavsRange) {
-			m_pUavsRange->Clear();
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
-				.ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
-				.Buffer{
-					.NumElements{ static_cast<uint32_t>(m_capacity) },
-					.StructureByteStride{ sizeof(T) }
-				}
-			};
-			m_pResource->CreateUnorderedAccessView(
-				pDevice,
-				m_pUavsRange->GetNextCpuHandle(),
-				&uavDesc
-			);
-		}
+	void RecreateBufferAndViews(
+		std::shared_ptr<Device> pDevice,
+		uint32_t numElements,
+		D3D12_RESOURCE_STATES initState
+	) {
+		assert(GetResource());
 
-		if (m_pRtvsRange) {
-			m_pRtvsRange->Clear();
-			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{
-				.ViewDimension{ D3D12_RTV_DIMENSION_BUFFER },
-				.Buffer{
-					.NumElements{ static_cast<uint32_t>(m_capacity) }
-				}
-			};
-			m_pResource->CreateRenderTargetView(
-				pDevice,
-				m_pRtvsRange->GetNextCpuHandle(),
-				&rtvDesc
-			);
-		}
+		GPUResource::AllocationDesc allocDesc{
+			GetResource()->GetHeapProperties().Type,
+			GetResource()->GetHeapFlags(),
+			m_allocationFlags
+		};
+		GPUResource::ResourceDesc resDesc{
+			GetResource()->GetResourceDesc(),
+			initState
+		};
+		CreateBufferAndViews(
+			pDevice,
+			numElements,
+			allocDesc,
+			resDesc
+		);
 	}
 };

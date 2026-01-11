@@ -64,23 +64,23 @@ GPURingBuffer::GPURingBuffer(
     switch (type) {
     case RingBufferType::CPU: {
 		m_pBuffer = std::make_shared<GPUResource>(
-			L"RingBuffer/Upload",
+			L"RingBuffer/Upload" + std::to_wstring(capacity),
 			pDevice,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-			GPUResource::ResourceData{
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceDesc{
 				CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
 				D3D12_RESOURCE_STATE_GENERIC_READ
 			}
 		);
-		m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+		m_pBuffer->GetD3D12Resource()->Map(0, nullptr, &m_cpuVirtualAddress);
         break;
     }
     case RingBufferType::GPU: {
 		m_pBuffer = std::make_shared<GPUResource>(
-			L"RingBuffer/Default",
+			L"RingBuffer/Default" + std::to_wstring(capacity),
 			pDevice,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			GPUResource::ResourceData{
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceDesc{
 				CD3DX12_RESOURCE_DESC::Buffer(
 					GetCapacity(),
 					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -94,7 +94,7 @@ GPURingBuffer::GPURingBuffer(
         throw std::runtime_error("An attempt was made to create a ring buffer with unknown type");
     }
 
-    m_gpuVirtualAddress = m_pBuffer->GetResource()->GetGPUVirtualAddress();
+    m_gpuVirtualAddress = m_pBuffer->GetD3D12Resource()->GetGPUVirtualAddress();
 }
 
 GPURingBuffer::~GPURingBuffer() {
@@ -118,7 +118,7 @@ DynamicAllocation GPURingBuffer::Allocate(size_t size) {
 
 void GPURingBuffer::Destroy() {
     if (m_pBuffer && m_cpuVirtualAddress) {
-        m_pBuffer->GetResource()->Unmap(0, nullptr);
+        m_pBuffer->GetD3D12Resource()->Unmap(0, nullptr);
     }
     m_cpuVirtualAddress = nullptr;
     m_gpuVirtualAddress = 0;

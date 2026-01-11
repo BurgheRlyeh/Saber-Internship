@@ -54,12 +54,12 @@ void DeviceContext::InitializeContext(
 
 	m_pMeshAtlas = std::make_shared<Atlas<Mesh>>(L"");
 	// TODO: divide name and path
-	m_pMaterialManager = std::make_shared<MaterialManager>(
-		L"../../Resources/Textures/",
-		m_pDevice,
-		m_pDescHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV],
-		1024
-	);
+	//m_pMaterialManager = std::make_shared<MaterialManager>(
+	//	L"../../Resources/Textures/",
+	//	m_pDevice,
+	//	m_pDescHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV],
+	//	1024
+	//);
 
 	const size_t RingBufferDefaultSize{ 1024 };
 	for (size_t i{}; i < static_cast<size_t>(RingBufferType::Count); ++i) {
@@ -96,6 +96,9 @@ void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pD
 		D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
 
 		D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_HAS_NO_RESOURCE,            // For D3D12MA compatibility
+
+		// TODO: make constant buffer's size at least D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT when GBV is enabled
+		D3D12_MESSAGE_ID_HEAP_ADDRESS_RANGE_INTERSECTS_MULTIPLE_BUFFERS,
 
 		D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,                     // Occurs when PSOLibrary tries to find unexisted PSO
 

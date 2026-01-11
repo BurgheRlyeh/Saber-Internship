@@ -1,6 +1,8 @@
 #include "DescriptorHeapRange.h"
 
-DescHeapRange::DescHeapRange(
+#include <stdexcept>
+
+DescRange::DescRange(
 	const std::wstring& name,
 	const size_t& capacity,
 	const UINT& handleIncSize,
@@ -15,12 +17,12 @@ DescHeapRange::DescHeapRange(
 	, m_type(type)
 {}
 
-DescHeapRange::DescHeapRange(
+DescRange::DescRange(
 	const std::wstring & name,
-	const DescHeapRange & other
-) : DescHeapRange(other) {}
+	const DescRange & other
+) : DescRange(other) {}
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescHeapRange::GetCpuHandle(size_t id) const {
+D3D12_CPU_DESCRIPTOR_HANDLE DescRange::GetCpuHandle(size_t id) const {
 	assert(id < m_size);
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(
 		m_cpuHandle,
@@ -29,7 +31,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescHeapRange::GetCpuHandle(size_t id) const {
 	);
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE DescHeapRange::GetGpuHandle(size_t id) const {
+D3D12_GPU_DESCRIPTOR_HANDLE DescRange::GetGpuHandle(size_t id) const {
 	assert(id < m_size);
 	return CD3DX12_GPU_DESCRIPTOR_HANDLE(
 		m_gpuHandle,
@@ -38,19 +40,19 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescHeapRange::GetGpuHandle(size_t id) const {
 	);
 }
 
-size_t DescHeapRange::GetSize() const {
+size_t DescRange::GetSize() const {
 	return m_size;
 }
 
-size_t DescHeapRange::GetNextId() {
+size_t DescRange::GetNextId() {
 	assert(m_size < m_capacity);
 	return m_size++;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescHeapRange::GetNextCpuHandle() {
+D3D12_CPU_DESCRIPTOR_HANDLE DescRange::GetNextCpuHandle() {
 	return GetCpuHandle(GetNextId());
 }
 
-void DescHeapRange::Clear() {
+void DescRange::Clear() {
 	m_size = 0;
 }

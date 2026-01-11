@@ -1,7 +1,7 @@
 #include "MaterialManager.h"
 
+#include "Buffer.h"
 #include "CommandList.h"
-#include "ConstantBuffer.h"
 #include "DDSTexture.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
@@ -13,30 +13,36 @@ const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
 
 MaterialManager::MaterialManager(
 	const std::wstring& resourceFolder,
-	std::shared_ptr<Device> pDevice,
+	std::shared_ptr<DeviceContext> pDeviceContext,
 	std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
 	const size_t& capacity
 ) {
 	m_pTextureAtlas = std::make_shared<Atlas<DDSTexture>>(resourceFolder);
 
-	m_pCBVsRange = pDescHeapManager->AllocateRange(
-		BASE_NAME + L"/Ranges/Cbv",
-		1,
-		D3D12_DESCRIPTOR_RANGE_TYPE_CBV
-	);
+	//m_pCBVsRange = pDescHeapManager->AllocateRange(
+	//	BASE_NAME + L"/Ranges/Cbv",
+	//	1,
+	//	D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+	//);
 	m_pSRVsRange = pDescHeapManager->AllocateRange(
 		BASE_NAME + L"/Ranges/Srv",
 		2 * capacity,	// (albedo + normal) * count
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 	);
 
-	m_pMaterialCB = std::make_shared<ConstantBuffer>(
+	m_pMaterialCB = std::make_shared<Buffer<MaterialCB>>(
 		BASE_NAME + L"/MaterialCB",
-		pDevice,
-		sizeof(MaterialCB),
-		&m_materialCB
+		pDeviceContext,
+		1,
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+		GPUResource::ResourceDesc{
+			CD3DX12_RESOURCE_DESC::Buffer(0),
+			D3D12_RESOURCE_STATE_GENERIC_READ
+		},
+		ResourceView::Cbv
 	);
-	m_pMaterialCB->CreateConstantBufferView(pDevice, m_pCBVsRange->GetNextCpuHandle());
+	m_pMaterialCB->CreateUpdater<InstUploadBufferUpdater<MaterialCB>>();
+	m_pMaterialCB->SetUpdateAll(&m_materialCB, 1);
 
 	m_pMaterials.reserve(capacity);
 
@@ -48,11 +54,11 @@ MaterialManager::~MaterialManager() {
 	m_pMaterials.clear();
 }
 
-std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialCBVsRange() const {
-	return m_pCBVsRange;
+std::shared_ptr<DescRange> MaterialManager::GetMaterialCBVsRange() const {
+	return m_pMaterialCB->GetDescRange(DescRangeType::Cbv);
 }
 
-std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialSRVsRange() const {
+std::shared_ptr<DescRange> MaterialManager::GetMaterialSRVsRange() const {
 	return m_pSRVsRange;
 }
 
@@ -77,7 +83,7 @@ size_t MaterialManager::AddMaterial(
 		0,
 		0
 	};
-	m_pMaterialCB->Update(&m_materialCB);
+	m_pMaterialCB->SetUpdateAll(&m_materialCB, 1);
 
 	return materialId;
 }

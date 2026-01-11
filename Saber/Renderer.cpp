@@ -17,6 +17,7 @@
 #include "Device.h"
 #include "DeviceContext.h"
 #include "IndirectUpdater.h"
+#include "MaterialManager.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
@@ -79,6 +80,12 @@ void Renderer::Initialize(HWND hWnd) {
         // DSV
         { 1 }
     }));
+    m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
+        L"../../Resources/Textures/",
+        m_pDeviceContext,
+        m_pDeviceContext->GetDescriptorHeap(),
+        1024
+    ));
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pDeviceContext->GetCommandQueue()->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
@@ -140,7 +147,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            pScene->AddObject(Default, TestTextureRenderObject::CreateTextureCube(
+            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
                 m_pDeviceContext,
                 pCommandList,
                 m_pGBuffers[0],
@@ -155,7 +162,7 @@ void Renderer::Initialize(HWND hWnd) {
             };
 
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddObject(Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
                 pCommandList,
                 filepath,
@@ -163,13 +170,13 @@ void Renderer::Initialize(HWND hWnd) {
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                m_pDeviceContext,
-                pCommandList,
-                filepathGrass,
-                m_pGBuffers[0],
-                DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
-            ));
+			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+				m_pDeviceContext,
+				pCommandList,
+				filepathGrass,
+				m_pGBuffers[0],
+				DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
+			));
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -185,7 +192,7 @@ void Renderer::Initialize(HWND hWnd) {
             std::mt19937 gen(rd());
             std::uniform_real_distribution<float> posDist(-10.f, 10.f);
             for (size_t i{}; i < 100; ++i) {
-                pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+                pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                     m_pDeviceContext,
                     pCommandList,
                     filepathGrass,
@@ -221,7 +228,7 @@ void Renderer::Initialize(HWND hWnd) {
                 );
 
                 // random lights
-                for (size_t i{}; i < 1; ++i) {
+                for (size_t i{}; i < 0; ++i) {
                     std::random_device rd;
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
@@ -439,7 +446,7 @@ void Renderer::Render() {
             L"Static Objects rendering"
         );
         scene->RenderObjects(
-            Default,
+            RenderSubsystemType::Default,
             m_pDeviceContext,
             commandListForStaticObjects,
             m_viewport,
@@ -461,7 +468,7 @@ void Renderer::Render() {
             L"Alphakill Objects rendering"
         );
         scene->RenderObjects(
-            AlphaKill,
+            RenderSubsystemType::AlphaKill,
             m_pDeviceContext,
             commandListForAlphaObjects,
             m_viewport,
@@ -488,14 +495,14 @@ void Renderer::Render() {
             L"Dynamic Objects rendering"
         );
         scene->RenderObjects(
-            Dynamic,
+            RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
             m_scissorRect
         );
         scene->RenderObjects(
-            static_cast<RenderSubsystemType>(AlphaKill | Dynamic),
+            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
@@ -512,7 +519,7 @@ void Renderer::Render() {
             L"HZB",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterRender); },
+            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterRender); },
             [&] { fenceValueAfterHZB = m_pDeviceContext->GetCommandQueue()->Signal(); }
         )
     };
@@ -523,7 +530,7 @@ void Renderer::Render() {
             L"DeferredShading",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterHZB); },
+            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterHZB); },
             [&] { fenceValueAfterDeferredShading = m_pDeviceContext->GetCommandQueue()->Signal(); }
         )
     };
@@ -532,7 +539,7 @@ void Renderer::Render() {
             L"AfterFrameJob",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterDeferredShading); }
+            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterDeferredShading); }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -806,7 +813,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
 std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
     std::shared_ptr<Device> pDevice,
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
-    std::shared_ptr<DescHeapRange> pDescHeapRange
+    std::shared_ptr<DescRange> pDescHeapRange
 ) {
     DXGI_SWAP_CHAIN_DESC desc{};
     ThrowIfFailed(pSwapChain->GetDesc(&desc));

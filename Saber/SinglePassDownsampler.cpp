@@ -1,7 +1,8 @@
 #include "SinglePassDownsampler.h"
 
+#include "Buffer.h"
+#include "BufferUpdater.h"
 #include "CommandList.h"
-#include "ConstantBuffer.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "Device.h"
@@ -30,12 +31,33 @@ SinglePassDownsampler::SinglePassDownsampler(
         }
     );
 
-    m_pSpdCounterBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
-        BASE_NAME + L"/SpdCounterBuffer/Uav", 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+    m_pSpdCounterBuffer = std::make_shared<Buffer<SpdGlobalAtomicBuffer>>(
+        BASE_NAME + L"/SpdCounterBuffer",
+        pDeviceContext,
+        1,
+        GPUResource::AllocationDesc{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+        GPUResource::ResourceDesc{
+            .resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+                sizeof(SpdGlobalAtomicBuffer),
+                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+            ) },
+            .resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
+		},
+        ResourceView::Uav
     );
-    m_pSpdConstantBufferRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(
-        BASE_NAME + L"/SpdConstantBuffer/Cbv", 1, D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+
+	m_pSpdConstantBuffer = std::make_shared<Buffer<SPDConstantBuffer>>(
+		BASE_NAME + L"/SpdConstantBuffer",
+        pDeviceContext,
+        1,
+        GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+		GPUResource::ResourceDesc{
+			CD3DX12_RESOURCE_DESC::Buffer(0),
+            D3D12_RESOURCE_STATE_GENERIC_READ
+        },
+        ResourceView::Cbv
     );
+    m_pSpdConstantBuffer->CreateUpdater<InstUploadBufferUpdater<SPDConstantBuffer>>();
 
     Resize(pDeviceContext->GetDevice(), width, height);
 }
@@ -45,32 +67,6 @@ void SinglePassDownsampler::Resize(
     UINT64 width,
     UINT height
 ) {
-    m_pSpdCounterBufferRange->Clear();
-    m_pSpdConstantBufferRange->Clear();
-
-    // global atomic counter buffer
-    m_pSpdCounterBuffer = std::make_shared<GPUResource>(
-        BASE_NAME + L"/SpdCounterBuffer",
-        pDevice,
-        GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
-        GPUResource::ResourceData{
-            .resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
-                sizeof(SpdGlobalAtomicBuffer),
-                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-            ) },
-            .resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
-        }
-    );
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
-        .ViewDimension{ D3D12_UAV_DIMENSION_BUFFER },
-        .Buffer{ .NumElements{ 1 }, .StructureByteStride{ 6 * sizeof(FfxUInt32) }, }
-    };
-    m_pSpdCounterBuffer->CreateUnorderedAccessView(
-        pDevice,
-        m_pSpdCounterBufferRange->GetNextCpuHandle(),
-        &uavDesc
-    );
-
     // spd constant buffer
     FfxUInt32x2 dispatchThreadGroupCountXY, workGroupOffset, numWorkGroupsAndMips;
     FfxUInt32x4 rectInfo{ 0, 0, width, height };
@@ -86,16 +82,7 @@ void SinglePassDownsampler::Resize(
     m_spdConstantBuffer.numWorkGroups = numWorkGroupsAndMips[0];
     m_spdConstantBuffer.workGroupOffset[0] = workGroupOffset[0];
     m_spdConstantBuffer.workGroupOffset[1] = workGroupOffset[1];
-    m_pSpdConstantBuffer = std::make_shared<ConstantBuffer>(
-        BASE_NAME + L"/SpdConstantBuffer",
-        pDevice,
-		sizeof(SPDConstantBuffer),
-        &m_spdConstantBuffer
-    );
-    m_pSpdConstantBuffer->CreateConstantBufferView(
-        pDevice,
-        m_pSpdConstantBufferRange->GetNextCpuHandle()
-    );
+    m_pSpdConstantBuffer->SetUpdateAll(&m_spdConstantBuffer, 1);
 }
 
 void SinglePassDownsampler::Dispatch(
@@ -123,8 +110,8 @@ void SinglePassDownsampler::InnerRootParametersSetter(
     UINT& rootParamId
 ) const {
     auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
-    pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBufferRange->GetGpuHandle());
-	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBufferRange->GetGpuHandle());
+    pD3D12CommandList->SetComputeRootDescriptorTable(0, m_pSpdConstantBuffer->GetDescRange(DescRangeType::Cbv)->GetGpuHandle());
+	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBuffer->GetDescRange(DescRangeType::Uav)->GetGpuHandle());
 }
 
 Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob() {

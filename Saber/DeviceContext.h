@@ -94,6 +94,10 @@ public:
 	std::shared_ptr<Atlas<Mesh>> GetMeshAtlas() const {
 		return m_pMeshAtlas;
 	}
+
+	void SetMaterialManager(std::shared_ptr<MaterialManager> pMaterialManager) {
+		m_pMaterialManager = pMaterialManager;
+	}
 	std::shared_ptr<MaterialManager> GetMaterialManager() const {
 		return m_pMaterialManager;
 	}

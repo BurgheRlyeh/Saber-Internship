@@ -8,7 +8,7 @@ DescriptorHeapManager::DescriptorHeapManager(
 	std::shared_ptr<Device> pDevice,
 	const D3D12_DESCRIPTOR_HEAP_DESC& heapDesc
 ) : m_heapDesc(heapDesc) {
-	m_pRangesAtlas = std::make_shared<Atlas<DescHeapRange>>(name);
+	m_pRangesAtlas = std::make_shared<Atlas<DescRange>>(name);
 
 	ThrowIfFailed(pDevice->GetD3D12Device()->CreateDescriptorHeap(&m_heapDesc, IID_PPV_ARGS(&m_pDescHeap)));
 	m_pDescHeap->SetName(name.c_str());
@@ -20,7 +20,7 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorHeapManager::GetDescripto
 	return m_pDescHeap;
 }
 
-std::shared_ptr<DescHeapRange> DescriptorHeapManager::AllocateRange(
+std::shared_ptr<DescRange> DescriptorHeapManager::AllocateRange(
 	const std::wstring& name,
 	const size_t& size,
 	const std::optional<D3D12_DESCRIPTOR_RANGE_TYPE>& type
@@ -28,7 +28,7 @@ std::shared_ptr<DescHeapRange> DescriptorHeapManager::AllocateRange(
 	assert(size);
 	assert(m_firstFreeId + size <= m_heapDesc.NumDescriptors);
 
-	std::shared_ptr<DescHeapRange> pRange{ m_pRangesAtlas->Assign(
+	std::shared_ptr<DescRange> pRange{ m_pRangesAtlas->Assign(
 		name,
 		size,
 		m_handleIncSize,
@@ -49,6 +49,6 @@ std::shared_ptr<DescHeapRange> DescriptorHeapManager::AllocateRange(
 	return pRange;
 }
 
-std::shared_ptr<DescHeapRange> DescriptorHeapManager::GetRange(const std::wstring& name) {
+std::shared_ptr<DescRange> DescriptorHeapManager::GetRange(const std::wstring& name) {
 	return m_pRangesAtlas->Find(name);
 }

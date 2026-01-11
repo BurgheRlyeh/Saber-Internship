@@ -42,8 +42,8 @@ void DepthBuffer::Resize(
 	m_pDepthBuffer = std::make_shared<TextureResource>(
 		m_name + L"/DepthBuffer",
 		pDevice,
-		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-		GPUResource::ResourceData{
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+		GPUResource::ResourceDesc{
 			resDesc,
 			D3D12_RESOURCE_STATE_COMMON,
 			&m_clearValue
@@ -103,8 +103,8 @@ bool DepthBuffer::ResizeHZB(
 	m_pHZBuffer = std::make_shared<TextureResource>(
 		m_name + L"/HierarchicalDepthBuffer",
 		pDevice,
-		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-		GPUResource::ResourceData{
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+		GPUResource::ResourceDesc{
 			resDesc,
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		}
@@ -158,9 +158,9 @@ void DepthBuffer::CreateHierarchicalDepthBuffer(
 	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
 	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	pCommandList->GetD3D12CommandList()->CopyTextureRegion(
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetD3D12Resource().Get(), 0),
 		0, 0, 0,
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetD3D12Resource().Get(), 0),
 		&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
 	);
 

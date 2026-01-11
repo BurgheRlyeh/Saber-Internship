@@ -70,9 +70,12 @@ public:
 		}
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
+		if (m_pModelBuffers->GetResource()->GetState() != D3D12_RESOURCE_STATE_GENERIC_READ) {
+			m_pModelBuffers->GetResource()->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_GENERIC_READ);
+		}
 		pCommandList->GetD3D12CommandList()->SetGraphicsRootShaderResourceView(
 			2,
-			m_pModelBuffers->GetResource()->GetResource()->GetGPUVirtualAddress()
+			m_pModelBuffers->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
 		);
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
@@ -85,8 +88,8 @@ public:
 			m_name + L"/ModelBuffers",
 			pDeviceContext,
 			m_capacity,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-			GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0), D3D12_RESOURCE_STATE_GENERIC_READ }
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceDesc{ CD3DX12_RESOURCE_DESC::Buffer(0), D3D12_RESOURCE_STATE_GENERIC_READ }
 		);
 		m_pModelBuffers->CreateUpdater<InstUploadBufferUpdater<ModelBuffer>>();
 

@@ -23,8 +23,8 @@ public:
 		renderSubsystemName,
 		pDeviceContext,
 		capacity,
-		GPUResource::HeapData{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
-		GPUResource::ResourceData{
+		GPUResource::AllocationDesc{ .heapType{ D3D12_HEAP_TYPE_DEFAULT } },
+		GPUResource::ResourceDesc{
 			.resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
 				capacity * sizeof(IndirectCommand),
 				D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -44,8 +44,8 @@ public:
 		}
 		pCommandList->GetD3D12CommandList()->ExecuteIndirect(
 			m_pCommandSignature.Get(),
-			m_capacity,
-			m_pResource->GetResource().Get(),
+			GetCapacity(),
+			m_pResource->GetD3D12Resource().Get(),
 			0,
 			nullptr,
 			0

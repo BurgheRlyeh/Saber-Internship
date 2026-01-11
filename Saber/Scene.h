@@ -5,15 +5,17 @@
 #include <array>
 #include <mutex>
 
+#include "EnumHelpers.h"
 #include "DynamicUploadRingBuffer.h"
 #include "IndirectCommand.h"
 #include "LightBuffer.h"
 #include "SceneBuffer.h"
 
+template <typename T>
+class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
-class ConstantBuffer;
 class DepthBuffer;
 class DescriptorHeapManager;
 class Device;
@@ -24,30 +26,30 @@ template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem;
 class Texture;
 
-enum RenderSubsystemType : size_t {
+enum class RenderSubsystemType : size_t {
     Default     = 0 << 0,
     Dynamic     = 1 << 0,
     AlphaKill   = 1 << 1,
     Count       = 1 << 2
 };
+ENABLE_ENUM_FLAGS(RenderSubsystemType);
 
 class Scene {
     std::wstring m_name{};
 
-    SceneBuffer m_sceneBuffer;
-    std::shared_ptr<ConstantBuffer> m_pSceneCb{};
+    SceneBuffer m_sceneBuffer{};
+    std::shared_ptr<Buffer<SceneBuffer>> m_pSceneCb{};
     std::mutex m_sceneBufferMutex{};
     std::atomic<bool> m_isUpdSceneCb{ true };
-    DynamicAllocation m_sceneCBDynamicAllocation{};
 
-    LightBuffer m_lightBuffer;
-    std::shared_ptr<ConstantBuffer> m_pLightCB{};
+    LightBuffer m_lightBuffer{};
+    std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
     std::mutex m_lightBufferMutex{};
     std::atomic<bool> m_isUpdateLightCB{};
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
-        RenderSubsystemType::Count
+        static_cast<size_t>(RenderSubsystemType::Count)
     > m_pRenderSubsystems{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
@@ -121,11 +123,11 @@ public:
     );
 
     void AddObject(
-        const RenderSubsystemType type,
+        const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<RenderObject> pObject
     ) const;
     void RenderObjects(
-        const RenderSubsystemType type,
+        const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,

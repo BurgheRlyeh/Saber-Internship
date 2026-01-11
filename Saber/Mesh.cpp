@@ -158,7 +158,7 @@ void Mesh::AddIndexBuffer(
     );
 
     m_indexBufferView = {
-        .BufferLocation{ m_pIndexBuffer->GetResource()->GetGPUVirtualAddress() },
+        .BufferLocation{ m_pIndexBuffer->GetD3D12Resource()->GetGPUVirtualAddress() },
         .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
         .Format{ indexFormat }
     };
@@ -178,7 +178,7 @@ void Mesh::AddVertexBuffer(
     ));
 
     m_bufferViews.push_back(D3D12_VERTEX_BUFFER_VIEW{
-        .BufferLocation{ m_pBuffers.back()->GetResource().Get()->GetGPUVirtualAddress() },
+        .BufferLocation{ m_pBuffers.back()->GetD3D12Resource().Get()->GetGPUVirtualAddress() },
         .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
         .StrideInBytes{ static_cast<UINT>(bufferData.size) }
         });
@@ -195,8 +195,8 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
     std::shared_ptr<GPUResource> pBuffer{ std::make_shared<GPUResource>(
         bufferName,
         pDeviceContext->GetDevice(),
-        GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-        GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(bufferSize) }
+        GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+        GPUResource::ResourceDesc{ CD3DX12_RESOURCE_DESC::Buffer(bufferSize) }
     ) };
 
     D3D12_SUBRESOURCE_DATA subresourceData{

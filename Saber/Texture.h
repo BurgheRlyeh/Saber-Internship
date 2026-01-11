@@ -17,9 +17,9 @@ class Texture {
 
 	std::vector<std::shared_ptr<TextureResource>> m_pTextures{};
 
-	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
-	std::shared_ptr<DescHeapRange> m_pRtvsRange{};
-	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+	std::shared_ptr<DescRange> m_pSrvsRange{};
+	std::shared_ptr<DescRange> m_pRtvsRange{};
+	std::shared_ptr<DescRange> m_pUavsRange{};
 
 public:
 	Texture(
@@ -87,8 +87,8 @@ public:
 			m_pTextures[i] = std::make_shared<TextureResource>(
 				m_name + L"/Texture" + std::to_wstring(i),
 				pDevice,
-				GPUResource::HeapData{},
-				GPUResource::ResourceData{ m_desc }
+				GPUResource::AllocationDesc{},
+				GPUResource::ResourceDesc{ m_desc }
 			);
 			if (m_pRtvsRange) {
 				m_pTextures[i]->CreateRenderTargetView(pDevice, m_pRtvsRange->GetNextCpuHandle());

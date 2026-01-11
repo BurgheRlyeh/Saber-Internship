@@ -3,7 +3,7 @@
 #include "Headers.h"
 
 class CommandList;
-class DescHeapRange;
+class DescRange;
 class Device;
 class DeviceContext;
 class SinglePassDownsampler;
@@ -23,11 +23,11 @@ class DepthBuffer {
 	std::shared_ptr<TextureResource> m_pDepthBuffer{};
 	std::shared_ptr<TextureResource> m_pHZBuffer{};
 
-	std::shared_ptr<DescHeapRange> m_pDsvsRange{};
-	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
+	std::shared_ptr<DescRange> m_pDsvsRange{};
+	std::shared_ptr<DescRange> m_pSrvsRange{};
 	size_t m_depthSrvId{};
 	size_t m_hzbSrvId{};
-	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+	std::shared_ptr<DescRange> m_pUavsRange{};
 
 	std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
 

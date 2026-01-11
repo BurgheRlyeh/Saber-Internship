@@ -2,10 +2,10 @@
 
 #include <functional>
 
+#include "Buffer.h"
 #include "Camera.h"
 #include "CommandList.h"
 #include "ComputeObject.h"
-#include "ConstantBuffer.h"
 #include "DepthBuffer.h"
 #include "DescriptorHeapManager.h"
 #include "Device.h"
@@ -24,26 +24,39 @@ Scene::Scene(
 	m_pDepthBuffer(pDepthBuffer),
 	m_pGBuffer(pGBuffer)
 {
-    for (size_t i{}; i < RenderSubsystemType::Count; ++i) {
+    for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
         m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
             m_name + L"/RenderSubsystem" + std::to_wstring(i + 1)
         );
     }
 	
-    m_pSceneCb = std::make_shared<ConstantBuffer>(
+    m_pSceneCb = std::make_shared<Buffer<SceneBuffer>>(
         m_name + L"/SceneCb",
-        pDeviceContext->GetDevice(),
-        sizeof(SceneBuffer),
-        nullptr,
-        GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT }
+        pDeviceContext,
+        1,
+        GPUResource::AllocationDesc{},
+        GPUResource::ResourceDesc{
+            CD3DX12_RESOURCE_DESC::Buffer(0),
+            D3D12_RESOURCE_STATE_GENERIC_READ
+        },
+        EnumFlags<ResourceView>{ ResourceView::None }
     );
+    m_pSceneCb->CreateUpdater<StaticBufferUpdater<SceneBuffer>>();
+
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
-    m_pLightCB = std::make_shared<ConstantBuffer>(
+    m_pLightCB = std::make_shared<Buffer<LightBuffer>>(
         m_name + L"/LightCB",
-        pDeviceContext->GetDevice(),
-        sizeof(LightBuffer),
-        &m_lightBuffer
-    );
+        pDeviceContext,
+		1,
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+		GPUResource::ResourceDesc{
+            CD3DX12_RESOURCE_DESC::Buffer(0),
+			D3D12_RESOURCE_STATE_GENERIC_READ
+        },
+        EnumFlags<ResourceView>{ ResourceView::None }
+	);
+    m_pLightCB->CreateUpdater<InstUploadBufferUpdater<LightBuffer>>();
+    m_pLightCB->SetUpdateAll(&m_lightBuffer, 1);
 
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
@@ -69,10 +82,11 @@ void Scene::InitializeRenderSubsystems(
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<ComputeObject> pIndirectUpdater
 ) const {
-	for (size_t i{}; i < RenderSubsystemType::Count; ++i) {
+    for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
+        RenderSubsystemType type{ FromId<RenderSubsystemType>(i) };
 		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
             pDeviceContext,
-			i & Dynamic ? nullptr : pIndirectUpdater
+            type & RenderSubsystemType::Dynamic ? pIndirectUpdater : nullptr
 		);
         m_pRenderSubsystems[i]->InitializeModelBuffer(
             pDeviceContext,
@@ -208,13 +222,13 @@ bool Scene::AddLightSource(
 }
 
 void Scene::AddObject(
-    const RenderSubsystemType type,
+    const EnumFlags<RenderSubsystemType> type,
     std::shared_ptr<RenderObject> pObject
 ) const {
-    m_pRenderSubsystems[type]->Add(pObject);
+    m_pRenderSubsystems[ToId(type)]->Add(pObject);
 }
 void Scene::RenderObjects(
-    const RenderSubsystemType type,
+    const EnumFlags<RenderSubsystemType> type,
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandList,
     D3D12_VIEWPORT viewport,
@@ -223,8 +237,8 @@ void Scene::RenderObjects(
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
 
-    if (m_pRenderSubsystems[type]->IsUpdatePending()) {
-        m_pRenderSubsystems[type]->PerformUpdate(pDeviceContext, pCommandList);
+    if (m_pRenderSubsystems[ToId(type)]->IsUpdatePending()) {
+        m_pRenderSubsystems[ToId(type)]->PerformUpdate(pDeviceContext, pCommandList);
     }
 
     auto commandListPrepare = [&] {
@@ -244,11 +258,11 @@ void Scene::RenderObjects(
         );
 
         pD3D12CommandList->SetGraphicsRootConstantBufferView(
-            0,
-            m_sceneCBDynamicAllocation.gpuAddress
+			0,
+			m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
         );
         pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap().GetAddressOf());
-        if (type & AlphaKill) {
+        if (type & RenderSubsystemType::AlphaKill) {
             const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
             pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
             pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
@@ -256,7 +270,7 @@ void Scene::RenderObjects(
     };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
-    m_pRenderSubsystems[type]->Render(
+    m_pRenderSubsystems[ToId(type)]->Render(
         pCommandList,
         commandListPrepare
     );
@@ -292,11 +306,11 @@ void Scene::RunDeferredShading(
             auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
             pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
-                m_sceneCBDynamicAllocation.gpuAddress
+                m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             );
             pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
-                m_pLightCB->GetResource()->GetGPUVirtualAddress()
+                m_pLightCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             );
             pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
@@ -382,33 +396,16 @@ void Scene::UpdateSceneBuffer(
 
     camerasMutexLock.unlock();
 
-    DynamicAllocation cpuAlloc = pDeviceContext->GetRingBuffer()->Allocate(sizeof(SceneBuffer));
-	memcpy(cpuAlloc.cpuAddress, &m_sceneBuffer, sizeof(SceneBuffer));
+	m_pSceneCb->SetUpdateAll(&m_sceneBuffer, 1);
+	sceneBufferMutexLock.unlock();
 
-    sceneBufferMutexLock.unlock();
-
-    m_sceneCBDynamicAllocation = pDeviceContext->GetRingBuffer(RingBufferType::GPU)->Allocate(sizeof(SceneBuffer));
-    m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(
-        pCommandList,
-        D3D12_RESOURCE_STATE_COPY_DEST
-    );
-    pCommandList->GetD3D12CommandList()->CopyBufferRegion(
-        m_sceneCBDynamicAllocation.pBuffer->GetResource().Get(),
-        m_sceneCBDynamicAllocation.offset,
-        cpuAlloc.pBuffer->GetResource().Get(),
-        cpuAlloc.offset,
-        sizeof(SceneBuffer)
-    );
-    m_sceneCBDynamicAllocation.pBuffer->ResourceTransition(
-        pCommandList,
-        D3D12_RESOURCE_STATE_GENERIC_READ
-    );
+    m_pSceneCb->PerformUpdate(pDeviceContext, pCommandList);
 }
 
 void Scene::UpdateLightBuffer() {
     bool expected{ true };
     if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
         std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-        m_pLightCB->Update(&m_lightBuffer);
+        m_pLightCB->SetUpdateAll(&m_lightBuffer, 1);
     }
 }

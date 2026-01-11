@@ -5,11 +5,12 @@
 #include "Atlas.h"
 #include "MaterialCB.h"
 
+template <typename T>
+class Buffer;
 class CommandList;
-class ConstantBuffer;
 class DDSTexture;
 class DescriptorHeapManager;
-class DescHeapRange;
+class DescRange;
 class Device;
 class DeviceContext;
 class TextureResource;
@@ -17,11 +18,10 @@ class TextureResource;
 class MaterialManager {
 	static const std::wstring BASE_NAME;
 
-	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
-	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
+	std::shared_ptr<DescRange> m_pSRVsRange{};
 
 	MaterialCB m_materialCB{};
-	std::shared_ptr<ConstantBuffer> m_pMaterialCB{};
+	std::shared_ptr<Buffer<MaterialCB>> m_pMaterialCB{};
 
 	struct RenderMaterial {
 		std::shared_ptr<TextureResource> pAlbedo{};
@@ -34,14 +34,14 @@ class MaterialManager {
 public:
 	MaterialManager(
 		const std::wstring& resourceFolder,
-		std::shared_ptr<Device> pDevice,
+		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
 		const size_t& capacity
 	);
 	~MaterialManager();
 
-	std::shared_ptr<DescHeapRange> GetMaterialCBVsRange() const;
-	std::shared_ptr<DescHeapRange> GetMaterialSRVsRange() const;
+	std::shared_ptr<DescRange> GetMaterialCBVsRange() const;
+	std::shared_ptr<DescRange> GetMaterialSRVsRange() const;
 
 	size_t AddMaterial(
 		std::shared_ptr<DeviceContext> pDeviceContext,

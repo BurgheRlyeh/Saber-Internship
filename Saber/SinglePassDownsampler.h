@@ -4,9 +4,10 @@
 
 #include "ComputeObject.h"
 
+template <typename T>
+class Buffer;
 class CommandList;
-class ConstantBuffer;
-class DescHeapRange;
+class DescRange;
 class Device;
 class DeviceContext;
 class GPUResource;
@@ -17,8 +18,7 @@ class SinglePassDownsampler : public ComputeObject {
     struct SpdGlobalAtomicBuffer {
         uint32_t counter[6]{};
     };
-    std::shared_ptr<GPUResource> m_pSpdCounterBuffer{};
-    std::shared_ptr<DescHeapRange> m_pSpdCounterBufferRange{};
+    std::shared_ptr<Buffer<SpdGlobalAtomicBuffer>> m_pSpdCounterBuffer{};
 
     struct SPDConstantBuffer {
         uint32_t mips{};
@@ -26,9 +26,8 @@ class SinglePassDownsampler : public ComputeObject {
         uint32_t workGroupOffset[2]{};
         float invInputSize[2]{};     // Only used for linear sampling mode
         float padding[2]{};
-    } m_spdConstantBuffer{};
-    std::shared_ptr<ConstantBuffer> m_pSpdConstantBuffer{};
-    std::shared_ptr<DescHeapRange> m_pSpdConstantBufferRange{};
+	} m_spdConstantBuffer{};
+	std::shared_ptr<Buffer<SPDConstantBuffer>> m_pSpdConstantBuffer{};
 
     uint32_t m_dispatchX{};
     uint32_t m_dispatchY{};

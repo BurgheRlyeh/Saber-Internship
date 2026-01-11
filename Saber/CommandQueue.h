@@ -68,6 +68,7 @@ public:
 	uint64_t ExecutionTask(uint64_t waitFenceValue);
 
 	uint64_t Signal();
+	void Wait(uint64_t fenceValue);
 	bool IsFenceComplete(uint64_t fenceValue);
 	void WaitForFenceValue(uint64_t fenceValue);
 	void Flush();

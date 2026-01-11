@@ -8,7 +8,7 @@
 #include <limits>
 
 #include "Atlas.h"
-#include "ConstantBuffer.h"
+#include "Buffer.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
 #include "Mesh.h"
@@ -25,7 +25,7 @@ protected:
     std::shared_ptr<Mesh> m_pMesh{};
 
     ModelBuffer m_modelBuffer{};
-    std::shared_ptr<ConstantBuffer> m_pModelCb{};
+    std::shared_ptr<Buffer<ModelBuffer>> m_pModelCb{};
     size_t m_modelBufferId{ static_cast<size_t>(-1) };
 
 public:
@@ -37,12 +37,12 @@ public:
         if (pModelBuffer) {
             m_modelBuffer = *pModelBuffer;
         }
-        m_pModelCb = std::make_shared<ConstantBuffer>(
-            m_name + L"/ModelCb",
-            pDevice,
-            sizeof(ModelBuffer),
-            &m_modelBuffer
-        );
+		/*m_pModelCb = std::make_shared<Buffer<ModelBuffer>>(
+			m_name + L"/ModelCb",
+			pDevice,
+			sizeof(ModelBuffer),
+			&m_modelBuffer
+		);*/
     }
 
     struct MeshInitData {
@@ -64,13 +64,6 @@ public:
     void SetModelBufferId(size_t id) {
         m_modelBufferId = id;
     }
-    void AllocateModelBufferCbv(
-        std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<DescHeapRange> pModelCBVsRange
-    ) {
-        m_modelBufferId = pModelCBVsRange->GetNextId();
-        m_pModelCb->CreateConstantBufferView(pDeviceContext->GetDevice(), pModelCBVsRange->GetCpuHandle(m_modelBufferId));
-    }
     ModelBuffer& GetModelBuffer() {
         return m_modelBuffer;
     }
@@ -85,7 +78,7 @@ public:
     void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) override {
         indirectCommand = CbMeshIndirectCommand{
             .constantBufferView{
-                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+                m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             },
             .indexBufferView{
                 *m_pMesh->GetIndexBufferView()
@@ -103,7 +96,7 @@ public:
     void FillIndirectCommand(CbMesh4IndirectCommand& indirectCommand) override {
         indirectCommand = CbMesh4IndirectCommand{
             .constantBufferView{
-                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+                m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             },
             .indexBufferView{
                 *m_pMesh->GetIndexBufferView()
@@ -139,7 +132,7 @@ public:
     void FillIndirectCommand(CbConstMesh4IndirectCommand& indirectCommand) override {
         indirectCommand = CbConstMesh4IndirectCommand{
             .constantBufferView{
-                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+                m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             },
             .rootConstant{ DirectX::XMUINT4{ static_cast<uint32_t>(m_modelBufferId), 0, 0, 0 } },
             .indexBufferView{
@@ -194,7 +187,7 @@ protected:
         if (m_modelBufferId == static_cast<size_t>(-1)) {
             pD3D12CommandList->SetGraphicsRootConstantBufferView(
                 rootParamId++,
-                m_pModelCb->GetResource()->GetGPUVirtualAddress()
+                m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             );
         }
         else {
@@ -318,7 +311,6 @@ public:
             L"Brick.dds",
             L"BrickNM.dds"
         ));
-        pObj->UpdateModelBuffer();
 
         return pObj;
     }
@@ -380,7 +372,6 @@ public:
             L"barbarian_diffuse.dds",
             L"barb2_n.dds"
         ));
-        pObj->UpdateModelBuffer();
 
         return pObj;
     }
@@ -499,7 +490,6 @@ public:
             L"grassAlbedo.dds",
             L"grassNormal.dds"
         ));
-        pObj->UpdateModelBuffer();
 
         return pObj;
     }

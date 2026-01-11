@@ -161,12 +161,12 @@
   <ItemGroup>
     <ClInclude Include="Atlas.h" />
     <ClInclude Include="Buffer.h" />
+    <ClInclude Include="BufferResource.h" />
     <ClInclude Include="BufferUpdater.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CommandList.h" />
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="ComputeObject.h" />
-    <ClInclude Include="ConstantBuffer.h" />
     <ClInclude Include="CppHlslTypesRedefine.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
     <ClInclude Include="DDSTexture.h" />
@@ -177,6 +177,7 @@
     <ClInclude Include="Device.h" />
     <ClInclude Include="DeviceContext.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
+    <ClInclude Include="EnumHelpers.h" />
     <ClInclude Include="FencedQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GLTFLoader.h" />
@@ -218,7 +219,6 @@
     <ClCompile Include="CommandList.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="ComputeObject.cpp" />
-    <ClCompile Include="ConstantBuffer.cpp" />
     <ClCompile Include="D3D12MemAlloc.cpp" />
     <ClCompile Include="DDSTexture.cpp" />
     <ClCompile Include="DeferredShading.cpp" />
