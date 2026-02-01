@@ -597,9 +597,7 @@ void Renderer::Render() {
         }
         });
 
-    uint64_t lastCompletedFenceValue{
-        m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
-    };
+    uint64_t lastCompletedFenceValue{ m_frameFenceValues[m_currBackBufferId] };
     m_frameFenceValues[m_currBackBufferId] = m_pDeviceContext->GetCommandQueue()->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
     uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
