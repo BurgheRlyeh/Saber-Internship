@@ -44,18 +44,10 @@ Scene::Scene(
     m_pSceneCb->CreateUpdater<StaticBufferUpdater<SceneBuffer>>();
 
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
-    m_pLightCB = std::make_shared<Buffer<LightBuffer>>(
+    m_pLightCB = CreateUploadBufferWithUpdater<LightBuffer>(
         m_name + L"/LightCB",
-        pDeviceContext,
-		1,
-		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
-		GPUResource::ResourceDesc{
-            CD3DX12_RESOURCE_DESC::Buffer(0),
-			D3D12_RESOURCE_STATE_GENERIC_READ
-        },
-        EnumFlags<ResourceView>{ ResourceView::None }
-	);
-    m_pLightCB->CreateUpdater<InstUploadBufferUpdater<LightBuffer>>();
+        pDeviceContext
+    );
     m_pLightCB->SetUpdateAll(&m_lightBuffer, 1);
 
     m_pTargetTexture = std::make_shared<Texture>(

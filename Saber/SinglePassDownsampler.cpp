@@ -46,18 +46,11 @@ SinglePassDownsampler::SinglePassDownsampler(
         ResourceView::Uav
     );
 
-	m_pSpdConstantBuffer = std::make_shared<Buffer<SPDConstantBuffer>>(
+	m_pSpdConstantBuffer = CreateUploadBufferWithUpdater<SPDConstantBuffer>(
 		BASE_NAME + L"/SpdConstantBuffer",
-        pDeviceContext,
-        1,
-        GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
-		GPUResource::ResourceDesc{
-			CD3DX12_RESOURCE_DESC::Buffer(0),
-            D3D12_RESOURCE_STATE_GENERIC_READ
-        },
-        ResourceView::Cbv
+		pDeviceContext,
+		ResourceView::Cbv
     );
-    m_pSpdConstantBuffer->CreateUpdater<InstUploadBufferUpdater<SPDConstantBuffer>>();
 
     Resize(pDeviceContext->GetDevice(), width, height);
 }

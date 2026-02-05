@@ -57,27 +57,6 @@ public:
 		);
 	}
 
-	template <typename T, typename UploadBufferUpdater = InstUploadBufferUpdater>
-	static std::shared_ptr<Buffer<T>> CreateUploadBufferWithUpdater(
-		const std::wstring& name,
-		std::shared_ptr<DeviceContext> pDeviceContext,
-		const EnumFlags<ResourceView> views = ResourceView::None
-	) {
-		auto pBuffer{ std::make_shared<Buffer<T>>(
-			name,
-			pDeviceContext,
-			1,
-			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
-			GPUResource::ResourceDesc{
-				CD3DX12_RESOURCE_DESC::Buffer(0),
-				D3D12_RESOURCE_STATE_GENERIC_READ
-			},
-			views
-		) };
-		pBuffer->CreateUpdater<UploadBufferUpdater<T>>();
-		return pBuffer;
-	}
-
 	std::shared_ptr<DescRange> GetDescRange(DescRangeType type) const {
 		return m_pDescHeapRanges[ToId(type)];
 	}
@@ -92,7 +71,8 @@ public:
 		return GetResource()->GetCapacity();
 	}
 
-	template<std::derived_from<BufferUpdater<T>> Updater, typename... Args>
+	template<typename Updater, typename... Args>
+	requires BufferUpdaterConcept<T, Updater>
 	void CreateUpdater(Args&&... args) {
 		m_pUpdater = std::make_unique<Updater>(*this, std::forward<Args>(args)...);
 	}
@@ -219,3 +199,27 @@ protected:
 		);
 	}
 };
+
+template <
+	typename T,
+	template <typename> typename UploadBufferUpdater = InstUploadBufferUpdater
+> requires BufferUpdaterConcept<T, UploadBufferUpdater<T>>
+static std::shared_ptr<Buffer<T>> CreateUploadBufferWithUpdater(
+	const std::wstring& name,
+	std::shared_ptr<DeviceContext> pDeviceContext,
+	const EnumFlags<ResourceView> views = ResourceView::None
+) {
+	auto pBuffer{ std::make_shared<Buffer<T>>(
+		name,
+		pDeviceContext,
+		1,
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+		GPUResource::ResourceDesc{
+			CD3DX12_RESOURCE_DESC::Buffer(0),
+			D3D12_RESOURCE_STATE_GENERIC_READ
+		},
+		views
+	) };
+	pBuffer->CreateUpdater<UploadBufferUpdater<T>>();
+	return pBuffer;
+}

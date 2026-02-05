@@ -30,18 +30,11 @@ MaterialManager::MaterialManager(
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
 	);
 
-	m_pMaterialCB = std::make_shared<Buffer<MaterialCB>>(
+	m_pMaterialCB = CreateUploadBufferWithUpdater<MaterialCB>(
 		BASE_NAME + L"/MaterialCB",
 		pDeviceContext,
-		1,
-		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
-		GPUResource::ResourceDesc{
-			CD3DX12_RESOURCE_DESC::Buffer(0),
-			D3D12_RESOURCE_STATE_GENERIC_READ
-		},
 		ResourceView::Cbv
 	);
-	m_pMaterialCB->CreateUpdater<InstUploadBufferUpdater<MaterialCB>>();
 	m_pMaterialCB->SetUpdateAll(&m_materialCB, 1);
 
 	m_pMaterials.reserve(capacity);

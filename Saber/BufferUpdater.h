@@ -30,6 +30,9 @@ public:
 	virtual bool IsUpdatePending() const = 0;
 };
 
+template <typename T, typename Derived>
+concept BufferUpdaterConcept = std::derived_from<Derived, BufferUpdater<T>>;
+
 template <typename T>
 class StaticBufferUpdater : public BufferUpdater<T> {
 	bool m_isUpdatePending{};
@@ -211,7 +214,7 @@ public:
 		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
 
 		T* pDst{};
-		ThrowIfFailed(pD3D12Buffer->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		memcpy(pDst, pData, count * sizeof(T));
 		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(0, count));
 	}
@@ -219,7 +222,7 @@ public:
 		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
 
 		T* pDst{};
-		ThrowIfFailed(pD3D12Buffer->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		pDst[id] = data;
 		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(id, id + 1));
 	}
