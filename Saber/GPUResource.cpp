@@ -37,13 +37,20 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GPUResource::GetD3D12Resource() const {
 	return m_pResource;
 }
 
+size_t GPUResource::GetIntermediateSize(
+	UINT firstSubresource,
+	UINT numSubresources
+) {
+	return GetRequiredIntermediateSize(GetD3D12Resource().Get(), firstSubresource, numSubresources);
+}
+
 std::shared_ptr<GPUResource> GPUResource::CreateIntermediate(
 	std::shared_ptr<Device> pDevice,
 	UINT firstSubresource,
 	UINT numSubresources
 ) {
 	D3D12_RESOURCE_DESC resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
-		GetRequiredIntermediateSize(GetD3D12Resource().Get(), firstSubresource, numSubresources)
+		GetIntermediateSize(firstSubresource, numSubresources)
 	) };
 	if (resDesc.Width == static_cast<UINT64>(-1)) {
 		resDesc = GetD3D12Resource()->GetDesc();
@@ -69,7 +76,7 @@ void GPUResource::UpdateSubresources(
 	UINT firstSubresource,
 	UINT numSubresources
 ) {
-	::UpdateSubresources(
+	size_t updSize{ ::UpdateSubresources(
 		pCommandList->GetD3D12CommandList().Get(),
 		GetD3D12Resource().Get(),
 		pIntermediate->GetD3D12Resource().Get(),
@@ -77,7 +84,8 @@ void GPUResource::UpdateSubresources(
 		firstSubresource,
 		numSubresources,
 		pSrcData
-	);
+	) };
+	assert(updSize != 0);
 }
 
 void GPUResource::UpdateSubresources(
@@ -89,7 +97,7 @@ void GPUResource::UpdateSubresources(
 	UINT firstSubresource,
 	UINT numSubresources
 ) {
-	::UpdateSubresources(
+	size_t updSize{ ::UpdateSubresources(
 		pCommandList->GetD3D12CommandList().Get(),
 		GetD3D12Resource().Get(),
 		pIntermediate->GetD3D12Resource().Get(),
@@ -98,7 +106,8 @@ void GPUResource::UpdateSubresources(
 		numSubresources,
 		pResourceData,
 		pSrcData
-	);
+	) };
+	assert(updSize != 0);
 }
 
 bool GPUResource::SupportsView(ResourceView viewType) const {

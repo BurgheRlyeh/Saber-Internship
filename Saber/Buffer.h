@@ -15,7 +15,8 @@
 
 template <typename T>
 class Buffer {
-	friend class StaticBufferUpdater<T>;
+	friend class RangeBufferUpdater<T>;
+	friend class WholeBufferUpdater<T>;
 
 protected:
 	std::wstring m_name{};
@@ -117,8 +118,8 @@ public:
 			pDeviceContext->GetDevice(),
 			numElements,
 			pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
-				? D3D12_RESOURCE_STATE_COMMON
-				: D3D12_RESOURCE_STATE_COPY_DEST
+			? D3D12_RESOURCE_STATE_COMMON
+			: D3D12_RESOURCE_STATE_COPY_DEST
 		);
 
 		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {

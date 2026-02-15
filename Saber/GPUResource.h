@@ -113,6 +113,11 @@ public:
 		return heapFlags;
 	}
 
+	size_t GetIntermediateSize(
+		UINT firstSubresource = 0,
+		UINT numSubresources = 1
+	);
+
 	std::shared_ptr<GPUResource> CreateIntermediate(
 		std::shared_ptr<Device> pDevice,
 		UINT firstSubresource = 0,

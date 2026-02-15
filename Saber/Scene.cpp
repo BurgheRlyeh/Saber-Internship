@@ -21,15 +21,15 @@ Scene::Scene(
     std::shared_ptr<DepthBuffer> pDepthBuffer,
     std::shared_ptr<Texture> pGBuffer
 ) : m_name(name),
-	m_pDepthBuffer(pDepthBuffer),
-	m_pGBuffer(pGBuffer)
+m_pDepthBuffer(pDepthBuffer),
+m_pGBuffer(pGBuffer)
 {
     for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
         m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
             m_name + L"/RenderSubsystem" + std::to_wstring(i + 1)
         );
     }
-	
+
     m_pSceneCb = std::make_shared<Buffer<SceneBuffer>>(
         m_name + L"/SceneCb",
         pDeviceContext,
@@ -41,7 +41,7 @@ Scene::Scene(
         },
         EnumFlags<ResourceView>{ ResourceView::None }
     );
-    m_pSceneCb->CreateUpdater<StaticBufferUpdater<SceneBuffer>>();
+    m_pSceneCb->CreateUpdater<WholeBufferUpdater<SceneBuffer>>();
 
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
     m_pLightCB = CreateUploadBufferWithUpdater<LightBuffer>(
@@ -76,15 +76,15 @@ void Scene::InitializeRenderSubsystems(
 ) const {
     for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
         RenderSubsystemType type{ FromId<RenderSubsystemType>(i) };
-		m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
+        m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
             pDeviceContext,
             type & RenderSubsystemType::Dynamic ? pIndirectUpdater : nullptr
-		);
+        );
         m_pRenderSubsystems[i]->InitializeModelBuffer(
             pDeviceContext,
             nullptr
         );
-	}
+    }
 }
 
 /* scene readiness */
@@ -250,8 +250,8 @@ void Scene::RenderObjects(
         );
 
         pD3D12CommandList->SetGraphicsRootConstantBufferView(
-			0,
-			m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+            0,
+            m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
         );
         pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap().GetAddressOf());
         if (type & RenderSubsystemType::AlphaKill) {
@@ -259,7 +259,7 @@ void Scene::RenderObjects(
             pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCBVsRange()->GetGpuHandle());
             pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSRVsRange()->GetGpuHandle());
         }
-    };
+        };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
     m_pRenderSubsystems[ToId(type)]->Render(
@@ -331,25 +331,25 @@ void Scene::RenderPostProcessing(
 
     m_pTargetTexture->ChangeState(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-	// prepare command list
-	UINT rootParameterIndex{};
-	{
+    // prepare command list
+    UINT rootParameterIndex{};
+    {
         auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
 
-		m_pPostProcessing->SetPipelineStateAndRootSignature(pCommandList);
+        m_pPostProcessing->SetPipelineStateAndRootSignature(pCommandList);
 
         pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		pD3D12CommandList->RSSetViewports(1, &viewport);
-		pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+        pD3D12CommandList->RSSetViewports(1, &viewport);
+        pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
 
         pD3D12CommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
 
-		pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
-		pD3D12CommandList->SetGraphicsRootDescriptorTable(
+        pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+        pD3D12CommandList->SetGraphicsRootDescriptorTable(
             rootParameterIndex++,
-			m_pTargetTexture->GetSrvDescHandle()
-		);
+            m_pTargetTexture->GetSrvDescHandle()
+        );
     }
 
     m_pPostProcessing->Render(pCommandList, rootParameterIndex);
@@ -374,22 +374,22 @@ void Scene::UpdateSceneBuffer(
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandList
 ) {
-	std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
+    std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
-	std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
-	DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
+    std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+    DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
 
-	std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
+    std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
 
     m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
     m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
     m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-	m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
 
     camerasMutexLock.unlock();
 
-	m_pSceneCb->SetUpdateAll(&m_sceneBuffer, 1);
-	sceneBufferMutexLock.unlock();
+    m_pSceneCb->SetUpdateAll(&m_sceneBuffer, 1);
+    sceneBufferMutexLock.unlock();
 
     m_pSceneCb->PerformUpdate(pDeviceContext, pCommandList);
 }

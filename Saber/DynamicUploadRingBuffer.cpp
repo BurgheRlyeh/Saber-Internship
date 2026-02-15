@@ -15,6 +15,8 @@ bool FenceBasedRawRingBuffer::Allocate(size_t size, size_t & offset) {
         return false;
     }
 
+    size_t addSize{ size };
+
     //        tail          head                  
     //        |             |                     
     //  [xxxxx              xxxxxxxxxxxxxxxxxxx]  
@@ -23,19 +25,20 @@ bool FenceBasedRawRingBuffer::Allocate(size_t size, size_t & offset) {
 
     //           head             tail        capacity  
     //           |                |           |         
-    //  [        xxxxxxxxxxxxxxxxx            ]         
-    if (m_head < m_tail && m_tail + size > m_capacity) {
+    //  [        xxxxxxxxxxxxxxxxx            ]        
+    if (m_head <= m_tail && m_tail + size > m_capacity) {
         if (size > m_head)
             return false;
 
-        size += (m_capacity - m_tail);
+        addSize += (m_capacity - m_tail);
         m_tail = 0;
     }
 
     offset = m_tail;
+
     m_tail += size;
-    m_size += size;
-    m_currFrameSize += size;
+    m_size += addSize;
+    m_currFrameSize += addSize;
 
     return true;
 }
@@ -113,7 +116,14 @@ DynamicAllocation GPURingBuffer::Allocate(size_t size) {
         DynAlloc.cpuAddress = reinterpret_cast<char*>(DynAlloc.cpuAddress) + offset;
     }
 
-    return DynAlloc;
+    return DynamicAllocation{
+        m_pBuffer,
+        offset,
+        size,
+        !m_cpuVirtualAddress ? nullptr
+            : reinterpret_cast<char*>(m_cpuVirtualAddress) + offset,
+        m_gpuVirtualAddress + offset
+    };
 }
 
 void GPURingBuffer::Destroy() {
