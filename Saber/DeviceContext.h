@@ -51,6 +51,7 @@ public:
 		D3D12_DESCRIPTOR_HEAP_FLAGS flags{};
 	};
 	DeviceContext(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
+	~DeviceContext();
 	void InitializeContext(
 		const std::array<DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 	);

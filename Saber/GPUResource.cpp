@@ -198,10 +198,7 @@ bool GPUResource::IsCbv() const {
 std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GPUResource::GetCbvDesc() const {
 	return D3D12_CONSTANT_BUFFER_VIEW_DESC{
 		.BufferLocation{ GetD3D12Resource()->GetGPUVirtualAddress() },
-		.SizeInBytes{ AlignSize(
-			GetD3D12Resource()->GetDesc().Width,
-			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
-		) }
+		.SizeInBytes{ static_cast<UINT>(GetD3D12Resource()->GetDesc().Width) }
 	};
 }
 void GPUResource::CreateConstantBufferView(

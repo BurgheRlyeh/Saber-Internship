@@ -23,6 +23,12 @@ DeviceContext::DeviceContext(
 #endif
 }
 
+DeviceContext::~DeviceContext() {
+	m_pCommandQueueDirect.reset();
+	m_pCommandQueueCompute.reset();
+	m_pCommandQueueCopy.reset();
+}
+
 void DeviceContext::InitializeContext(
 	const std::array<DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 ) {
