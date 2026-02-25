@@ -33,7 +33,10 @@ public:
 			&& resDesc.resDesc.SampleDesc.Quality == 0
 			&& resDesc.resDesc.Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR);
 		assert(resDesc.pResClearValue == nullptr);
-		resDesc.resDesc.Width = capacity * sizeof(T);
+		resDesc.resDesc.Width = AlignSize(
+			capacity * sizeof(T),
+			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+		);
 		GPUResource::CreateResource(name, pDevice, allocDesc, resDesc);
 	}
 

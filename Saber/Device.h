@@ -14,6 +14,7 @@ public:
 		const std::wstring& name,
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
 	);
+	~Device();
 
 	Microsoft::WRL::ComPtr<ID3D12Device2> GetD3D12Device() const;
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> GetD3D12Allocator() const;

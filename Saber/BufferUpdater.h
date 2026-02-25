@@ -40,7 +40,11 @@ enum class BufferUpdaterMemoryType {
 
 template <typename T, BufferUpdaterMemoryType MemoryType = BufferUpdaterMemoryType::Intermediate>
 class RangeBufferUpdater : public BufferUpdater<T> {
-	std::pair<size_t, size_t> m_updRange{ 1, 0 };
+	using UpdateRange = std::pair<size_t, size_t>;
+	inline static constexpr UpdateRange InvalidUpdRange{
+		static_cast<size_t>(-1), 0
+	};
+	UpdateRange m_updRange{ InvalidUpdRange };
 
 public:
 	RangeBufferUpdater(
@@ -56,7 +60,7 @@ public:
 	}
 
 	virtual bool IsUpdatePending() const override {
-		return m_updRange.first <= m_updRange.second;
+		return m_updRange != InvalidUpdRange;
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
@@ -125,7 +129,7 @@ public:
 				updSize
 			);
 		}
-		m_updRange = std::make_pair(1, 0);
+		m_updRange = InvalidUpdRange;
 
 		if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
 			buffer.GetResource()->ResourceTransition(
