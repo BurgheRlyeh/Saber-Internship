@@ -189,6 +189,9 @@
     <ClInclude Include="EnumHelpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BufferStorage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

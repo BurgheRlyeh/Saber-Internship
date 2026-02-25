@@ -162,6 +162,7 @@
     <ClInclude Include="Atlas.h" />
     <ClInclude Include="Buffer.h" />
     <ClInclude Include="BufferResource.h" />
+    <ClInclude Include="BufferStorage.h" />
     <ClInclude Include="BufferUpdater.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CommandList.h" />

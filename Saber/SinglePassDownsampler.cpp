@@ -75,7 +75,7 @@ void SinglePassDownsampler::Resize(
     m_spdConstantBuffer.numWorkGroups = numWorkGroupsAndMips[0];
     m_spdConstantBuffer.workGroupOffset[0] = workGroupOffset[0];
     m_spdConstantBuffer.workGroupOffset[1] = workGroupOffset[1];
-    m_pSpdConstantBuffer->SetUpdateAll(&m_spdConstantBuffer, 1);
+    m_pSpdConstantBuffer->UpdateAll(&m_spdConstantBuffer, 1);
 }
 
 void SinglePassDownsampler::Dispatch(

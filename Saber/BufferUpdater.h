@@ -22,8 +22,8 @@ public:
 	BufferUpdater(Buffer<T>& buffer) : m_buffer(buffer) {}
 	virtual ~BufferUpdater() = default;
 
-	virtual void SetUpdateAll(T* pData, size_t count) = 0;
-	virtual void SetUpdateAt(size_t id, const T& data) = 0;
+	virtual void UpdateAll(const T* pData, size_t count) = 0;
+	virtual void UpdateAt(size_t id, const T& data) = 0;
 	virtual bool IsUpdatePending() const = 0;
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
@@ -47,26 +47,10 @@ public:
 		Buffer<T>& buffer
 	) : BufferUpdater<T>(buffer) {}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
-		std::vector<T>& bufferData{ m_buffer.m_data };
-
-		if (count > bufferData.size()) {
-			bufferData.resize(count);
-		}
-		for (size_t i{}; i < count; ++i) {
-			bufferData[i] = pData[i];
-		}
-
+	virtual void UpdateAll(const T* pData, size_t count) override {
 		m_updRange = std::make_pair(0, count - 1);
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
-		std::vector<T>& bufferData{ m_buffer.m_data };
-
-		if (id >= bufferData.size()) {
-			bufferData.resize(id + 1);
-		}
-		bufferData[id] = data;
-
+	virtual void UpdateAt(size_t id, const T& data) override {
 		m_updRange.first = std::min(m_updRange.first, id);
 		m_updRange.second = std::max(m_updRange.second, id);
 	}
@@ -116,7 +100,7 @@ public:
 
 			T* pDst{};
 			ThrowIfFailed(pIntermediate->GetD3D12Resource()->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
-			memcpy(pDst, &buffer.m_data[m_updRange.first], updSize);
+			memcpy(pDst, &buffer.GetStorageData()[m_updRange.first], updSize);
 			pIntermediate->GetD3D12Resource()->Unmap(0, &CD3DX12_RANGE(m_updRange.first, m_updRange.second));
 
 			pCommandList->GetD3D12CommandList()->CopyBufferRegion(
@@ -132,7 +116,7 @@ public:
 			DynamicAllocation intermediateAllocation{
 				pDeviceContext->GetRingBuffer()->Allocate(updSize)
 			};
-			memcpy(intermediateAllocation.cpuAddress, &buffer.m_data[m_updRange.first], updSize);
+			memcpy(intermediateAllocation.cpuAddress, &buffer.GetStorageData()[m_updRange.first], updSize);
 			pCommandList->GetD3D12CommandList()->CopyBufferRegion(
 				buffer.GetResource()->GetD3D12Resource().Get(),
 				m_updRange.first * sizeof(T),
@@ -161,26 +145,10 @@ public:
 		Buffer<T>& buffer
 	) : BufferUpdater<T>(buffer) {}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
-		std::vector<T>& bufferData{ m_buffer.m_data };
-
-		if (count > bufferData.size()) {
-			bufferData.resize(count);
-		}
-		for (size_t i{}; i < count; ++i) {
-			bufferData[i] = pData[i];
-		}
-
+	virtual void UpdateAll(const T* pData, size_t count) override {
 		m_isUpdatePending = true;
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
-		std::vector<T>& bufferData{ m_buffer.m_data };
-
-		if (id >= bufferData.size()) {
-			bufferData.resize(id + 1);
-		}
-		bufferData[id] = data;
-
+	virtual void UpdateAt(size_t id, const T& data) override {
 		m_isUpdatePending = true;
 	}
 	virtual bool IsUpdatePending() const override {
@@ -196,7 +164,7 @@ public:
 		m_isUpdatePending = false;
 
 		Buffer<T>& buffer{ m_buffer };
-		size_t updCnt{ buffer.m_data.size() };
+		size_t updCnt{ buffer.GetStorageDataSize() };
 
 		D3D12_RESOURCE_STATES prevState{ buffer.GetResource()->GetState() };
 		if (updCnt > buffer.GetCapacity()) {
@@ -216,7 +184,7 @@ public:
 		}
 
 		D3D12_SUBRESOURCE_DATA subresData{
-			.pData{ buffer.m_data.data() },
+			.pData{ buffer.GetStorageData() },
 			.RowPitch{ static_cast<UINT>(updCnt) * sizeof(T) },
 			.SlicePitch{ subresData.RowPitch }
 		};
@@ -271,7 +239,7 @@ public:
 		m_updBuf.reserve(m_buffer.GetCapacity());
 	}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
+	virtual void UpdateAll(const T* pData, size_t count) override {
 		if (count > m_updBuf.capacity()) {
 			m_updBufIds.reserve(count);
 			m_updBuf.reserve(count);
@@ -282,7 +250,7 @@ public:
 			m_updBuf.push_back(pData[i]);
 		}
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
+	virtual void UpdateAt(size_t id, const T& data) override {
 		m_updBufIds.push_back(id);
 		m_updBuf.push_back(data);
 		m_updMaxId = id;
@@ -347,7 +315,7 @@ public:
 		assert(m_buffer.GetResource()->GetHeapProperties().Type == D3D12_HEAP_TYPE_UPLOAD);
 	}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
+	virtual void UpdateAll(const T* pData, size_t count) override {
 		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
 
 		T* pDst{};
@@ -355,7 +323,7 @@ public:
 		memcpy(pDst, pData, count * sizeof(T));
 		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(0, count));
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
+	virtual void UpdateAt(size_t id, const T& data) override {
 		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
 
 		T* pDst{};

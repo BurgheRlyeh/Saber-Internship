@@ -41,6 +41,7 @@ m_pGBuffer(pGBuffer)
         },
         EnumFlags<ResourceView>{ ResourceView::None }
     );
+    m_pSceneCb->CreateStorage<WholeBufferStorage<SceneBuffer>>();
     m_pSceneCb->CreateUpdater<WholeBufferUpdater<SceneBuffer>>();
 
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
@@ -48,7 +49,7 @@ m_pGBuffer(pGBuffer)
         m_name + L"/LightCB",
         pDeviceContext
     );
-    m_pLightCB->SetUpdateAll(&m_lightBuffer, 1);
+    m_pLightCB->UpdateAll(&m_lightBuffer, 1);
 
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
@@ -388,7 +389,7 @@ void Scene::UpdateSceneBuffer(
 
     camerasMutexLock.unlock();
 
-    m_pSceneCb->SetUpdateAll(&m_sceneBuffer, 1);
+    m_pSceneCb->UpdateAll(&m_sceneBuffer, 1);
     sceneBufferMutexLock.unlock();
 
     m_pSceneCb->PerformUpdate(pDeviceContext, pCommandList);
@@ -398,6 +399,6 @@ void Scene::UpdateLightBuffer() {
     bool expected{ true };
     if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
         std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-        m_pLightCB->SetUpdateAll(&m_lightBuffer, 1);
+        m_pLightCB->UpdateAll(&m_lightBuffer, 1);
     }
 }

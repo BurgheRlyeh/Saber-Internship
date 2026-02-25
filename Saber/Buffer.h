@@ -6,6 +6,7 @@
 #include <bit>
 
 #include "BufferResource.h"
+#include "BufferStorage.h"
 #include "BufferUpdater.h"
 #include "ComputeObject.h"
 #include "DeviceContext.h"
@@ -25,8 +26,7 @@ protected:
 
 	std::array<std::shared_ptr<DescRange>, static_cast<size_t>(DescRangeType::ResNumTypes)> m_pDescHeapRanges{};
 
-	std::vector<T> m_data{};
-
+	std::unique_ptr<BufferStorage<T>> m_pStorage{};
 	std::unique_ptr<BufferUpdater<T>> m_pUpdater{};
 
 	D3D12MA::ALLOCATION_FLAGS m_allocationFlags{};
@@ -57,19 +57,24 @@ public:
 			resDescCopy
 		);
 	}
-
-	std::shared_ptr<DescRange> GetDescRange(DescRangeType type) const {
-		return m_pDescHeapRanges[ToId(type)];
-	}
-
 	virtual ~Buffer() = default;
 
 	std::shared_ptr<BufferResource<T>> GetResource() const {
 		return m_pResource;
 	}
 
+	std::shared_ptr<DescRange> GetDescRange(DescRangeType type) const {
+		return m_pDescHeapRanges[ToId(type)];
+	}
+
 	size_t GetCapacity() const {
 		return GetResource()->GetCapacity();
+	}
+
+	template<typename Storage, typename... Args>
+	requires BufferStorageConcept<T, Storage>
+	void CreateStorage(Args&&... args) {
+		m_pStorage = std::make_unique<Storage>(*this, std::forward<Args>(args)...);
 	}
 
 	template<typename Updater, typename... Args>
@@ -78,13 +83,26 @@ public:
 		m_pUpdater = std::make_unique<Updater>(*this, std::forward<Args>(args)...);
 	}
 
-	void SetUpdateAll(T* pData, size_t count) {
-		assert(m_pUpdater);
-		m_pUpdater->SetUpdateAll(pData, count);
+	T* GetStorageData() {
+		return m_pStorage ? m_pStorage->GetData() : nullptr;
 	}
-	void SetUpdateAt(size_t id, const T& data) {
+	size_t GetStorageDataSize() const {
+		return m_pStorage ? m_pStorage->GetDataSize() : 0;
+	}
+
+	void UpdateAll(const T* pData, size_t count) {
 		assert(m_pUpdater);
-		m_pUpdater->SetUpdateAt(id, data);
+		if (m_pStorage) {
+			m_pStorage->UpdateAll(pData, count);
+		}
+		m_pUpdater->UpdateAll(pData, count);
+	}
+	void UpdateAt(size_t id, const T& data) {
+		assert(m_pUpdater);
+		if (m_pStorage) {
+			m_pStorage->UpdateAt(id, data);
+		}
+		m_pUpdater->UpdateAt(id, data);
 	}
 	void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
@@ -155,7 +173,6 @@ protected:
 		const GPUResource::AllocationDesc& allocDesc,
 		GPUResource::ResourceDesc& resDesc
 	) {
-		resDesc.resDesc.Width = numElements * sizeof(T);
 		m_pResource = std::make_shared<BufferResource<T>>(
 			m_name,
 			pDevice,

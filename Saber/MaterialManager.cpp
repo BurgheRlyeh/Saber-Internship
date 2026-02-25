@@ -35,7 +35,7 @@ MaterialManager::MaterialManager(
 		pDeviceContext,
 		ResourceView::Cbv
 	);
-	m_pMaterialCB->SetUpdateAll(&m_materialCB, 1);
+	m_pMaterialCB->UpdateAll(&m_materialCB, 1);
 
 	m_pMaterials.reserve(capacity);
 
@@ -76,7 +76,7 @@ size_t MaterialManager::AddMaterial(
 		0,
 		0
 	};
-	m_pMaterialCB->SetUpdateAll(&m_materialCB, 1);
+	m_pMaterialCB->UpdateAll(&m_materialCB, 1);
 
 	return materialId;
 }
