@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Headers.h"
+#include "EnumFence.h"
 
 class CommandList;
 class DescRange;
@@ -8,6 +9,16 @@ class Device;
 class DeviceContext;
 class SinglePassDownsampler;
 class TextureResource;
+
+enum class DepthBufferState : uint8_t {
+	InvalidState = 0,
+
+	DepthWriting,
+	HierarchicalDepthBuilding,
+	DepthReading,
+
+	FlushState = std::numeric_limits<uint8_t>::max()
+};
 
 class DepthBuffer {
 	static inline D3D12_RESOURCE_DESC m_depthBufferDesc{
@@ -36,6 +47,7 @@ class DepthBuffer {
 
 	size_t m_width{};
 	size_t m_height{};
+	std::shared_ptr<EnumFence<DepthBufferState>> m_pDepthBufferFence{};
 
 public:
 	DepthBuffer(
@@ -82,10 +94,5 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMidMip() const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMips() const;
 
-	D3D12_DESCRIPTOR_RANGE1 GetSrvD3d12DescRange1(
-		UINT baseShaderRegister,
-		UINT registerSpace = 0,
-		D3D12_DESCRIPTOR_RANGE_FLAGS flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE,
-		UINT offsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
-	) const;
+	std::shared_ptr<EnumFence<DepthBufferState>> GetFence() const;
 };

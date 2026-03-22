@@ -178,7 +178,9 @@
     <ClInclude Include="Device.h" />
     <ClInclude Include="DeviceContext.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
+    <ClInclude Include="EnumFence.h" />
     <ClInclude Include="EnumHelpers.h" />
+    <ClInclude Include="Fence.h" />
     <ClInclude Include="FencedQueue.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GLTFLoader.h" />
@@ -186,6 +188,7 @@
     <ClInclude Include="Headers.h" />
     <ClInclude Include="HlslTypesDef.h" />
     <ClInclude Include="HlslTypesUndef.h" />
+    <ClInclude Include="IncrementFence.h" />
     <ClInclude Include="IndirectCommand.h" />
     <ClInclude Include="IndirectCommandBuffer.h" />
     <ClInclude Include="IndirectUpdater.h" />
@@ -229,8 +232,10 @@
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="DeviceContext.cpp" />
     <ClCompile Include="DynamicUploadRingBuffer.cpp" />
+    <ClCompile Include="Fence.cpp" />
     <ClCompile Include="GLTFLoader.cpp" />
     <ClCompile Include="GPUResource.cpp" />
+    <ClCompile Include="IncrementFence.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MaterialManager.cpp" />
     <ClCompile Include="MemoryMappedFile.cpp" />

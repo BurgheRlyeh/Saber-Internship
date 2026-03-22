@@ -20,6 +20,7 @@ class DepthBuffer;
 class DescriptorHeapManager;
 class Device;
 class DeviceContext;
+class GBuffer;
 class MaterialManager;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
@@ -61,7 +62,7 @@ class Scene {
 
     std::shared_ptr<Texture> m_pTargetTexture{};
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
-    std::shared_ptr<Texture> m_pGBuffer{};
+    std::shared_ptr<GBuffer> m_pGBuffer{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
@@ -73,7 +74,7 @@ public:
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
-        std::shared_ptr<Texture> m_pGBuffer
+        std::shared_ptr<GBuffer> m_pGBuffer
     );
 
     void Resize(
@@ -93,8 +94,8 @@ public:
     void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
     std::shared_ptr<DepthBuffer> GetDepthBuffer();
 
-    std::shared_ptr<Texture> GetGBuffer();
-    void SetGBuffer(std::shared_ptr<Texture> pGBuffer);
+    std::shared_ptr<GBuffer> GetGBuffer();
+    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
 
     void Update(
         std::shared_ptr<DeviceContext> pDeviceContext,

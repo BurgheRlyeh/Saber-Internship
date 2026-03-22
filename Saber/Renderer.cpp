@@ -16,6 +16,7 @@
 #include "DescriptorHeapRange.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "IncrementFence.h"
 #include "IndirectUpdater.h"
 #include "MaterialManager.h"
 #include "MeshRenderObject.h"
@@ -51,7 +52,7 @@ Renderer::~Renderer() {
 
 void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers.resize(m_numFrames);
-    m_frameFenceValues.resize(m_numFrames);
+    m_frameFenceValues = std::vector<uint64_t>(m_numFrames, IncrementFence::IncrementFenceInitValue);
 
 #if defined(_DEBUG)
     EnableDebugLayer();
@@ -107,15 +108,11 @@ void Renderer::Initialize(HWND hWnd) {
 	);
 
     m_pGBuffers.resize(1);
-    m_pGBuffers[0] = std::make_shared<Texture>(
+    m_pGBuffers[0] = std::make_shared<GBuffer>(
         L"GBuffer",
         m_pDeviceContext,
-        CD3DX12_RESOURCE_DESC::Tex2D(
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            m_clientWidth, m_clientHeight, 1, 0, 1, 0,
-            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-        ),
-        GBUFFER_SIZE
+        m_clientWidth,
+        m_clientHeight
 	);
 
     m_time = m_clock.now();
@@ -382,9 +379,17 @@ void Renderer::Update() {
 }
 
 void Renderer::Render() {
-    auto& scene = m_pScenes.at(m_currSceneId);
-    if (!scene->IsSceneReady())
+    auto& pScene = m_pScenes.at(m_currSceneId);
+    if (!pScene->IsSceneReady())
         return;
+
+    std::shared_ptr<CommandQueue>& pQueue{ m_pDeviceContext->GetCommandQueue() };
+
+    std::shared_ptr<GBuffer>& pGBuf{ pScene->GetGBuffer() };
+    std::shared_ptr<DepthBuffer>& pDepthBuf{ pScene->GetDepthBuffer() };
+
+    std::shared_ptr<EnumFence<GBufferState>>& pGBufFence{ pGBuf->GetFence() };
+    std::shared_ptr<EnumFence<DepthBufferState>>& pDepthBufFence{ pDepthBuf->GetFence() };
 
     size_t listPriority{};
 
@@ -392,7 +397,7 @@ void Renderer::Render() {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"BeforeFrameJob", m_pDeviceContext->GetDevice(), listPriority
         )
     };
@@ -404,13 +409,13 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Before frame part"
         );
-        scene->BeforeFrameJob(commandListBeforeFrame);
+        pScene->BeforeFrameJob(commandListBeforeFrame);
 
         // TODO: move it to "before first exec" task in CommandQueue::ExecutionTask
         auto newTime = m_clock.now();
         auto deltaTime = newTime - m_sceneTime;
         m_sceneTime = newTime;
-        scene->Update(
+        pScene->Update(
             m_pDeviceContext,
             commandListBeforeFrame,
             deltaTime.count() * 1e-9f
@@ -420,14 +425,6 @@ void Renderer::Render() {
             commandListBeforeFrame,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
-        if (!scene->GetGBuffer()) {
-            float clearColor[]{ 0.6f, 0.4f, 0.4f, 1.0f };
-            backBuffer->ClearRenderTarget(
-                commandListBeforeFrame,
-                rtv,
-                clearColor
-            );
-        }
 
         PIXEndEvent(commandListBeforeFrame->GetD3D12CommandList().Get());
         commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
@@ -435,8 +432,12 @@ void Renderer::Render() {
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{ 
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
-            L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority
+        pQueue->GetDeferredCommandList(
+            L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority,
+            [&] {
+                pQueue->GpuWait(pGBufFence, GBufferState::Write);
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthWriting);
+            }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -445,7 +446,7 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Static Objects rendering"
         );
-        scene->RenderObjects(
+        pScene->RenderObjects(
             RenderSubsystemType::Default,
             m_pDeviceContext,
             commandListForStaticObjects,
@@ -457,8 +458,8 @@ void Renderer::Render() {
         });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
-            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), listPriority
+        pQueue->GetDeferredCommandList(
+            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), ++listPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -467,7 +468,7 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Alphakill Objects rendering"
         );
-        scene->RenderObjects(
+        pScene->RenderObjects(
             RenderSubsystemType::AlphaKill,
             m_pDeviceContext,
             commandListForAlphaObjects,
@@ -478,14 +479,16 @@ void Renderer::Render() {
         commandListForAlphaObjects->SetReadyForExection();
         });
 
-    uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"DynamicObjects",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
             [] {},
-            [&]() { fenceValueAfterRender = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&]() {
+                pQueue->Signal(pGBufFence, GBufferState::Read);
+                pQueue->Signal(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
+            }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -494,14 +497,14 @@ void Renderer::Render() {
             PIX_COLOR(0, 0, 0),
             L"Dynamic Objects rendering"
         );
-        scene->RenderObjects(
+        pScene->RenderObjects(
             RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
             m_scissorRect
         );
-        scene->RenderObjects(
+        pScene->RenderObjects(
             RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
@@ -513,33 +516,44 @@ void Renderer::Render() {
         });
 
 
-    uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"HZB",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterRender); },
-            [&] { fenceValueAfterHZB = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&] {
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
+            },
+            [&] {
+                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthReading);
+            }
         )
     };
 
-    uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForDeferredShading{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"DeferredShading",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterHZB); },
-            [&] { fenceValueAfterDeferredShading = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&] {
+                pQueue->GpuWait(pGBufFence, GBufferState::Read);
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthReading);
+            },
+            [&] {
+                pQueue->Signal(pGBufFence, GBufferState::Write);
+                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthWriting);
+            }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"AfterFrameJob",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->Wait(fenceValueAfterDeferredShading); }
+            [&] {
+                pQueue->GpuWait(pGBufFence, GBufferState::Write);
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthWriting);
+            }
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -549,7 +563,7 @@ void Renderer::Render() {
                 PIX_COLOR(0, 0, 0),
                 L"Building HZB"
             );
-            scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
+            pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
                 m_pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap()
             );
@@ -563,7 +577,7 @@ void Renderer::Render() {
                 PIX_COLOR(0, 0, 0),
                 L"Deferred shading"
             );
-            scene->RunDeferredShading(
+            pScene->RunDeferredShading(
                 commandListForDeferredShading,
                 m_pDeviceContext->GetDescriptorHeap(),
                 m_pDeviceContext->GetMaterialManager(),
@@ -580,7 +594,7 @@ void Renderer::Render() {
                 PIX_COLOR(0, 0, 0),
                 L"Post Processing"
             );
-            scene->RenderPostProcessing(
+            pScene->RenderPostProcessing(
                 commandListAfterFrame,
                 m_pDeviceContext->GetDescriptorHeap(),
                 m_viewport,
@@ -598,7 +612,7 @@ void Renderer::Render() {
         });
 
     uint64_t lastCompletedFenceValue{ m_frameFenceValues[m_currBackBufferId] };
-    m_frameFenceValues[m_currBackBufferId] = m_pDeviceContext->GetCommandQueue()->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
+    m_frameFenceValues[m_currBackBufferId] = pQueue->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
     uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
     // Present

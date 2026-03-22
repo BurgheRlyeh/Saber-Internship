@@ -2,6 +2,7 @@
 
 #include "CommandList.h"
 #include "Device.h"
+#include "IncrementFence.h"
 
 CommandQueue::CommandQueue(
 	const std::wstring& baseName,
@@ -10,22 +11,13 @@ CommandQueue::CommandQueue(
 ) : m_name(baseName + L"/CommandQueue" + std::to_wstring(type)) {
 	m_pCommandQueue = CreateCommandQueue(pDevice, type);
 	m_pCommandQueue->SetName(m_name.c_str());
-	
-	ThrowIfFailed(pDevice->GetD3D12Device()->CreateFence(
-		m_fenceValue,
-		D3D12_FENCE_FLAG_NONE,
-		IID_PPV_ARGS(&m_pFence)
-	));
-	m_pFence->SetName((m_name + L"/Fence").c_str());
 
-	m_fenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
-	assert(m_fenceEvent && "Failed to create fence event handle.");
+	m_pIncFence = std::make_shared<IncrementFence>(m_name + L"/Fence", pDevice);
 }
 
 CommandQueue::~CommandQueue() {
 	// Make sure the command queue has finished all commands before closing.
 	Flush();
-	::CloseHandle(m_fenceEvent);
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() const {
@@ -40,7 +32,7 @@ std::shared_ptr<CommandList> CommandQueue::GetCommandList(
 	std::shared_ptr<Device> pDevice
 ) {
 	return std::make_shared<CommandList>(
-		m_name + L"/CommandList" + std::to_wstring(m_fenceValue),
+		m_name + L"/CommandList" + std::to_wstring(m_pIncFence->GetValue()),
 		GetD3D12CommandList(pDevice)
 	);
 }
@@ -86,7 +78,7 @@ void CommandQueue::ExecuteCommandListImmediately(
 	std::shared_ptr<CommandList> commandList
 ) {
 	uint64_t fenceValue{ ExecuteCommandList(commandList) };
-	WaitForFenceValue(fenceValue);
+	CpuWait(fenceValue);
 }
 
 void CommandQueue::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
@@ -112,7 +104,7 @@ uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 				continue;
 			}
 			if (waitFence) {
-				WaitForFenceValue(waitFenceValue);
+				CpuWait(waitFenceValue);
 				waitFence = false;
 			}
 			lastFrameValue = ExecuteCommandList(*iter);
@@ -124,29 +116,49 @@ uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 	return lastFrameValue;
 }
 
+// Fence
+void CommandQueue::Signal(std::shared_ptr<Fence>& pFence, uint64_t fenceValue) {
+	::Signal(this, pFence.get(), fenceValue);
+}
+void CommandQueue::CpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue) {
+	::CpuWait(pFence.get(), fenceValue);
+}
+void CommandQueue::GpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue) {
+	::GpuWait(this, pFence.get(), fenceValue);
+}
+void CommandQueue::Flush(std::shared_ptr<Fence>& pFence, uint64_t fenceValue) {
+	::Flush(this, pFence.get(), fenceValue);
+}
+
+// IncrementFence
+uint64_t CommandQueue::Signal(std::shared_ptr<IncrementFence>& pFence) {
+	return ::Signal(this, pFence.get());
+}
+void CommandQueue::CpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue) {
+	CpuWait(std::static_pointer_cast<Fence>(pFence), fenceValue);
+}
+void CommandQueue::GpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue) {
+	GpuWait(std::static_pointer_cast<Fence>(pFence), fenceValue);
+}
+void CommandQueue::Flush(std::shared_ptr<IncrementFence>& pFence) {
+	::Flush(this, pFence.get());
+}
+
+// CommandQueue's fence
 uint64_t CommandQueue::Signal() {
-	uint64_t fenceValue{ ++m_fenceValue };
-	m_pCommandQueue->Signal(m_pFence.Get(), fenceValue);
-	return fenceValue;
+	return Signal(m_pIncFence);
 }
-
-void CommandQueue::Wait(uint64_t fenceValue) {
-	ThrowIfFailed(m_pCommandQueue->Wait(m_pFence.Get(), fenceValue));
+void CommandQueue::CpuWait(uint64_t fenceValue) {
+	CpuWait(m_pIncFence, fenceValue);
 }
-
-bool CommandQueue::IsFenceComplete(uint64_t fenceValue) {
-	return m_pFence->GetCompletedValue() >= fenceValue;
+void CommandQueue::GpuWait(uint64_t fenceValue) {
+	GpuWait(m_pIncFence, fenceValue);
 }
-
-void CommandQueue::WaitForFenceValue(uint64_t fenceValue) {
-	if (!IsFenceComplete(fenceValue)) {
-		ThrowIfFailed(m_pFence->SetEventOnCompletion(fenceValue, m_fenceEvent));
-		::WaitForSingleObject(m_fenceEvent, DWORD_MAX);
-	}
-}
-
 void CommandQueue::Flush() {
-	WaitForFenceValue(Signal());
+	Flush(m_pIncFence);
+}
+bool CommandQueue::IsFenceComplete(uint64_t fenceValue) {
+	return m_pIncFence->IsCompleted(fenceValue);
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::CreateCommandQueue(

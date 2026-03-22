@@ -16,6 +16,7 @@ class DepthBuffer;
 class DescRange;
 class Device;
 class DeviceContext;
+class GBuffer;
 class Scene;
 class Texture;
 class TextureResource;
@@ -76,7 +77,7 @@ class Renderer {
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
 
-    std::vector<std::shared_ptr<Texture>> m_pGBuffers{};
+    std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 

@@ -19,7 +19,7 @@ Scene::Scene(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
-    std::shared_ptr<Texture> pGBuffer
+    std::shared_ptr<GBuffer> pGBuffer
 ) : m_name(name),
 m_pDepthBuffer(pDepthBuffer),
 m_pGBuffer(pGBuffer)
@@ -105,10 +105,10 @@ std::shared_ptr<DepthBuffer> Scene::GetDepthBuffer() {
 }
 
 /* g-buffer */
-void Scene::SetGBuffer(std::shared_ptr<Texture> pGBuffer) {
+void Scene::SetGBuffer(std::shared_ptr<GBuffer> pGBuffer) {
     m_pGBuffer = pGBuffer;
 }
-std::shared_ptr<Texture> Scene::GetGBuffer() {
+std::shared_ptr<GBuffer> Scene::GetGBuffer() {
     return m_pGBuffer;
 }
 

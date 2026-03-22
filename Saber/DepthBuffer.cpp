@@ -14,7 +14,12 @@ DepthBuffer::DepthBuffer(
 	UINT64 width,
 	UINT height,
 	std::shared_ptr<SinglePassDownsampler> pSPD
-) : m_name(name) {
+) : m_name(name),
+	m_pDepthBufferFence(std::make_shared<EnumFence<DepthBufferState>>(
+		name + L"/Fence",
+		pDeviceContext->GetDevice(),
+		DepthBufferState::DepthWriting
+	)) {
 	m_pDsvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateRange(m_name + L"/Ranges/DSV", 1);
 	m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
@@ -204,13 +209,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandleForMips() const {
 	return m_pUavsRange->GetGpuHandle();
 }
 
-D3D12_DESCRIPTOR_RANGE1 DepthBuffer::GetSrvD3d12DescRange1(UINT baseShaderRegister, UINT registerSpace, D3D12_DESCRIPTOR_RANGE_FLAGS flags, UINT offsetInDescriptorsFromTableStart) const {
-	return CD3DX12_DESCRIPTOR_RANGE1(
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		1,
-		baseShaderRegister,
-		registerSpace,
-		flags,
-		offsetInDescriptorsFromTableStart
-	);
+std::shared_ptr<EnumFence<DepthBufferState>> DepthBuffer::GetFence() const {
+	return m_pDepthBufferFence;
 }
