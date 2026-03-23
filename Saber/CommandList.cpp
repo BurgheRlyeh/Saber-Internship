@@ -1,5 +1,7 @@
 #include "CommandList.h"
 
+#include "pix3.h"
+
 CommandList::CommandList(
 	const std::wstring& name,
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
@@ -20,11 +22,14 @@ D3D12_COMMAND_LIST_TYPE CommandList::GetType() const {
 	return m_pD3D12CommandList->GetType();
 }
 
-bool CommandList::IsReadyForExection() const {
+bool CommandList::IsReadyForExecution() const {
 	return m_isReadyForExecution.load();
 }
 
-void CommandList::SetReadyForExection() {
+void CommandList::SetReadyForExecution() {
+	while (m_pixEventsBegan) {
+		PixEndEvent();
+	}
 	m_isReadyForExecution.store(true);
 }
 
@@ -34,4 +39,16 @@ void CommandList::BeforeExecute() const {
 
 void CommandList::AfterExecute() const {
 	m_afterExec();
+}
+
+void CommandList::PixBeginEvent(const std::wstring& name, uint8_t r, uint8_t g, uint8_t b) {
+	assert(m_pixEventsBegan < std::numeric_limits<uint8_t>::max());
+	++m_pixEventsBegan;
+	PIXBeginEvent(GetD3D12CommandList().Get(), PIX_COLOR(r, g, b), name.c_str());
+}
+
+void CommandList::PixEndEvent() {
+	assert(m_pixEventsBegan > 0);
+	--m_pixEventsBegan;
+	PIXEndEvent(GetD3D12CommandList().Get());
 }

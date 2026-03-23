@@ -6,8 +6,6 @@
 #include <iostream> 
 #include <sstream>
 
-#include "pix3.h"
-
 #include "CommandList.h"
 #include "CommandQueue.h"
 #include "DeferredShading.h"
@@ -404,11 +402,7 @@ void Renderer::Render() {
 
     // Some small work doesn't need to be moved to jobs, just as example
     {
-        PIXBeginEvent(
-            commandListBeforeFrame->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Before frame part"
-        );
+        commandListBeforeFrame->PixBeginEvent(L"Before frame part");
         pScene->BeforeFrameJob(commandListBeforeFrame);
 
         // TODO: move it to "before first exec" task in CommandQueue::ExecutionTask
@@ -426,8 +420,7 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
 
-        PIXEndEvent(commandListBeforeFrame->GetD3D12CommandList().Get());
-        commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
+        commandListBeforeFrame->SetReadyForExecution(); // but still it is cl to execute in proper order
     }
 
     // two command lists: static (1), dynamic (2)
@@ -441,11 +434,7 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForStaticObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Static Objects rendering"
-        );
+        commandListForStaticObjects->PixBeginEvent(L"Static Objects rendering");
         pScene->RenderObjects(
             RenderSubsystemType::Default,
             m_pDeviceContext,
@@ -453,8 +442,7 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForStaticObjects->GetD3D12CommandList().Get());
-        commandListForStaticObjects->SetReadyForExection();
+        commandListForStaticObjects->SetReadyForExecution();
         });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
@@ -463,11 +451,7 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForAlphaObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Alphakill Objects rendering"
-        );
+        commandListForAlphaObjects->PixBeginEvent(L"Alphakill Objects rendering");
         pScene->RenderObjects(
             RenderSubsystemType::AlphaKill,
             m_pDeviceContext,
@@ -475,9 +459,8 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForAlphaObjects->GetD3D12CommandList().Get());
-        commandListForAlphaObjects->SetReadyForExection();
-        });
+        commandListForAlphaObjects->SetReadyForExecution();
+    });
 
     std::shared_ptr<CommandList> commandListForDynamicObjects{
         pQueue->GetDeferredCommandList(
@@ -492,11 +475,7 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForDynamicObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Dynamic Objects rendering"
-        );
+        commandListForDynamicObjects->PixBeginEvent(L"Dynamic Objects rendering");
         pScene->RenderObjects(
             RenderSubsystemType::Dynamic,
             m_pDeviceContext,
@@ -511,8 +490,7 @@ void Renderer::Render() {
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
-        commandListForDynamicObjects->SetReadyForExection();
+        commandListForDynamicObjects->SetReadyForExecution();
         });
 
 
@@ -558,25 +536,16 @@ void Renderer::Render() {
     };
     m_pJobSystem->AddJob([&]() {
         {
-            PIXBeginEvent(
-                commandListForHZB->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Building HZB"
-            );
+            commandListForHZB->PixBeginEvent(L"Building HZB");
             pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
                 m_pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap()
             );
-            PIXEndEvent(commandListForHZB->GetD3D12CommandList().Get());
-            commandListForHZB->SetReadyForExection();
+            commandListForHZB->SetReadyForExecution();
         }
 
         {
-            PIXBeginEvent(
-                commandListForDeferredShading->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Deferred shading"
-            );
+            commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
             pScene->RunDeferredShading(
                 commandListForDeferredShading,
                 m_pDeviceContext->GetDescriptorHeap(),
@@ -584,16 +553,11 @@ void Renderer::Render() {
                 m_clientWidth,
                 m_clientHeight
             );
-            PIXEndEvent(commandListForDeferredShading->GetD3D12CommandList().Get());
-            commandListForDeferredShading->SetReadyForExection();
+            commandListForDeferredShading->SetReadyForExecution();
         }
 
         {
-            PIXBeginEvent(
-                commandListAfterFrame->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Post Processing"
-            );
+            commandListAfterFrame->PixBeginEvent(L"Post Processing");
             pScene->RenderPostProcessing(
                 commandListAfterFrame,
                 m_pDeviceContext->GetDescriptorHeap(),
@@ -606,8 +570,7 @@ void Renderer::Render() {
                 D3D12_RESOURCE_STATE_PRESENT
             );
 
-            PIXEndEvent(commandListAfterFrame->GetD3D12CommandList().Get());
-            commandListAfterFrame->SetReadyForExection();
+            commandListAfterFrame->SetReadyForExecution();
         }
         });
 

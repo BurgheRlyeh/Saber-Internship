@@ -82,7 +82,7 @@ void CommandQueue::ExecuteCommandListImmediately(
 }
 
 void CommandQueue::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
-	pCommandList->SetReadyForExection();
+	pCommandList->SetReadyForExecution();
 }
 
 uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
@@ -99,7 +99,7 @@ uint64_t CommandQueue::ExecutionTask(uint64_t waitFenceValue) {
 			if (iter == pCommandLists.end()) {
 				iter = pCommandLists.begin();
 			}
-			if (!(*iter)->IsReadyForExection()) {
+			if (!(*iter)->IsReadyForExecution()) {
 				++iter;
 				continue;
 			}
