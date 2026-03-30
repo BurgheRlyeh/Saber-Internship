@@ -188,7 +188,9 @@ enum class GBufferState : uint8_t {
 };
 
 class GBuffer : public Texture {
-	static inline constexpr size_t GBufferSize{ 3 };
+	// tex1: uv, materialId
+	// tex2: tbn
+	static inline constexpr size_t GBufferSize{ 2 };
 	static constexpr D3D12_RESOURCE_DESC GetGBufferTexDesc(size_t width, size_t height) {
 		return D3D12_RESOURCE_DESC{
 			.Dimension{ D3D12_RESOURCE_DIMENSION_TEXTURE2D },

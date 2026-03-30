@@ -67,7 +67,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_useWarp ? GetDxgiAdapterWarp(pFactory) : GetDxgiAdapterByVideoMemory(pFactory)
     };
 
-    constexpr size_t GBUFFER_SIZE{ 3 }; // uvMaterial + tbn + ddxddy
+    constexpr size_t GBUFFER_SIZE{ 2 }; // uvMaterial + tbn
     m_pDeviceContext = std::make_shared<DeviceContext>(pAdapter);
     m_pDeviceContext->InitializeContext(std::to_array<DeviceContext::DescHeapArgs>({
         // CBV_SRV_UAV
