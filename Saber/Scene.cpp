@@ -117,7 +117,7 @@ void Scene::Update(
     std::shared_ptr<CommandList> pCommandList,
     float deltaTime
 ) {
-    TryUpdateCamera(deltaTime);
+    UpdateCamera(deltaTime);
     UpdateSceneBuffer(pDeviceContext, pCommandList);
 }
 
@@ -142,28 +142,39 @@ void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
     }
 }
 
-bool Scene::TryMoveCamera(float forwardCoef, float rightCoef) {
+bool Scene::MoveCamera(float forwardCoef, float rightCoef) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
-    if (!pSphereCamera) {
+    DynamicCamera* pDynamicCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pDynamicCamera) {
         return false;
     }
 
-    pSphereCamera->Move(forwardCoef, rightCoef);
+    pDynamicCamera->Move(forwardCoef, rightCoef, 0.f);
 
     m_isUpdateCamera.store(true);
     return true;
 }
 
-bool Scene::TryRotateCamera(float deltaX, float deltaY) {
+bool Scene::RotateCamera(float deltaTheta, float deltaPhi) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
-    if (!pSphereCamera) {
+    DynamicCamera* pDynamicCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pDynamicCamera) {
         return false;
     }
 
-    pSphereCamera->Rotate(deltaX, deltaY);
+    pDynamicCamera->Rotate(deltaTheta, deltaPhi);
+    m_isUpdateCamera.store(true);
+    return true;
+}
 
+bool Scene::ZoomCamera(float delta) {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    OrbitCamera* pOrbitCamera{ dynamic_cast<OrbitCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pOrbitCamera) {
+        return false;
+    }
+
+    pOrbitCamera->Zoom(delta);
     m_isUpdateCamera.store(true);
     return true;
 }
@@ -182,6 +193,12 @@ void Scene::NextCamera() {
         lock.unlock();
         SetCurrentCamera((m_currCameraId + 1) % m_pCameras.size());
     }
+}
+
+void Scene::SwitchCameraProjection() {
+    std::unique_lock<std::mutex> lock(m_camerasMutex);
+    ProjectionType& projectionType{ m_pCameras.at(m_currCameraId)->m_projectionType };
+    projectionType = static_cast<ProjectionType>(!static_cast<size_t>(projectionType));
 }
 
 void Scene::SetAmbientLight(
@@ -356,18 +373,18 @@ void Scene::RenderPostProcessing(
     m_pPostProcessing->Render(pCommandList, rootParameterIndex);
 }
 
-bool Scene::TryUpdateCamera(float deltaTime) {
+bool Scene::UpdateCamera(float deltaTime) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     if (!m_isUpdateCamera.load()) {
         return false;
     }
 
-    DynamicCamera* pSphereCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
-    if (!pSphereCamera) {
+    DynamicCamera* pDynamicCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
+    if (!pDynamicCamera) {
         return false;
     }
 
-    pSphereCamera->Update(deltaTime);
+    pDynamicCamera->Update(deltaTime);
     return true;
 }
 

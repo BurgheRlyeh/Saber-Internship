@@ -157,7 +157,7 @@ void Renderer::Initialize(HWND hWnd) {
             };
 
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateModelFromGLTF(
+            pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
                 pCommandList,
                 filepath,
@@ -205,17 +205,18 @@ void Renderer::Initialize(HWND hWnd) {
             m_pJobSystem->AddJob([&, i, addObjects]() {
                 std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
 
-                // dynamic camera
-                pScene->AddCamera(std::make_shared<DynamicCamera>());
+                // dynamic cameras
+                pScene->AddCamera(std::make_shared<OrbitCamera>());
+                pScene->AddCamera(std::make_shared<FlyCamera>());
 
-                // standart camera
+                // standard camera
                 pScene->AddCamera(std::make_shared<StaticCamera>(
                     DirectX::XMFLOAT3{ 0.f, 0.f, 3.f },
                     DirectX::XMFLOAT3{ 0.f, 0.f, 0.f },
                     DirectX::XMFLOAT3{ 0.f, 1.f, 0.f }
                 ));
 
-                // standart light
+                // standard light
                 pScene->AddLightSource(
                     { -1.5f, 0.f, 1.5f, 1.f },
                     { 1.f, 1.f, 0.f },
@@ -281,6 +282,10 @@ void Renderer::SwitchToNextCamera() {
     m_isSwitchToNextCamera.store(true);
 }
 
+void Renderer::SwitchCameraProjection() {
+    m_isSwitchCameraProjection.store(true);
+}
+
 inline void Renderer::RenderLoop() {
     while (!m_isInitialized) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -296,6 +301,10 @@ inline void Renderer::RenderLoop() {
         if (m_isSwitchToNextCamera.load()) {
             m_pScenes[m_currSceneId]->NextCamera();
             m_isSwitchToNextCamera.store(false);
+        }
+        if (m_isSwitchCameraProjection.load()) {
+            m_pScenes[m_currSceneId]->SwitchCameraProjection();
+            m_isSwitchCameraProjection.store(false);
         }
 
         Update();
@@ -527,11 +536,7 @@ void Renderer::Render() {
         pQueue->GetDeferredCommandList(
             L"AfterFrameJob",
             m_pDeviceContext->GetDevice(),
-            ++listPriority,
-            [&] {
-                pQueue->GpuWait(pGBufFence, GBufferState::Write);
-                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthWriting);
-            }
+            ++listPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -600,11 +605,15 @@ void Renderer::Render() {
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
-    m_pScenes.at(m_currSceneId)->TryMoveCamera(forwardCoef, rightCoef);
+    m_pScenes.at(m_currSceneId)->MoveCamera(forwardCoef, rightCoef);
 }
 
 void Renderer::RotateCamera(float deltaX, float deltaY) {
-    m_pScenes.at(m_currSceneId)->TryRotateCamera(deltaX / m_clientWidth, deltaY / m_clientHeight);
+    m_pScenes.at(m_currSceneId)->RotateCamera(deltaX / m_clientWidth, deltaY / m_clientHeight);
+}
+
+void Renderer::ZoomCamera(float delta) {
+    m_pScenes.at(m_currSceneId)->ZoomCamera(delta);
 }
 
 bool Renderer::CheckTearingSupport() {

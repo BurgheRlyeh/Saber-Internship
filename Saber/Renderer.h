@@ -76,6 +76,7 @@ class Renderer {
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
+    std::atomic<bool> m_isSwitchCameraProjection{};
 
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
@@ -104,6 +105,7 @@ public:
     void SetSceneId(size_t sceneId);
 
     void SwitchToNextCamera();
+    void SwitchCameraProjection();
 
     void Resize(uint32_t width, uint32_t height);
 
@@ -113,6 +115,7 @@ public:
 
     void MoveCamera(float forwardCoef, float rightCoef);
     void RotateCamera(float deltaX, float deltaY);
+    void ZoomCamera(float delta);
 
 private:
     void RenderLoop();

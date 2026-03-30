@@ -106,10 +106,12 @@ public:
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
     void UpdateCamerasAspectRatio(float aspectRatio);
-    bool TryMoveCamera(float forwardCoef, float rightCoef);
-    bool TryRotateCamera(float deltaX, float deltaY);
+    bool MoveCamera(float forwardCoef, float rightCoef);
+    bool RotateCamera(float deltaTheta, float deltaPhi);
+    bool ZoomCamera(float delta);
     bool SetCurrentCamera(size_t cameraId);
     void NextCamera();
+    void SwitchCameraProjection();
 
     void SetAmbientLight(
         const DirectX::XMFLOAT3& color,
@@ -154,7 +156,7 @@ public:
     );
 
 private:
-    bool TryUpdateCamera(float deltaTime);
+    bool UpdateCamera(float deltaTime);
 
     void UpdateSceneBuffer(
         std::shared_ptr<DeviceContext> pDeviceContext,

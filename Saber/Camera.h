@@ -4,12 +4,21 @@
 
 #include <limits>
 
+enum class ProjectionType : uint8_t {
+	Perspective,
+	Orthographic
+};
+
 class Camera {
 public:
 	float m_near{ 0.1f };
 	float m_far{ 100.0f };
 	float m_fov{ 60.0f };
 	float m_aspectRatio{ 16.0f / 9.0f };
+
+	ProjectionType m_projectionType{ ProjectionType::Perspective };
+	float m_orthographicViewWidth{ 8.f };
+	float m_orthographicViewHeight{ 8.f };
 
 	void SetAspectRatio(float newAspectRatio);
 
@@ -18,6 +27,11 @@ public:
 	virtual DirectX::XMFLOAT3 GetUpDirection() const = 0;
 	virtual DirectX::XMFLOAT3 GetViewDirection() const = 0;
 
+	DirectX::XMMATRIX GetPerspectiveMatrix() const;
+	DirectX::XMMATRIX GetOrthographicMatrix() const;
+	DirectX::XMMATRIX GetViewPerspectiveMatrix() const;
+	DirectX::XMMATRIX GetViewOrthographicMatrix() const;
+
 	DirectX::XMMATRIX GetViewMatrix() const;
 	DirectX::XMMATRIX GetProjectionMatrix() const;
 	DirectX::XMMATRIX GetViewProjectionMatrix() const;
@@ -25,27 +39,7 @@ public:
 	void BuildViewFrustumPlanes(
 		DirectX::XMFLOAT4 (&planes)[6],
 		const DirectX::XMMATRIX* viewProjectionMatrix
-	) const {
-		DirectX::XMMATRIX t{ DirectX::XMMatrixTranspose(
-			viewProjectionMatrix ? *viewProjectionMatrix : GetViewProjectionMatrix()
-		) };
-
-		auto extractPlane{ [](DirectX::XMVECTOR v1, DirectX::XMVECTOR v2) {
-			DirectX::XMVECTOR plane{
-				DirectX::XMPlaneNormalize(DirectX::XMVectorAdd(v1, v2))
-			};
-			DirectX::XMFLOAT4 result;
-			DirectX::XMStoreFloat4(&result, plane);
-			return result;
-		} };
-
-		planes[0] = extractPlane(t.r[3], t.r[0]);							// left
-		planes[1] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[0]));	// right
-		planes[2] = extractPlane(t.r[3], t.r[1]);							// bottom
-		planes[3] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[1]));	// up
-		planes[4] = extractPlane(t.r[3], t.r[2]);							// near
-		planes[5] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[2]));	// far
-	}
+	) const;
 };
 
 class StaticCamera : public Camera {
@@ -54,10 +48,6 @@ class StaticCamera : public Camera {
 	DirectX::XMFLOAT3  m_up{ 0.0f, 1.0f, 0.0f };
 
 public:
-	float m_near{ 0.1f };
-	float m_far{ 100.0f };
-	float m_fov{ 60.0f };
-
 	StaticCamera(
 		const DirectX::XMFLOAT3& pos,
 		const DirectX::XMFLOAT3& poi,
@@ -71,26 +61,55 @@ public:
 };
 
 class DynamicCamera : public Camera {
-	DirectX::XMFLOAT3 m_poi{ 0.0f, 0.0f, 0.0f };
+protected:
+	float m_sensitivity{ DirectX::XM_PI };
+	float m_speed{ 5.f };
 
-	float m_radius{ 3.f };
-	float m_angX{ DirectX::XM_PIDIV2 * 3 / 4 };
-	float m_angY{};
-	float m_rotationSpeed{ DirectX::XM_PI };
+public:
+	virtual void Rotate(float deltaTheta, float deltaPhi) = 0;
+	virtual void Move(float forwardCoef, float rightCoef, float upCoef) = 0;
+	virtual void Update(float deltaTime) = 0;
+};
+
+class OrbitCamera : public DynamicCamera {
+	DirectX::XMFLOAT3 m_poi{ 0.f, 0.f, 0.f };
+
+	float m_theta{ DirectX::XM_PIDIV2 };
+	float m_phi{ DirectX::XM_PIDIV4 };
 
 	float m_deltaForward{};
 	float m_deltaRight{};
-	float m_speed{ 2.f };
+
+	float m_radius{ 5.f };
 
 public:
 	DirectX::XMFLOAT3 GetPosition() const override;
-	DirectX::XMFLOAT3 GetPointOfInterest() const override;
-	DirectX::XMFLOAT3 GetUpDirection() const override;
+	DirectX::XMFLOAT3 GetPointOfInterest() const override { return m_poi; }
+	DirectX::XMFLOAT3 GetUpDirection()	const override { return { 0.f, 1.f, 0.f }; }
 	DirectX::XMFLOAT3 GetViewDirection() const override;
 
-	void Move(float forwardCoef, float rightCoef);
+	void Rotate(float deltaTheta, float deltaPhi) override;
+	void Move(float forwardCoef, float rightCoef, float upCoef) override;
+	void Update(float deltaTime) override;
 
-	void Rotate(float deltaX, float deltaY);
+	void Zoom(float deltaRadius);
+};
 
-	void Update(float deltaTime);
+class FlyCamera : public DynamicCamera {
+	DirectX::XMFLOAT3 m_position{ 0.f, 0.f, 0.f };
+
+	float m_yaw{};
+	float m_pitch{};
+
+	DirectX::XMFLOAT3 m_velocity{ 0.f, 0.f, 0.f };
+
+public:
+	DirectX::XMFLOAT3 GetPosition() const override { return m_position; }
+	DirectX::XMFLOAT3 GetPointOfInterest() const override;
+	DirectX::XMFLOAT3 GetUpDirection() const override { return { 0.f, 1.f, 0.f }; }
+	DirectX::XMFLOAT3 GetViewDirection() const override;
+
+	void Rotate(float deltaYaw, float deltaPitch) override;
+	void Move(float forwardCoef, float rightCoef, float upCoef) override;
+	void Update(float deltaTime) override;
 };
