@@ -305,7 +305,7 @@ public:
         );
 
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
-        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
             L"Brick.dds",
@@ -366,7 +366,7 @@ public:
         );
 
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
-        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
             L"barbarian_diffuse.dds",
@@ -484,7 +484,7 @@ public:
         );
 
         pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
-        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->AddMaterial(
+        pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
             L"grassAlbedo.dds",
