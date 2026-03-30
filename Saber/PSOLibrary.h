@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include <mutex>
+
 #include "MemoryMappedFile.h"
 
 class Device;
@@ -11,7 +13,9 @@ private:
 	MemoryMappedFile m_file;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary1> m_pPipelineLibrary{};
-	bool m_renewed{};
+	std::mutex m_pipelineLibraryMutex;
+
+	std::atomic<bool> m_isRenewed{};
 
 public:
 	PSOLibrary(
