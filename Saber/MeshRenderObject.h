@@ -222,6 +222,8 @@ public:
         std::shared_ptr<DeviceContext> pDeviceContext,
         const std::shared_ptr<CommandList>& pCommandList,
         std::shared_ptr<Texture> pGBuffer,
+        std::filesystem::path& albedoFilepath,
+        std::filesystem::path& normalFilepath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         DirectX::XMFLOAT3 positions[24]{
@@ -308,8 +310,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"Brick.dds",
-            L"BrickNM.dds"
+            albedoFilepath,
+            normalFilepath
         ));
 
         return pObj;
@@ -318,8 +320,10 @@ public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
         const std::shared_ptr<CommandList>& pCommandList,
-        std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
+        std::filesystem::path& modelFilepath,
+        std::filesystem::path& albedoFilepath,
+        std::filesystem::path& normalFilepath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -327,7 +331,7 @@ public:
         };
 
         Mesh::MeshDataGLTF data{
-            .filepath{ filepath },
+            .filepath{ modelFilepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
@@ -369,8 +373,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"barbarian_diffuse.dds",
-            L"barb2_n.dds"
+            albedoFilepath,
+            normalFilepath
         ));
 
         return pObj;
@@ -436,8 +440,10 @@ public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateAlphaModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
         const std::shared_ptr<CommandList>& pCommandList,
-        std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
+        std::filesystem::path& modelFilepath,
+        std::filesystem::path& albedoFilepath,
+        std::filesystem::path& normalFilepath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -445,7 +451,7 @@ public:
         };
 
         Mesh::MeshDataGLTF data{
-            .filepath{ filepath },
+            .filepath{ modelFilepath },
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
@@ -487,8 +493,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"grassAlbedo.dds",
-            L"grassNormal.dds"
+            albedoFilepath,
+            normalFilepath
         ));
 
         return pObj;

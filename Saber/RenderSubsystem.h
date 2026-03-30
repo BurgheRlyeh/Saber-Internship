@@ -35,14 +35,15 @@ public:
 			|| (m_pIndirectCommandBuffer && m_pIndirectCommandBuffer->IsUpdatePending());
 	}
 
-	bool Add(std::shared_ptr<RenderObject> pObject) {
+	size_t Add(std::shared_ptr<RenderObject> pObject) {
 		std::unique_lock<std::mutex> lock(m_objectsMutex);
 		assert(m_objects.empty() || pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
-		if (m_objects.size() == m_capacity) {
-			return false;
+
+		size_t id{ m_objects.size() };
+		if (id == m_capacity) {
+			return static_cast<size_t>(-1);
 		}
 		m_objects.push_back(pObject);
-		size_t id{ m_objects.size() - 1 };
 		lock.unlock();
 
 		auto pMeshObject{ std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(pObject) };
@@ -57,6 +58,7 @@ public:
 			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
 			m_pModelBuffers->UpdateAt(id, modelBuffer);
 		}
+		return id;
 	}
 
 	void Render(
@@ -136,6 +138,14 @@ public:
 		}
 
 		return true;
+	}
+
+	ModelBuffer GetModelBuffer(size_t id) {
+		return m_pModelBuffers->GetStorageData()[id];
+	}
+
+	void SetModelBuffer(size_t id, const ModelBuffer& modelBuffer) {
+		m_pModelBuffers->UpdateAt(id, modelBuffer);
 	}
 
 	void PerformUpdate(

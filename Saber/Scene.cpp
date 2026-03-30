@@ -11,6 +11,7 @@
 #include "Device.h"
 #include "DeviceContext.h"
 #include "MaterialManager.h"
+#include "ModelBuffer.h"
 #include "RenderObject.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
@@ -119,6 +120,13 @@ void Scene::Update(
 ) {
     UpdateCamera(deltaTime);
     UpdateSceneBuffer(pDeviceContext, pCommandList);
+
+    std::scoped_lock lock(m_dynamicUpdatesMutex);
+    for (auto& updData : m_dynamicUpdates) {
+        auto& pRenderSubsystem{ m_pRenderSubsystems[ToId(updData.obj.type)] };
+        ModelBuffer modelBuf{ pRenderSubsystem->GetModelBuffer(updData.obj.id) };
+        pRenderSubsystem->SetModelBuffer(updData.obj.id, updData.updFunction(modelBuf, deltaTime));
+    }
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
@@ -231,11 +239,26 @@ bool Scene::AddLightSource(
     return result;
 }
 
-void Scene::AddObject(
+Scene::ObjectKey Scene::AddObject(
     const EnumFlags<RenderSubsystemType> type,
     std::shared_ptr<RenderObject> pObject
 ) const {
-    m_pRenderSubsystems[ToId(type)]->Add(pObject);
+    return ObjectKey{ type, m_pRenderSubsystems[ToId(type)]->Add(pObject) };
+}
+Scene::ObjectKey Scene::AddObject(
+    const EnumFlags<RenderSubsystemType> type,
+    std::shared_ptr<RenderObject> pObject,
+    std::function<ModelBuffer(ModelBuffer modelBuffer, float deltaTime)> updFunction
+) {
+    assert(type & RenderSubsystemType::Dynamic);
+    size_t id{ m_pRenderSubsystems[ToId(type)]->Add(pObject) };
+
+    std::scoped_lock lock(m_dynamicUpdatesMutex);
+    m_dynamicUpdates.push_back(Scene::DynamicObjectData{
+        type, id, updFunction
+    });
+
+    return ObjectKey{ type, id };
 }
 void Scene::RenderObjects(
     const EnumFlags<RenderSubsystemType> type,

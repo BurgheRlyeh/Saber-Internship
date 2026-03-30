@@ -3,6 +3,7 @@
 #include "Headers.h"
 
 #include <array>
+#include <functional>
 #include <mutex>
 
 #include "EnumHelpers.h"
@@ -22,6 +23,7 @@ class Device;
 class DeviceContext;
 class GBuffer;
 class MaterialManager;
+struct ModelBuffer;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem;
@@ -52,6 +54,20 @@ class Scene {
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
         static_cast<size_t>(RenderSubsystemType::Count)
     > m_pRenderSubsystems{};
+
+public:
+    struct ObjectKey {
+        EnumFlags<RenderSubsystemType> type{};
+        size_t id{};
+    };
+
+private:
+    struct DynamicObjectData {
+        ObjectKey obj{};
+        std::function<ModelBuffer(ModelBuffer modelBuffer, float deltaTime)> updFunction{};
+    };
+    std::vector<DynamicObjectData> m_dynamicUpdates{};
+    std::mutex m_dynamicUpdatesMutex{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
     std::mutex m_camerasMutex{};
@@ -125,10 +141,15 @@ public:
         const float& specularPower = 1.f
     );
 
-    void AddObject(
+    ObjectKey AddObject(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<RenderObject> pObject
     ) const;
+    ObjectKey AddObject(
+        const EnumFlags<RenderSubsystemType> type,
+        std::shared_ptr<RenderObject> pObject,
+        std::function<ModelBuffer(ModelBuffer modelBuffer, float deltaTime)> updFunction
+    );
     void RenderObjects(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,

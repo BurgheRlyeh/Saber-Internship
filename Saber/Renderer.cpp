@@ -25,6 +25,25 @@
 #include "Texture.h"
 #include "TextureResource.h"
 
+struct CelestialBody {
+    float orbitRadius{};
+    float orbitSpeed{};
+    float rotationSpeed{};
+    float scale{};
+
+    float currentOrbitAngle{};
+    float currentRotationAngle{};
+
+    int parentIndex{ -1 }; // индекс в g_bodies
+    int depth{};
+
+    DirectX::XMVECTOR position{};
+    DirectX::XMMATRIX worldTransform{};
+    DirectX::XMMATRIX modelMatrix{};
+};
+
+static std::vector<std::shared_ptr<CelestialBody>> g_bodies;
+
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
     , m_clientWidth(resWidth)
@@ -117,7 +136,7 @@ void Renderer::Initialize(HWND hWnd) {
     m_isInitialized = true;
 
     {
-        constexpr size_t ScenesCount{ 4 };
+        constexpr size_t ScenesCount{ 5 };
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
@@ -146,6 +165,8 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext,
                 pCommandList,
                 m_pGBuffers[0],
+                std::filesystem::path{ L"Brick.dds" },
+                std::filesystem::path{ L"BrickNM.dds" },
                 DirectX::XMMatrixIdentity()
             ));
 
@@ -156,20 +177,22 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
             pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
                 pCommandList,
-                filepath,
                 m_pGBuffers[0],
+                std::filesystem::path{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" },
+                std::filesystem::path{ L"barbarian_diffuse.dds" },
+                std::filesystem::path{ L"barb2_n.dds" },
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
-            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
 			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
 				m_pDeviceContext,
 				pCommandList,
-				filepathGrass,
-				m_pGBuffers[0],
+                m_pGBuffers[0],
+                std::filesystem::path{ L"../../Resources/StaticModels/grass.glb" },
+                std::filesystem::path{ L"grassAlbedo.dds" },
+                std::filesystem::path{ L"grassNormal.dds" },
 				DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
 			));
 
@@ -180,7 +203,6 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
             DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
 
             std::random_device rd;
@@ -190,11 +212,207 @@ void Renderer::Initialize(HWND hWnd) {
                 pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                     m_pDeviceContext,
                     pCommandList,
-                    filepathGrass,
                     m_pGBuffers[0],
+                    std::filesystem::path{ L"../../Resources/StaticModels/grass.glb" },
+                    std::filesystem::path{ L"grassAlbedo.dds" },
+                    std::filesystem::path{ L"grassNormal.dds" },
                     scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
                 ));
             }
+
+            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
+        };
+        sceneObjectAdders[4] = [&](std::unique_ptr<Scene>& pScene) {
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+            };
+
+            auto CreateBody = [&](std::wstring texture,
+                float scale,
+                int parentIndex,
+                float orbitRadius,
+                float orbitSpeed,
+                float rotationSpeed,
+                float initialOrbitAngle = 0.0f)
+            {
+                auto body{ std::make_shared<CelestialBody>() };
+
+                body->parentIndex = parentIndex;
+                body->orbitRadius = orbitRadius;
+                body->orbitSpeed = orbitSpeed;
+                body->rotationSpeed = rotationSpeed;
+                body->scale = scale;
+
+                body->currentOrbitAngle = initialOrbitAngle;
+                body->currentRotationAngle = 0.0f;
+
+                body->position = DirectX::XMVectorZero();
+                body->modelMatrix = DirectX::XMMatrixIdentity();
+
+                body->depth = (parentIndex >= 0) ? (g_bodies[parentIndex]->depth + 1) : 0;
+
+                int myIndex{ static_cast<int>(g_bodies.size()) };
+                g_bodies.push_back(body);
+
+                pScene->AddObject(
+                    RenderSubsystemType::Dynamic,
+                    TestTextureRenderObject::CreateModelFromGLTF(
+                        m_pDeviceContext,
+                        pCommandList,
+                        m_pGBuffers[0],
+                        std::filesystem::path{ L"../../Resources/StaticModels/sphere.glb" },
+                        std::filesystem::path{ texture },
+                        std::filesystem::path{ texture }
+                    ),
+                    [body](ModelBuffer modelBuffer, float dt)
+                {
+                    // 1. Обновляем углы
+                    body->currentOrbitAngle += body->orbitSpeed * dt;
+                    body->currentRotationAngle += body->rotationSpeed * dt;
+
+                    // 2. Матрица родителя 
+                    DirectX::XMMATRIX parentWorld{};
+                    if (body->parentIndex >= 0) {
+                        parentWorld = g_bodies[body->parentIndex]->worldTransform;
+                    }
+                    else {
+                        parentWorld = DirectX::XMMatrixIdentity();
+                    }
+
+                    // 3. Подготавливаем локальные матрицы
+                    DirectX::XMMATRIX scaleMatrix{ DirectX::XMMatrixScaling(body->scale, body->scale, body->scale) };
+                    DirectX::XMMATRIX orbitRotation{ DirectX::XMMatrixRotationY(body->currentOrbitAngle) };
+                    DirectX::XMMATRIX translation{ DirectX::XMMatrixTranslation(body->orbitRadius, 0.0f, 0.0f) };
+                    DirectX::XMMATRIX selfRotation{ DirectX::XMMatrixRotationY(body->currentRotationAngle) };
+
+                    // 4. Считаем worldTransform
+                    body->worldTransform = translation * orbitRotation * parentWorld;
+
+                    // 5. Считаем modelMatrix 
+                    body->modelMatrix = scaleMatrix * selfRotation * body->worldTransform;
+
+                    // 6. Обновляем position
+                    body->position = body->worldTransform.r[3];
+
+                    // 7. Обновляем ModelBuffer
+                    modelBuffer.modelMatrix = body->modelMatrix;
+                    modelBuffer.normalMatrix = DirectX::XMMatrixTranspose(
+                        DirectX::XMMatrixInverse(nullptr, modelBuffer.modelMatrix)
+                    );
+
+                    return modelBuffer;
+                });
+
+                return myIndex;
+            };
+
+            // ------------------------------------------------------------
+            // СЦЕНА (создаём в правильном порядке)
+
+            // 0. Солнце (в центре)
+            int sunIndex{
+                CreateBody(
+                    L"sun.dds",
+                    0.8f,
+                    -1,
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f
+                )
+            };
+
+            // 1. ВНУТРЕННЯЯ ПЛАНЕТА
+            int p1Id{
+                CreateBody(
+                    L"p1.dds",
+                    0.25f,   
+                    sunIndex,
+                    7.0f,
+                    0.6f,    
+                    1.5f,
+                    DirectX::XM_PIDIV2
+                )
+            };
+
+            // 2. ПЛАНЕТА 2 
+            int p2id{
+                CreateBody(
+                    L"p2.dds",
+                    0.4f,    
+                    sunIndex,
+                    14.0f,
+                    0.4f,    
+                    1.0f,
+                    DirectX::XM_PI
+                )
+            };
+
+            // Первая луна второй планеты
+            int p2m1id{
+                CreateBody(
+                    L"p2m1.dds",
+                    0.08f,
+                    p2id,
+                    1.5f,
+                    0.8f, 
+                    0.5f,
+                    0.0f
+                )
+            };
+
+            // Вторая луна второй планеты
+            int p2m2id{
+                CreateBody(
+                    L"p2m2.dds",
+                    0.05f,
+                    p2id,
+                    2.5f,
+                    0.5f,
+                    0.8f,
+                    DirectX::XM_PI
+                )
+            };
+
+            // 3. СРЕДНЯЯ ПЛАНЕТА 
+            int p3Id{
+                CreateBody(
+                    L"p3.dds",
+                    0.5f,
+                    sunIndex,
+                    21.0f,
+                    0.25f,
+                    0.8f,
+                    DirectX::XM_PI * 1.5f
+                )
+            };
+
+            // 4. ПЛАНЕТА 1
+            int p4id{
+                CreateBody(
+                    L"p4.dds",
+                    0.35f,
+                    sunIndex,
+                    28.0f,
+                    0.15f,
+                    1.0f,
+                    0.0f
+                )
+            };
+
+            // Луна первой планеты
+            int p4m1id{
+                CreateBody(
+                    L"p4m1.dds",
+                    0.1f,
+                    p4id,
+                    1.8f,
+                    1.0f,
+                    0.5f,
+                    0.0f
+                )
+            };
+            // ------------------------------------------------------------
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
