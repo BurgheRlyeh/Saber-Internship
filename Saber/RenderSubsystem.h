@@ -1,3 +1,15 @@
+/**
+ * @file RenderSubsystem.h
+ * @brief Batched GPU-driven render subsystem using @c ExecuteIndirect.
+ *
+ * @ref RenderSubsystem<IndirectCommand> owns a list of @ref RenderObject instances
+ * that share the same PSO, a @ref Buffer<ModelBuffer> for per-object constant data,
+ * and an @ref IndirectCommandBuffer<IndirectCommand> for the GPU-driven draw arguments.
+ *
+ * Objects are registered with @ref Add; @ref InitializeModelBuffer and
+ * @ref InitializeIndirectCommandBuffer prepare the GPU buffers; @ref PerformUpdate
+ * flushes any pending CPU-side writes; @ref Render issues the @c ExecuteIndirect call.
+ */
 #pragma once
 
 #include "Headers.h"
@@ -6,11 +18,16 @@
 #include "IndirectCommandBuffer.h"
 #include "MeshRenderObject.h"
 
+/**
+ * @brief Manages a batch of same-PSO objects rendered with a single @c ExecuteIndirect call.
+ *
+ * @tparam IndirectCommand Indirect-command struct; must satisfy @ref IndirectCommandConcept.
+ */
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem {
 	std::wstring m_name{};
 
-	size_t m_capacity{};
+	size_t m_capacity{}; /**< @brief Maximum number of objects. */
 
 	std::vector<std::shared_ptr<RenderObject>> m_objects{};
 	std::mutex m_objectsMutex{};
@@ -19,6 +36,11 @@ class RenderSubsystem {
 	std::shared_ptr<IndirectCommandBuffer<IndirectCommand>> m_pIndirectCommandBuffer{};
 
 public:
+	/**
+	 * @brief Constructs the subsystem and reserves space for @p capacity objects.
+	 * @param name     Debug name.
+	 * @param capacity Maximum object count (default 128).
+	 */
 	RenderSubsystem(
 		const std::wstring& name,
 		size_t capacity = 128
@@ -30,11 +52,23 @@ public:
 		m_objects.reserve(m_capacity);
 	}
 
+	/**
+	 * @brief Returns @c true if any GPU buffer has a pending CPU-to-GPU upload.
+	 */
 	bool IsUpdatePending() const {
 		return (m_pModelBuffers && m_pModelBuffers->IsUpdatePending())
 			|| (m_pIndirectCommandBuffer && m_pIndirectCommandBuffer->IsUpdatePending());
 	}
 
+	/**
+	 * @brief Registers a @ref RenderObject with the subsystem.
+	 *
+	 * All objects must share the same PSO.  Stages model-buffer and indirect-command
+	 * updates immediately if the GPU buffers are already initialised.
+	 *
+	 * @param pObject Object to register; must be a @ref MeshRenderObject<ModelBuffer>.
+	 * @return @c true if added; @c false if the subsystem is at capacity.
+	 */
 	bool Add(std::shared_ptr<RenderObject> pObject) {
 		std::unique_lock<std::mutex> lock(m_objectsMutex);
 		assert(m_objects.empty() || pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
@@ -59,6 +93,13 @@ public:
 		}
 	}
 
+	/**
+	 * @brief Binds state shared by all objects and issues the @c ExecuteIndirect call.
+	 * @param pCommandList      Direct command list.
+	 * @param commandListPrepare Callback invoked after PSO / root signature binding
+	 *                          and before the draw; use it to bind scene-level descriptors.
+	 * @param offset            Unused placeholder for future draw-offset support.
+	 */
 	void Render(
 		std::shared_ptr<CommandList> pCommandList,
 		const std::function<void()>& commandListPrepare,
@@ -80,6 +121,12 @@ public:
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
 
+	/**
+	 * @brief Creates the per-object model-buffer GPU resource and stages initial data.
+	 * @param pDeviceContext   Device context.
+	 * @param pIndirectUpdater Unused; reserved for future GPU-driven model-buffer updates.
+	 * @return Always @c true.
+	 */
 	bool InitializeModelBuffer(
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
@@ -103,6 +150,17 @@ public:
 		return true;
 	}
 
+	/**
+	 * @brief Creates the indirect-command buffer and stages initial draw arguments.
+	 *
+	 * When @p pIndirectUpdater is provided the buffer is configured with a
+	 * @ref DynamicBufferUpdater (GPU scatter-write); otherwise a
+	 * @ref RangeBufferUpdater is used with CPU-side storage.
+	 *
+	 * @param pDeviceContext   Device context.
+	 * @param pIndirectUpdater Optional compute object for GPU-side updates.
+	 * @return @c false if the object list is empty; @c true otherwise.
+	 */
 	bool InitializeIndirectCommandBuffer(
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<ComputeObject> pIndirectUpdater = nullptr
@@ -138,6 +196,11 @@ public:
 		return true;
 	}
 
+	/**
+	 * @brief Flushes pending model-buffer and indirect-command-buffer updates to the GPU.
+	 * @param pDeviceContext Device context.
+	 * @param pCommandList  Command list for copy/barrier commands.
+	 */
 	void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandList> pCommandList

@@ -1,3 +1,8 @@
+/**
+ * @file framework.h
+ * @brief Standard system and project-specific include file for the Win32 application framework.
+ */
+
 // header.h : include file for standard system include files,
 // or project specific include files
 //

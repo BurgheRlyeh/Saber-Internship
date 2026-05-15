@@ -1,3 +1,12 @@
+/**
+ * @file CppHlslTypesRedefine.h
+ * @brief Provides compatibility macros so that HLSL built-in types map to
+ *        their C++/DirectX Math equivalents when compiled as C++, and to
+ *        native HLSL types when compiled as HLSL shader code.
+ *
+ * This header is intended to be included in files that are compiled by both
+ * the C++ compiler and the HLSL compiler (e.g. shared constant-buffer structs).
+ */
 #ifndef CPP_HLSL_TYPES_REDEFINE_H
 #define CPP_HLSL_TYPES_REDEFINE_H
 

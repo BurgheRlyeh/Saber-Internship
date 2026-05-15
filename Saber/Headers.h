@@ -1,3 +1,10 @@
+/**
+ * @file Headers.h
+ * @brief Central include file for DirectX 12, WRL, and common STL headers used throughout the project.
+ *
+ * Also defines the @c ThrowIfFailed helper that checks HRESULT values and
+ * optionally queries DRED data on device removal.
+ */
 #pragma once
 
 // Exclude rarely-used stuff from Windows headers
@@ -32,6 +39,16 @@
 #include <cassert>
 #include <exception>
 
+/**
+ * @brief Throws an exception if the given HRESULT indicates failure.
+ *
+ * On debug builds, if a device-removal error is detected, the function also
+ * queries DRED auto-breadcrumbs and page-fault allocation data for diagnostics.
+ *
+ * @param hr      The HRESULT value to check.
+ * @param pDevice Optional D3D12 device used for DRED queries on device removal.
+ * @throws std::exception if @p hr is a failure code.
+ */
 inline void ThrowIfFailed(HRESULT hr, Microsoft::WRL::ComPtr<ID3D12Device> pDevice = nullptr) {
     if (SUCCEEDED(hr)) {
         return;

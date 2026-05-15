@@ -1,30 +1,55 @@
-//{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
-// Used by Saber.rc
+/**
+ * @file Resource.h
+ * @brief Lightweight GPU resource descriptors for shaders and root signatures.
+ *
+ * @ref ShaderResource loads a compiled shader blob from a @c .cso file.
+ * @ref RootSignatureResource deserialises a root-signature blob and creates
+ * the @c ID3D12RootSignature object on the device.
+ */
+#pragma once
 
-#define IDS_APP_TITLE			103
+#include "Headers.h"
 
-#define IDR_MAINFRAME			128
-#define IDD_SABER_DIALOG	102
-#define IDD_ABOUTBOX			103
-#define IDM_ABOUT				104
-#define IDM_EXIT				105
-#define IDI_SABER			107
-#define IDI_SMALL				108
-#define IDC_SABER			109
-#define IDC_MYICON				2
-#ifndef IDC_STATIC
-#define IDC_STATIC				-1
-#endif
-// Next default values for new objects
-//
-#ifdef APSTUDIO_INVOKED
-#ifndef APSTUDIO_READONLY_SYMBOLS
+#include "Device.h"
 
-#define _APS_NO_MFC					130
-#define _APS_NEXT_RESOURCE_VALUE	129
-#define _APS_NEXT_COMMAND_VALUE		32771
-#define _APS_NEXT_CONTROL_VALUE		1000
-#define _APS_NEXT_SYMED_VALUE		110
-#endif
-#endif
+/**
+ * @brief Holds a compiled shader blob loaded from a @c .cso file.
+ */
+struct ShaderResource {
+    Microsoft::WRL::ComPtr<ID3DBlob> pShaderBlob{}; /**< @brief The compiled shader byte-code. */
+
+    /**
+     * @brief Reads and stores the compiled shader from disk.
+     * @param filename Path to the compiled shader object (@c .cso) file.
+     */
+    ShaderResource(const std::wstring& filename) {
+        ThrowIfFailed(D3DReadFileToBlob(filename.c_str(), &pShaderBlob));
+    }
+};
+
+/**
+ * @brief Creates and holds a @c ID3D12RootSignature from a serialised blob.
+ */
+struct RootSignatureResource {
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature{}; /**< @brief The created root signature object. */
+
+    /**
+     * @brief Deserialises the blob and creates the root signature on the device.
+     * @param filename            Debug name applied to the root-signature object.
+     * @param pDevice             Device on which to create the root signature.
+     * @param pRootSignatureBlob  Serialised root-signature blob.
+     */
+    RootSignatureResource(
+        const std::wstring& filename,
+        std::shared_ptr<Device> pDevice,
+        Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob
+    ) {
+        ThrowIfFailed(pDevice->GetD3D12Device()->CreateRootSignature(
+            0,
+            pRootSignatureBlob->GetBufferPointer(),
+            pRootSignatureBlob->GetBufferSize(),
+            IID_PPV_ARGS(&pRootSignature)
+        ));
+        pRootSignature->SetName(filename.c_str());
+    }
+};

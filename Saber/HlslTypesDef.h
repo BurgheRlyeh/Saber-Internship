@@ -1,3 +1,10 @@
+/**
+ * @file HlslTypesDef.h
+ * @brief Defines HLSL-compatible type aliases for use in C++ code.
+ *
+ * Include this file before any struct that must be shared between C++ and HLSL.
+ * Pair with @ref HlslTypesUndef.h to restore the original names afterwards.
+ */
 #ifdef __cplusplus
 
 #include <DirectXMath.h>
