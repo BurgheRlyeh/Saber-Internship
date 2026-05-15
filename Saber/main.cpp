@@ -64,9 +64,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_pRenderer->SetSceneId(wParam - '0');
             break;
         case 'C':
+        case 'c':
             g_pRenderer->SwitchToNextCamera();
             break;
+        case 'P':
+        case 'p':
+            g_pRenderer->SwitchCameraProjection();
+            break;
         case 'V':
+        case 'v':
             g_pRenderer->SwitchVSync();
             break;
         case VK_ESCAPE:
@@ -182,6 +188,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 static_cast<float>(g_mouseY - oldY)
             );
         }
+        break;
+    }
+    case WM_MOUSEWHEEL: {
+        int delta{ GET_WHEEL_DELTA_WPARAM(wParam) };
+        float scroll{ -1.f * delta / WHEEL_DELTA };
+        g_pRenderer->ZoomCamera(scroll * g_speed);
         break;
     }
     // The default window procedure will play a system notification sound 

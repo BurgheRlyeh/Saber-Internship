@@ -5,49 +5,52 @@
 #include <array>
 #include <mutex>
 
+#include "EnumHelpers.h"
 #include "DynamicUploadRingBuffer.h"
 #include "IndirectCommand.h"
 #include "LightBuffer.h"
 #include "SceneBuffer.h"
 
+template <typename T>
+class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
-class ConstantBuffer;
 class DepthBuffer;
 class DescriptorHeapManager;
 class Device;
 class DeviceContext;
+class GBuffer;
 class MaterialManager;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem;
 class Texture;
 
-enum RenderSubsystemType : size_t {
+enum class RenderSubsystemType : size_t {
     Default     = 0 << 0,
     Dynamic     = 1 << 0,
     AlphaKill   = 1 << 1,
     Count       = 1 << 2
 };
+ENABLE_ENUM_FLAGS(RenderSubsystemType);
 
 class Scene {
     std::wstring m_name{};
 
-    SceneBuffer m_sceneBuffer;
-    std::shared_ptr<ConstantBuffer> m_pSceneCb{};
+    SceneBuffer m_sceneBuffer{};
+    std::shared_ptr<Buffer<SceneBuffer>> m_pSceneCb{};
     std::mutex m_sceneBufferMutex{};
     std::atomic<bool> m_isUpdSceneCb{ true };
-    DynamicAllocation m_sceneCBDynamicAllocation{};
 
-    LightBuffer m_lightBuffer;
-    std::shared_ptr<ConstantBuffer> m_pLightCB{};
+    LightBuffer m_lightBuffer{};
+    std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
     std::mutex m_lightBufferMutex{};
     std::atomic<bool> m_isUpdateLightCB{};
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
-        RenderSubsystemType::Count
+        static_cast<size_t>(RenderSubsystemType::Count)
     > m_pRenderSubsystems{};
 
     std::vector<std::shared_ptr<Camera>> m_pCameras{};
@@ -59,7 +62,7 @@ class Scene {
 
     std::shared_ptr<Texture> m_pTargetTexture{};
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
-    std::shared_ptr<Texture> m_pGBuffer{};
+    std::shared_ptr<GBuffer> m_pGBuffer{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
@@ -71,7 +74,7 @@ public:
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
-        std::shared_ptr<Texture> m_pGBuffer
+        std::shared_ptr<GBuffer> m_pGBuffer
     );
 
     void Resize(
@@ -91,8 +94,8 @@ public:
     void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
     std::shared_ptr<DepthBuffer> GetDepthBuffer();
 
-    std::shared_ptr<Texture> GetGBuffer();
-    void SetGBuffer(std::shared_ptr<Texture> pGBuffer);
+    std::shared_ptr<GBuffer> GetGBuffer();
+    void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
 
     void Update(
         std::shared_ptr<DeviceContext> pDeviceContext,
@@ -103,10 +106,12 @@ public:
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
     void UpdateCamerasAspectRatio(float aspectRatio);
-    bool TryMoveCamera(float forwardCoef, float rightCoef);
-    bool TryRotateCamera(float deltaX, float deltaY);
+    bool MoveCamera(float forwardCoef, float rightCoef);
+    bool RotateCamera(float deltaTheta, float deltaPhi);
+    bool ZoomCamera(float delta);
     bool SetCurrentCamera(size_t cameraId);
     void NextCamera();
+    void SwitchCameraProjection();
 
     void SetAmbientLight(
         const DirectX::XMFLOAT3& color,
@@ -121,11 +126,11 @@ public:
     );
 
     void AddObject(
-        const RenderSubsystemType type,
+        const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<RenderObject> pObject
     ) const;
     void RenderObjects(
-        const RenderSubsystemType type,
+        const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
@@ -151,7 +156,7 @@ public:
     );
 
 private:
-    bool TryUpdateCamera(float deltaTime);
+    bool UpdateCamera(float deltaTime);
 
     void UpdateSceneBuffer(
         std::shared_ptr<DeviceContext> pDeviceContext,

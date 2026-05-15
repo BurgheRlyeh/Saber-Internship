@@ -6,7 +6,7 @@
 
 #include "Atlas.h"
 
-class DescHeapRange;
+class DescRange;
 class Device;
 
 class DescriptorHeapManager {
@@ -14,7 +14,7 @@ class DescriptorHeapManager {
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
 	UINT m_handleIncSize{};
 
-	std::shared_ptr<Atlas<DescHeapRange>> m_pRangesAtlas{};
+	std::shared_ptr<Atlas<DescRange>> m_pRangesAtlas{};
 
 	size_t m_firstFreeId{};
 
@@ -40,11 +40,11 @@ public:
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetDescriptorHeap() const;
 
-	std::shared_ptr<DescHeapRange> AllocateRange(
+	std::shared_ptr<DescRange> AllocateRange(
 		const std::wstring& name,
 		const size_t& size,
 		const std::optional<D3D12_DESCRIPTOR_RANGE_TYPE>& type = std::nullopt
 	);
 
-	std::shared_ptr<DescHeapRange> GetRange(const std::wstring& name);
+	std::shared_ptr<DescRange> GetRange(const std::wstring& name);
 };

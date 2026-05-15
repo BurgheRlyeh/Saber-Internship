@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include <utility>
+
 #include "ComputeObject.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
@@ -20,85 +22,206 @@ public:
 	BufferUpdater(Buffer<T>& buffer) : m_buffer(buffer) {}
 	virtual ~BufferUpdater() = default;
 
-	virtual void SetUpdateAll(T* pData, size_t count) = 0;
-	virtual void SetUpdateAt(size_t id, const T& data) = 0;
+	virtual void UpdateAll(const T* pData, size_t count) = 0;
+	virtual void UpdateAt(size_t id, const T& data) = 0;
+	virtual bool IsUpdatePending() const = 0;
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandList> pCommandListDirect
 	) = 0;
-
-	virtual bool IsUpdatePending() const = 0;
 };
 
-template <typename T>
-class StaticBufferUpdater : public BufferUpdater<T> {
-	bool m_isUpdatePending{};
+template <typename T, typename Derived>
+concept BufferUpdaterConcept = std::derived_from<Derived, BufferUpdater<T>>;
+
+enum class BufferUpdaterMemoryType {
+	Intermediate, RingBuffer
+};
+
+template <typename T, BufferUpdaterMemoryType MemoryType = BufferUpdaterMemoryType::Intermediate>
+class RangeBufferUpdater : public BufferUpdater<T> {
+	using UpdateRange = std::pair<size_t, size_t>;
+	inline static constexpr UpdateRange InvalidUpdRange{
+		static_cast<size_t>(-1), 0
+	};
+	UpdateRange m_updRange{ InvalidUpdRange };
 
 public:
-	StaticBufferUpdater(
+	RangeBufferUpdater(
 		Buffer<T>& buffer
 	) : BufferUpdater<T>(buffer) {}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
-		if (count > m_buffer.GetCapacity()) {
-			m_buffer.m_data.resize(count);
-		}
-		for (size_t i{}; i < count; ++i) {
-			m_buffer.m_data[i] = pData[i];
-		}
-		m_isUpdatePending = true;
+	virtual void UpdateAll(const T* pData, size_t count) override {
+		m_updRange = std::make_pair(0, count - 1);
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
-		if (id >= m_buffer.m_data.size()) {
-			m_buffer.m_data.resize(id + 1);
-		}
-		m_buffer.m_data[id] = data;
-		m_isUpdatePending = true;
+	virtual void UpdateAt(size_t id, const T& data) override {
+		m_updRange.first = std::min(m_updRange.first, id);
+		m_updRange.second = std::max(m_updRange.second, id);
+	}
+
+	virtual bool IsUpdatePending() const override {
+		return m_updRange != InvalidUpdRange;
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandList> pCommandListDirect
+		std::shared_ptr<CommandList> pCommandList
 	) override {
-		if (!m_isUpdatePending) {
+		if (!IsUpdatePending()) {
 			return;
 		}
-		m_isUpdatePending = false;
 
-		if (m_buffer.m_data.size() > m_buffer.GetCapacity()) {
-			m_buffer.CreateBuffersAndViews(pDeviceContext->GetDevice(), m_buffer.m_data.size());
+		Buffer<T>& buffer{ m_buffer };
+		size_t updCnt{ m_updRange.second - m_updRange.first + 1 };
+		size_t updSize{ updCnt * sizeof(T) };
+
+		D3D12_RESOURCE_STATES prevState{ buffer.GetResource()->GetState() };
+		if (updCnt > buffer.GetCapacity()) {
+			buffer.RecreateBufferAndViews(
+				pDeviceContext->GetDevice(),
+				updCnt,
+				pCommandList->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+				? D3D12_RESOURCE_STATE_COMMON
+				: D3D12_RESOURCE_STATE_COPY_DEST
+			);
 		}
-
-		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
-			m_buffer.GetResource()->ResourceTransition(
-				pCommandListDirect,
+		else if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			buffer.GetResource()->ResourceTransition(
+				pCommandList,
 				D3D12_RESOURCE_STATE_COPY_DEST
 			);
 		}
 
-		DynamicAllocation intermediateAllocation{
-			pDeviceContext->GetRingBuffer()->Allocate(m_buffer.m_data.size() * sizeof(T))
-		};
+		if constexpr (MemoryType == BufferUpdaterMemoryType::Intermediate) {
+			auto pIntermediate{ std::make_shared<GPUResource>(
+				L"Intermediate",
+				pDeviceContext->GetDevice(),
+				GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+				GPUResource::ResourceDesc{
+					CD3DX12_RESOURCE_DESC::Buffer(updSize),
+					D3D12_RESOURCE_STATE_GENERIC_READ
+				}
+			) };
+
+			T* pDst{};
+			ThrowIfFailed(pIntermediate->GetD3D12Resource()->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
+			memcpy(pDst, &buffer.GetStorageData()[m_updRange.first], updSize);
+			pIntermediate->GetD3D12Resource()->Unmap(0, &CD3DX12_RANGE(m_updRange.first, m_updRange.second));
+
+			pCommandList->GetD3D12CommandList()->CopyBufferRegion(
+				buffer.GetResource()->GetD3D12Resource().Get(),
+				m_updRange.first * sizeof(T),
+				pIntermediate->GetD3D12Resource().Get(),
+				0,
+				updSize
+			);
+			pDeviceContext->AddIntermediate(pIntermediate);
+		}
+		else {
+			DynamicAllocation intermediateAllocation{
+				pDeviceContext->GetRingBuffer()->Allocate(updSize)
+			};
+			memcpy(intermediateAllocation.cpuAddress, &buffer.GetStorageData()[m_updRange.first], updSize);
+			pCommandList->GetD3D12CommandList()->CopyBufferRegion(
+				buffer.GetResource()->GetD3D12Resource().Get(),
+				m_updRange.first * sizeof(T),
+				intermediateAllocation.pBuffer->GetD3D12Resource().Get(),
+				intermediateAllocation.offset,
+				updSize
+			);
+		}
+		m_updRange = InvalidUpdRange;
+
+		if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			buffer.GetResource()->ResourceTransition(
+				pCommandList,
+				prevState
+			);
+		}
+	}
+};
+
+template <typename T, BufferUpdaterMemoryType MemoryType = BufferUpdaterMemoryType::Intermediate>
+class WholeBufferUpdater : public BufferUpdater<T> {
+	bool m_isUpdatePending{};
+
+public:
+	WholeBufferUpdater(
+		Buffer<T>& buffer
+	) : BufferUpdater<T>(buffer) {}
+
+	virtual void UpdateAll(const T* pData, size_t count) override {
+		m_isUpdatePending = true;
+	}
+	virtual void UpdateAt(size_t id, const T& data) override {
+		m_isUpdatePending = true;
+	}
+	virtual bool IsUpdatePending() const override {
+		return m_isUpdatePending;
+	}
+	virtual void PerformUpdate(
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		std::shared_ptr<CommandList> pCommandList
+	) override {
+		if (!IsUpdatePending()) {
+			return;
+		}
+		m_isUpdatePending = false;
+
+		Buffer<T>& buffer{ m_buffer };
+		size_t updCnt{ buffer.GetStorageDataSize() };
+
+		D3D12_RESOURCE_STATES prevState{ buffer.GetResource()->GetState() };
+		if (updCnt > buffer.GetCapacity()) {
+			buffer.RecreateBufferAndViews(
+				pDeviceContext->GetDevice(),
+				updCnt,
+				pCommandList->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+				? D3D12_RESOURCE_STATE_COMMON
+				: D3D12_RESOURCE_STATE_COPY_DEST
+			);
+		}
+		else if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			buffer.GetResource()->ResourceTransition(
+				pCommandList,
+				D3D12_RESOURCE_STATE_COPY_DEST
+			);
+		}
+
 		D3D12_SUBRESOURCE_DATA subresData{
-			.pData{ m_buffer.m_data.data() },
-			.RowPitch{ static_cast<UINT>(m_buffer.m_data.size()) * sizeof(T) },
+			.pData{ buffer.GetStorageData() },
+			.RowPitch{ static_cast<UINT>(updCnt) * sizeof(T) },
 			.SlicePitch{ subresData.RowPitch }
 		};
 
-		m_buffer.GetResource()->UpdateSubresources(
-			pCommandListDirect,
-			intermediateAllocation.pBuffer,
-			&subresData,
-			intermediateAllocation.offset
-		);
+		if constexpr (MemoryType == BufferUpdaterMemoryType::Intermediate) {
+			std::shared_ptr<GPUResource> pIntermediate{
+				buffer.GetResource()->CreateIntermediate(pDeviceContext->GetDevice())
+			};
+			buffer.GetResource()->UpdateSubresources(
+				pCommandList,
+				pIntermediate,
+				&subresData
+			);
+			pDeviceContext->AddIntermediate(pIntermediate);
+		}
+		else {
+			DynamicAllocation intermediateAllocation{
+				pDeviceContext->GetRingBuffer()->Allocate(buffer.GetResource()->GetIntermediateSize())
+			};
+			buffer.GetResource()->UpdateSubresources(
+				pCommandList,
+				intermediateAllocation.pBuffer,
+				&subresData,
+				intermediateAllocation.offset
+			);
+		}
 
-		m_buffer.GetResource()->ResourceTransition(
-			pCommandListDirect,
-			m_buffer.m_resData.resInitState
-		);
-	}
-
-	virtual bool IsUpdatePending() const override {
-		return m_isUpdatePending;
+		if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+			buffer.GetResource()->ResourceTransition(
+				pCommandList,
+				prevState
+			);
+		}
 	}
 };
 
@@ -120,7 +243,7 @@ public:
 		m_updBuf.reserve(m_buffer.GetCapacity());
 	}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
+	virtual void UpdateAll(const T* pData, size_t count) override {
 		if (count > m_updBuf.capacity()) {
 			m_updBufIds.reserve(count);
 			m_updBuf.reserve(count);
@@ -131,10 +254,13 @@ public:
 			m_updBuf.push_back(pData[i]);
 		}
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
+	virtual void UpdateAt(size_t id, const T& data) override {
 		m_updBufIds.push_back(id);
 		m_updBuf.push_back(data);
 		m_updMaxId = id;
+	}
+	virtual bool IsUpdatePending() const override {
+		return m_updBufIds.size();
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
@@ -142,7 +268,7 @@ public:
 	) override {
 		assert(m_updBufIds.size() == m_updBuf.size());
 		size_t updCnt{ m_updBufIds.size() };
-		if (!updCnt) {
+		if (!IsUpdatePending()) {
 			return;
 		}
 
@@ -176,15 +302,12 @@ public:
 				pD3D12CommandList->SetComputeRootShaderResourceView(rootParamId++, updBufAllocation.gpuAddress);
 				pD3D12CommandList->SetComputeRootUnorderedAccessView(
 					rootParamId++,
-					m_buffer.GetResource()->GetResource()->GetGPUVirtualAddress()
+					m_buffer.GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
 				);
 			}
 		);
 	}
 
-	virtual bool IsUpdatePending() const override {
-		return m_updBufIds.size();
-	}
 };
 
 template <typename T>
@@ -196,24 +319,27 @@ public:
 		assert(m_buffer.GetResource()->GetHeapProperties().Type == D3D12_HEAP_TYPE_UPLOAD);
 	}
 
-	virtual void SetUpdateAll(T* pData, size_t count) override {
+	virtual void UpdateAll(const T* pData, size_t count) override {
+		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
+
 		T* pDst{};
-		ThrowIfFailed(m_buffer.GetResource()->GetResource()->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		memcpy(pDst, pData, count * sizeof(T));
-		m_buffer.GetResource()->GetResource()->Unmap(0, &CD3DX12_RANGE(0, count));
+		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(0, count));
 	}
-	virtual void SetUpdateAt(size_t id, const T& data) override {
+	virtual void UpdateAt(size_t id, const T& data) override {
+		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
+
 		T* pDst{};
-		ThrowIfFailed(m_buffer.GetResource()->GetResource()->Map(0, nullptr, reinterpret_cast<void**>(&pDst)));
+		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		pDst[id] = data;
-		m_buffer.GetResource()->GetResource()->Unmap(0, &CD3DX12_RANGE(id, id + 1));
+		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(id, id + 1));
+	}
+	virtual bool IsUpdatePending() const override {
+		return false;
 	}
 	virtual void PerformUpdate(
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		std::shared_ptr<CommandList> pCommandListDirect
 	) override {}
-
-	virtual bool IsUpdatePending() const override {
-		return false;
-	}
 };

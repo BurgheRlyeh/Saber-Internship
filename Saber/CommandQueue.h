@@ -7,19 +7,22 @@
 #include <unordered_set>
 #include <vector>
 
+#include "EnumFence.h"
 #include "LockFreeQueue.h"
 
 class CommandList;
 class Device;
+template <EnumConcept Enum>
+class EnumFence;
+class Fence;
+class IncrementFence;
 
 class CommandQueue {
 	std::wstring m_name;
 
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_pCommandQueue{};
 
-	Microsoft::WRL::ComPtr<ID3D12Fence> m_pFence{};
-	uint64_t m_fenceValue{};
-	HANDLE m_fenceEvent{};
+	std::shared_ptr<IncrementFence> m_pIncFence{};
 	
 	struct CommandAllocatorEntry {
 		uint64_t fenceValue{};
@@ -67,10 +70,42 @@ public:
 	void PushForExecution(std::shared_ptr<CommandList> pCommandList);
 	uint64_t ExecutionTask(uint64_t waitFenceValue);
 
+	// Fence
+	void Signal(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void CpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void GpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void Flush(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+
+	// IncrementFence
+	uint64_t Signal(std::shared_ptr<IncrementFence>& pFence);
+	void CpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
+	void GpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
+	void Flush(std::shared_ptr<IncrementFence>& pFence);
+
+	// EnumFence
+	template <EnumConcept Enum>
+	void Signal(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+		Signal(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
+	}
+	template <EnumConcept Enum>
+	void CpuWait(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+		CpuWait(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
+	}
+	template <EnumConcept Enum>
+	void GpuWait(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+		GpuWait(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
+	}
+	template <EnumConcept Enum>
+	void Flush(std::shared_ptr<EnumFence<Enum>>& pFence) {
+		Flush(pFence, std::numeric_limits<std::underlying_type_t<Enum>>::max());
+	}
+
+	// CommandQueue's fence
 	uint64_t Signal();
-	bool IsFenceComplete(uint64_t fenceValue);
-	void WaitForFenceValue(uint64_t fenceValue);
+	void CpuWait(uint64_t fenceValue);
+	void GpuWait(uint64_t fenceValue);
 	void Flush();
+	bool IsFenceComplete(uint64_t fenceValue);
 
 private:
 	static Microsoft::WRL::ComPtr<ID3D12CommandQueue> CreateCommandQueue(

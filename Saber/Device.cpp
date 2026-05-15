@@ -14,6 +14,11 @@ Device::Device(
 	);
 }
 
+Device::~Device() {
+	m_pAllocator.Reset();
+	m_pDevice.Reset();
+}
+
 Microsoft::WRL::ComPtr<ID3D12Device2> Device::GetD3D12Device() const {
 	return m_pDevice;
 }

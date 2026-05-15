@@ -2,57 +2,92 @@
 
 #include "Headers.h"
 
-#include "Atlas.h"
+#include <unordered_map>
+#include <mutex>
+
 #include "MaterialCB.h"
 
+template <typename T>
+class Buffer;
 class CommandList;
-class ConstantBuffer;
 class DDSTexture;
 class DescriptorHeapManager;
-class DescHeapRange;
+class DescRange;
 class Device;
 class DeviceContext;
 class TextureResource;
 
-class MaterialManager {
-	static const std::wstring BASE_NAME;
+class TextureManager {
+	std::wstring m_name{};
 
-	std::shared_ptr<DescHeapRange> m_pCBVsRange{};
-	std::shared_ptr<DescHeapRange> m_pSRVsRange{};
+	std::wstring m_resourceFolder{};
 
-	MaterialCB m_materialCB{};
-	std::shared_ptr<ConstantBuffer> m_pMaterialCB{};
+	std::vector<std::shared_ptr<TextureResource>> m_pTextures{};
+	std::shared_ptr<DescRange> m_pSrvRange{};
 
-	struct RenderMaterial {
-		std::shared_ptr<TextureResource> pAlbedo{};
-		std::shared_ptr<TextureResource> pNormal{};
-	};
-	std::vector<std::shared_ptr<RenderMaterial>> m_pMaterials{};
-
-	std::shared_ptr<Atlas<DDSTexture>> m_pTextureAtlas{};
+	std::unordered_map<std::wstring, size_t> m_textureIdMap{};
+    std::mutex m_textureIdMapMutex;
 
 public:
-	MaterialManager(
+	TextureManager(
+		const std::wstring& name,
 		const std::wstring& resourceFolder,
-		std::shared_ptr<Device> pDevice,
-		std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
-		const size_t& capacity
-	);
-	~MaterialManager();
-
-	std::shared_ptr<DescHeapRange> GetMaterialCBVsRange() const;
-	std::shared_ptr<DescHeapRange> GetMaterialSRVsRange() const;
-
-	size_t AddMaterial(
-		std::shared_ptr<DeviceContext> pDeviceContext,
-		std::shared_ptr<CommandList> pCommandListDirect,
-		const std::wstring& albedoFilepath,
-		const std::wstring& normalFilepath
+		std::shared_ptr<DescriptorHeapManager> heap,
+		size_t capacity
 	);
 
-private:
-	size_t AddTexture(
-		std::shared_ptr<Device> pDevice,
-		std::shared_ptr<TextureResource> pTex
+	std::shared_ptr<DescRange> GetSrvRange() const;
+
+	size_t GetCreateTextureId(
+		const std::wstring& filepath,
+		std::shared_ptr<DeviceContext> context,
+		std::shared_ptr<CommandList> cmd
 	);
+};
+
+class MaterialManager {
+    static const std::wstring BASE_NAME;
+
+    std::shared_ptr<TextureManager> m_pTexManager;
+
+    struct MaterialKey {
+        std::wstring albedo;
+        std::wstring normal;
+
+        bool operator==(const MaterialKey& other) const {
+            return albedo == other.albedo && normal == other.normal;
+        }
+
+        struct Hasher {
+            size_t operator()(const MaterialKey& k) const {
+                return (std::hash<std::wstring>()(k.albedo)) ^
+                    (std::hash<std::wstring>()(k.normal) << 1);
+            }
+        };
+    };
+    std::unordered_map<MaterialKey, size_t, MaterialKey::Hasher> m_materialIdMap;
+    std::mutex m_materialIdMapMutex;
+
+    MaterialCB m_materialBuffer{};
+    std::shared_ptr<Buffer<MaterialCB>> m_pMaterialBuffer;
+
+    size_t m_capacity{};
+
+public:
+    MaterialManager(
+        const std::wstring& resourceFolder,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+        size_t capacity
+    );
+
+    std::shared_ptr<DescRange> GetMaterialCbvRange() const;
+    std::shared_ptr<DescRange> GetMaterialSrvRange() const;
+
+    size_t GetCreateMaterial(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList,
+        const std::wstring& albedoFilepath,
+        const std::wstring& normalFilepath
+    );
 };

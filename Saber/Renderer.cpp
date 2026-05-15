@@ -6,8 +6,6 @@
 #include <iostream> 
 #include <sstream>
 
-#include "pix3.h"
-
 #include "CommandList.h"
 #include "CommandQueue.h"
 #include "DeferredShading.h"
@@ -16,7 +14,9 @@
 #include "DescriptorHeapRange.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "IncrementFence.h"
 #include "IndirectUpdater.h"
+#include "MaterialManager.h"
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
@@ -50,7 +50,7 @@ Renderer::~Renderer() {
 
 void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers.resize(m_numFrames);
-    m_frameFenceValues.resize(m_numFrames);
+    m_frameFenceValues = std::vector<uint64_t>(m_numFrames, IncrementFence::IncrementFenceInitValue);
 
 #if defined(_DEBUG)
     EnableDebugLayer();
@@ -67,7 +67,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_useWarp ? GetDxgiAdapterWarp(pFactory) : GetDxgiAdapterByVideoMemory(pFactory)
     };
 
-    constexpr size_t GBUFFER_SIZE{ 3 }; // uvMaterial + tbn + ddxddy
+    constexpr size_t GBUFFER_SIZE{ 2 }; // uvMaterial + tbn
     m_pDeviceContext = std::make_shared<DeviceContext>(pAdapter);
     m_pDeviceContext->InitializeContext(std::to_array<DeviceContext::DescHeapArgs>({
         // CBV_SRV_UAV
@@ -79,6 +79,12 @@ void Renderer::Initialize(HWND hWnd) {
         // DSV
         { 1 }
     }));
+    m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
+        L"../../Resources/Textures/",
+        m_pDeviceContext,
+        m_pDeviceContext->GetDescriptorHeap(),
+        1024
+    ));
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pDeviceContext->GetCommandQueue()->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
@@ -100,15 +106,11 @@ void Renderer::Initialize(HWND hWnd) {
 	);
 
     m_pGBuffers.resize(1);
-    m_pGBuffers[0] = std::make_shared<Texture>(
+    m_pGBuffers[0] = std::make_shared<GBuffer>(
         L"GBuffer",
         m_pDeviceContext,
-        CD3DX12_RESOURCE_DESC::Tex2D(
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            m_clientWidth, m_clientHeight, 1, 0, 1, 0,
-            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-        ),
-        GBUFFER_SIZE
+        m_clientWidth,
+        m_clientHeight
 	);
 
     m_time = m_clock.now();
@@ -140,7 +142,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            pScene->AddObject(Default, TestTextureRenderObject::CreateTextureCube(
+            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
                 m_pDeviceContext,
                 pCommandList,
                 m_pGBuffers[0],
@@ -155,7 +157,7 @@ void Renderer::Initialize(HWND hWnd) {
             };
 
             std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddObject(Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+            pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
                 pCommandList,
                 filepath,
@@ -163,13 +165,13 @@ void Renderer::Initialize(HWND hWnd) {
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-            pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                m_pDeviceContext,
-                pCommandList,
-                filepathGrass,
-                m_pGBuffers[0],
-                DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
-            ));
+			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+				m_pDeviceContext,
+				pCommandList,
+				filepathGrass,
+				m_pGBuffers[0],
+				DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
+			));
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -185,7 +187,7 @@ void Renderer::Initialize(HWND hWnd) {
             std::mt19937 gen(rd());
             std::uniform_real_distribution<float> posDist(-10.f, 10.f);
             for (size_t i{}; i < 100; ++i) {
-                pScene->AddObject(AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+                pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
                     m_pDeviceContext,
                     pCommandList,
                     filepathGrass,
@@ -203,17 +205,18 @@ void Renderer::Initialize(HWND hWnd) {
             m_pJobSystem->AddJob([&, i, addObjects]() {
                 std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
 
-                // dynamic camera
-                pScene->AddCamera(std::make_shared<DynamicCamera>());
+                // dynamic cameras
+                pScene->AddCamera(std::make_shared<OrbitCamera>());
+                pScene->AddCamera(std::make_shared<FlyCamera>());
 
-                // standart camera
+                // standard camera
                 pScene->AddCamera(std::make_shared<StaticCamera>(
                     DirectX::XMFLOAT3{ 0.f, 0.f, 3.f },
                     DirectX::XMFLOAT3{ 0.f, 0.f, 0.f },
                     DirectX::XMFLOAT3{ 0.f, 1.f, 0.f }
                 ));
 
-                // standart light
+                // standard light
                 pScene->AddLightSource(
                     { -1.5f, 0.f, 1.5f, 1.f },
                     { 1.f, 1.f, 0.f },
@@ -221,7 +224,7 @@ void Renderer::Initialize(HWND hWnd) {
                 );
 
                 // random lights
-                for (size_t i{}; i < 1; ++i) {
+                for (size_t i{}; i < 0; ++i) {
                     std::random_device rd;
                     std::mt19937 gen(rd());
                     std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
@@ -279,6 +282,10 @@ void Renderer::SwitchToNextCamera() {
     m_isSwitchToNextCamera.store(true);
 }
 
+void Renderer::SwitchCameraProjection() {
+    m_isSwitchCameraProjection.store(true);
+}
+
 inline void Renderer::RenderLoop() {
     while (!m_isInitialized) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -294,6 +301,10 @@ inline void Renderer::RenderLoop() {
         if (m_isSwitchToNextCamera.load()) {
             m_pScenes[m_currSceneId]->NextCamera();
             m_isSwitchToNextCamera.store(false);
+        }
+        if (m_isSwitchCameraProjection.load()) {
+            m_pScenes[m_currSceneId]->SwitchCameraProjection();
+            m_isSwitchCameraProjection.store(false);
         }
 
         Update();
@@ -375,9 +386,17 @@ void Renderer::Update() {
 }
 
 void Renderer::Render() {
-    auto& scene = m_pScenes.at(m_currSceneId);
-    if (!scene->IsSceneReady())
+    auto& pScene = m_pScenes.at(m_currSceneId);
+    if (!pScene->IsSceneReady())
         return;
+
+    std::shared_ptr<CommandQueue>& pQueue{ m_pDeviceContext->GetCommandQueue() };
+
+    std::shared_ptr<GBuffer>& pGBuf{ pScene->GetGBuffer() };
+    std::shared_ptr<DepthBuffer>& pDepthBuf{ pScene->GetDepthBuffer() };
+
+    std::shared_ptr<EnumFence<GBufferState>>& pGBufFence{ pGBuf->GetFence() };
+    std::shared_ptr<EnumFence<DepthBufferState>>& pDepthBufFence{ pDepthBuf->GetFence() };
 
     size_t listPriority{};
 
@@ -385,25 +404,21 @@ void Renderer::Render() {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{ m_pBackBuffersDescHeapRange->GetCpuHandle(m_currBackBufferId) };
 
     std::shared_ptr<CommandList> commandListBeforeFrame{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"BeforeFrameJob", m_pDeviceContext->GetDevice(), listPriority
         )
     };
 
     // Some small work doesn't need to be moved to jobs, just as example
     {
-        PIXBeginEvent(
-            commandListBeforeFrame->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Before frame part"
-        );
-        scene->BeforeFrameJob(commandListBeforeFrame);
+        commandListBeforeFrame->PixBeginEvent(L"Before frame part");
+        pScene->BeforeFrameJob(commandListBeforeFrame);
 
         // TODO: move it to "before first exec" task in CommandQueue::ExecutionTask
         auto newTime = m_clock.now();
         auto deltaTime = newTime - m_sceneTime;
         m_sceneTime = newTime;
-        scene->Update(
+        pScene->Update(
             m_pDeviceContext,
             commandListBeforeFrame,
             deltaTime.count() * 1e-9f
@@ -413,167 +428,142 @@ void Renderer::Render() {
             commandListBeforeFrame,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
-        if (!scene->GetGBuffer()) {
-            float clearColor[]{ 0.6f, 0.4f, 0.4f, 1.0f };
-            backBuffer->ClearRenderTarget(
-                commandListBeforeFrame,
-                rtv,
-                clearColor
-            );
-        }
 
-        PIXEndEvent(commandListBeforeFrame->GetD3D12CommandList().Get());
-        commandListBeforeFrame->SetReadyForExection(); // but still it is cl to execute in proper order
+        commandListBeforeFrame->SetReadyForExecution(); // but still it is cl to execute in proper order
     }
 
     // two command lists: static (1), dynamic (2)
     std::shared_ptr<CommandList> commandListForStaticObjects{ 
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
-            L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority
+        pQueue->GetDeferredCommandList(
+            L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority,
+            [&] {
+                pQueue->GpuWait(pGBufFence, GBufferState::Write);
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthWriting);
+            }
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForStaticObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Static Objects rendering"
-        );
-        scene->RenderObjects(
-            Default,
+        commandListForStaticObjects->PixBeginEvent(L"Static Objects rendering");
+        pScene->RenderObjects(
+            RenderSubsystemType::Default,
             m_pDeviceContext,
             commandListForStaticObjects,
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForStaticObjects->GetD3D12CommandList().Get());
-        commandListForStaticObjects->SetReadyForExection();
+        commandListForStaticObjects->SetReadyForExecution();
         });
 
     std::shared_ptr<CommandList> commandListForAlphaObjects{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
-            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), listPriority
+        pQueue->GetDeferredCommandList(
+            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), ++listPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForAlphaObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Alphakill Objects rendering"
-        );
-        scene->RenderObjects(
-            AlphaKill,
+        commandListForAlphaObjects->PixBeginEvent(L"Alphakill Objects rendering");
+        pScene->RenderObjects(
+            RenderSubsystemType::AlphaKill,
             m_pDeviceContext,
             commandListForAlphaObjects,
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForAlphaObjects->GetD3D12CommandList().Get());
-        commandListForAlphaObjects->SetReadyForExection();
-        });
+        commandListForAlphaObjects->SetReadyForExecution();
+    });
 
-    uint64_t fenceValueAfterRender{};
     std::shared_ptr<CommandList> commandListForDynamicObjects{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"DynamicObjects",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
             [] {},
-            [&]() { fenceValueAfterRender = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&]() {
+                pQueue->Signal(pGBufFence, GBufferState::Read);
+                pQueue->Signal(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
+            }
         )
     };
     m_pJobSystem->AddJob([&]() {
-        PIXBeginEvent(
-            commandListForDynamicObjects->GetD3D12CommandList().Get(),
-            PIX_COLOR(0, 0, 0),
-            L"Dynamic Objects rendering"
-        );
-        scene->RenderObjects(
-            Dynamic,
+        commandListForDynamicObjects->PixBeginEvent(L"Dynamic Objects rendering");
+        pScene->RenderObjects(
+            RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
             m_scissorRect
         );
-        scene->RenderObjects(
-            static_cast<RenderSubsystemType>(AlphaKill | Dynamic),
+        pScene->RenderObjects(
+            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
             m_pDeviceContext,
             commandListForDynamicObjects,
             m_viewport,
             m_scissorRect
         );
-        PIXEndEvent(commandListForDynamicObjects->GetD3D12CommandList().Get());
-        commandListForDynamicObjects->SetReadyForExection();
+        commandListForDynamicObjects->SetReadyForExecution();
         });
 
 
-    uint64_t fenceValueAfterHZB{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForHZB{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"HZB",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterRender); },
-            [&] { fenceValueAfterHZB = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&] {
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
+            },
+            [&] {
+                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthReading);
+            }
         )
     };
 
-    uint64_t fenceValueAfterDeferredShading{ static_cast<uint64_t>(-1) };
     std::shared_ptr<CommandList> commandListForDeferredShading{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"DeferredShading",
             m_pDeviceContext->GetDevice(),
             ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterHZB); },
-            [&] { fenceValueAfterDeferredShading = m_pDeviceContext->GetCommandQueue()->Signal(); }
+            [&] {
+                pQueue->GpuWait(pGBufFence, GBufferState::Read);
+                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthReading);
+            },
+            [&] {
+                pQueue->Signal(pGBufFence, GBufferState::Write);
+                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthWriting);
+            }
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
-        m_pDeviceContext->GetCommandQueue()->GetDeferredCommandList(
+        pQueue->GetDeferredCommandList(
             L"AfterFrameJob",
             m_pDeviceContext->GetDevice(),
-            ++listPriority,
-            [&] { m_pDeviceContext->GetCommandQueue()->WaitForFenceValue(fenceValueAfterDeferredShading); }
+            ++listPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
         {
-            PIXBeginEvent(
-                commandListForHZB->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Building HZB"
-            );
-            scene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
+            commandListForHZB->PixBeginEvent(L"Building HZB");
+            pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
                 m_pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap()
             );
-            PIXEndEvent(commandListForHZB->GetD3D12CommandList().Get());
-            commandListForHZB->SetReadyForExection();
+            commandListForHZB->SetReadyForExecution();
         }
 
         {
-            PIXBeginEvent(
-                commandListForDeferredShading->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Deferred shading"
-            );
-            scene->RunDeferredShading(
+            commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
+            pScene->RunDeferredShading(
                 commandListForDeferredShading,
                 m_pDeviceContext->GetDescriptorHeap(),
                 m_pDeviceContext->GetMaterialManager(),
                 m_clientWidth,
                 m_clientHeight
             );
-            PIXEndEvent(commandListForDeferredShading->GetD3D12CommandList().Get());
-            commandListForDeferredShading->SetReadyForExection();
+            commandListForDeferredShading->SetReadyForExecution();
         }
 
         {
-            PIXBeginEvent(
-                commandListAfterFrame->GetD3D12CommandList().Get(),
-                PIX_COLOR(0, 0, 0),
-                L"Post Processing"
-            );
-            scene->RenderPostProcessing(
+            commandListAfterFrame->PixBeginEvent(L"Post Processing");
+            pScene->RenderPostProcessing(
                 commandListAfterFrame,
                 m_pDeviceContext->GetDescriptorHeap(),
                 m_viewport,
@@ -585,15 +575,12 @@ void Renderer::Render() {
                 D3D12_RESOURCE_STATE_PRESENT
             );
 
-            PIXEndEvent(commandListAfterFrame->GetD3D12CommandList().Get());
-            commandListAfterFrame->SetReadyForExection();
+            commandListAfterFrame->SetReadyForExecution();
         }
         });
 
-    uint64_t lastCompletedFenceValue{
-        m_frameFenceValues[(m_currBackBufferId + m_numFrames - 1) % m_numFrames]
-    };
-    m_frameFenceValues[m_currBackBufferId] = m_pDeviceContext->GetCommandQueue()->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
+    uint64_t lastCompletedFenceValue{ m_frameFenceValues[m_currBackBufferId] };
+    m_frameFenceValues[m_currBackBufferId] = pQueue->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
     uint64_t fenceValue{ m_frameFenceValues[m_currBackBufferId] };
 
     // Present
@@ -618,11 +605,15 @@ void Renderer::Render() {
 }
 
 void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
-    m_pScenes.at(m_currSceneId)->TryMoveCamera(forwardCoef, rightCoef);
+    m_pScenes.at(m_currSceneId)->MoveCamera(forwardCoef, rightCoef);
 }
 
 void Renderer::RotateCamera(float deltaX, float deltaY) {
-    m_pScenes.at(m_currSceneId)->TryRotateCamera(deltaX / m_clientWidth, deltaY / m_clientHeight);
+    m_pScenes.at(m_currSceneId)->RotateCamera(deltaX / m_clientWidth, deltaY / m_clientHeight);
+}
+
+void Renderer::ZoomCamera(float delta) {
+    m_pScenes.at(m_currSceneId)->ZoomCamera(delta);
 }
 
 bool Renderer::CheckTearingSupport() {
@@ -806,7 +797,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Renderer::CreateSwapChain(
 std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
     std::shared_ptr<Device> pDevice,
     Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
-    std::shared_ptr<DescHeapRange> pDescHeapRange
+    std::shared_ptr<DescRange> pDescHeapRange
 ) {
     DXGI_SWAP_CHAIN_DESC desc{};
     ThrowIfFailed(pSwapChain->GetDesc(&desc));

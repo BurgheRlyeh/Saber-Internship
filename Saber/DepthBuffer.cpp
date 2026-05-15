@@ -14,7 +14,12 @@ DepthBuffer::DepthBuffer(
 	UINT64 width,
 	UINT height,
 	std::shared_ptr<SinglePassDownsampler> pSPD
-) : m_name(name) {
+) : m_name(name),
+	m_pDepthBufferFence(std::make_shared<EnumFence<DepthBufferState>>(
+		name + L"/Fence",
+		pDeviceContext->GetDevice(),
+		DepthBufferState::DepthWriting
+	)) {
 	m_pDsvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateRange(m_name + L"/Ranges/DSV", 1);
 	m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
@@ -42,8 +47,8 @@ void DepthBuffer::Resize(
 	m_pDepthBuffer = std::make_shared<TextureResource>(
 		m_name + L"/DepthBuffer",
 		pDevice,
-		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-		GPUResource::ResourceData{
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+		GPUResource::ResourceDesc{
 			resDesc,
 			D3D12_RESOURCE_STATE_COMMON,
 			&m_clearValue
@@ -103,8 +108,8 @@ bool DepthBuffer::ResizeHZB(
 	m_pHZBuffer = std::make_shared<TextureResource>(
 		m_name + L"/HierarchicalDepthBuffer",
 		pDevice,
-		GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-		GPUResource::ResourceData{
+		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+		GPUResource::ResourceDesc{
 			resDesc,
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 		}
@@ -158,9 +163,9 @@ void DepthBuffer::CreateHierarchicalDepthBuffer(
 	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
 	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	pCommandList->GetD3D12CommandList()->CopyTextureRegion(
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetResource().Get(), 0),
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetD3D12Resource().Get(), 0),
 		0, 0, 0,
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetResource().Get(), 0),
+		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetD3D12Resource().Get(), 0),
 		&CD3DX12_BOX(0, 0, 0, m_width, m_height, 1)
 	);
 
@@ -204,13 +209,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandleForMips() const {
 	return m_pUavsRange->GetGpuHandle();
 }
 
-D3D12_DESCRIPTOR_RANGE1 DepthBuffer::GetSrvD3d12DescRange1(UINT baseShaderRegister, UINT registerSpace, D3D12_DESCRIPTOR_RANGE_FLAGS flags, UINT offsetInDescriptorsFromTableStart) const {
-	return CD3DX12_DESCRIPTOR_RANGE1(
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		1,
-		baseShaderRegister,
-		registerSpace,
-		flags,
-		offsetInDescriptorsFromTableStart
-	);
+std::shared_ptr<EnumFence<DepthBufferState>> DepthBuffer::GetFence() const {
+	return m_pDepthBufferFence;
 }

@@ -9,12 +9,14 @@
 #include <atomic>
 #include <mutex>
 
+#include "Scene.h"
 #include "JobSystem.h"
 
 class DepthBuffer;
-class DescHeapRange;
+class DescRange;
 class Device;
 class DeviceContext;
+class GBuffer;
 class Scene;
 class Texture;
 class TextureResource;
@@ -38,7 +40,7 @@ class Renderer {
     // todo: move to some swapchain wrapper
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
     std::vector<std::shared_ptr<TextureResource>> m_pBackBuffers{};
-    std::shared_ptr<DescHeapRange> m_pBackBuffersDescHeapRange{};
+    std::shared_ptr<DescRange> m_pBackBuffersDescHeapRange{};
     UINT m_currBackBufferId{};
     std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
 
@@ -74,8 +76,9 @@ class Renderer {
 
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
+    std::atomic<bool> m_isSwitchCameraProjection{};
 
-    std::vector<std::shared_ptr<Texture>> m_pGBuffers{};
+    std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
@@ -102,6 +105,7 @@ public:
     void SetSceneId(size_t sceneId);
 
     void SwitchToNextCamera();
+    void SwitchCameraProjection();
 
     void Resize(uint32_t width, uint32_t height);
 
@@ -111,6 +115,7 @@ public:
 
     void MoveCamera(float forwardCoef, float rightCoef);
     void RotateCamera(float deltaX, float deltaY);
+    void ZoomCamera(float delta);
 
 private:
     void RenderLoop();
@@ -149,7 +154,7 @@ private:
     std::vector<std::shared_ptr<TextureResource>> CreateBackBuffers(
         std::shared_ptr<Device> pDevice,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
-        std::shared_ptr<DescHeapRange> pDescHeapRange
+        std::shared_ptr<DescRange> pDescHeapRange
     );
 
     // Ensure that any commands previously executed on the GPU have finished executing 

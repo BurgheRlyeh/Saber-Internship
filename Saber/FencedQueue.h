@@ -17,9 +17,12 @@ protected:
 	std::queue<FencedData> m_data;
 
 public:
-	FencedQueue(size_t numFrames)
-		: m_data(std::deque<FencedData>(numFrames))
-	{}
+	FencedQueue(size_t numFrames) : m_data(std::deque<FencedData>(numFrames)) {
+		// TODO: HACK: use vector-based deque with reserved capacity
+		for (size_t i{}; i < numFrames; ++i) {
+			m_data.pop();
+		}
+	}
 	virtual ~FencedQueue() = default;
 
 	void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {

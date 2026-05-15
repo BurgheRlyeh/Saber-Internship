@@ -1,7 +1,7 @@
 #include "MaterialManager.h"
 
+#include "Buffer.h"
 #include "CommandList.h"
-#include "ConstantBuffer.h"
 #include "DDSTexture.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
@@ -9,87 +9,103 @@
 #include "DeviceContext.h"
 #include "TextureResource.h"
 
+TextureManager::TextureManager(
+	const std::wstring& name,
+	const std::wstring& resourceFolder,
+	std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+	size_t capacity
+) : m_name(name), m_resourceFolder(resourceFolder) {
+	m_pSrvRange = pDescHeapManager->AllocateRange(
+		m_name + L"/Srv",
+		capacity,
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+	);
+}
+
+std::shared_ptr<DescRange> TextureManager::GetSrvRange() const {
+	return m_pSrvRange;
+}
+
+size_t TextureManager::GetCreateTextureId(
+	const std::wstring& filename,
+	std::shared_ptr<DeviceContext> pDeviceContext,
+	std::shared_ptr<CommandList> pCommandList
+) {
+    std::unique_lock lock(m_textureIdMapMutex);
+	if (auto it = m_textureIdMap.find(filename); it != m_textureIdMap.end())
+		return it->second;
+
+    size_t srvId{ m_pSrvRange->GetNextId() };
+    m_textureIdMap[filename] = srvId;
+    lock.unlock();
+
+    auto pTex{ std::make_shared<DDSTexture>(m_resourceFolder + filename, pDeviceContext, pCommandList) };
+	m_pTextures.push_back(pTex);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE handle{ m_pSrvRange->GetCpuHandle(srvId) };
+    pTex->CreateShaderResourceView(pDeviceContext->GetDevice(), handle);
+
+    return srvId;
+}
+
 const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
 
 MaterialManager::MaterialManager(
-	const std::wstring& resourceFolder,
-	std::shared_ptr<Device> pDevice,
-	std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
-	const size_t& capacity
+    const std::wstring& resourceFolder,
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+    size_t capacity
+) : m_capacity(capacity) {
+    m_pTexManager = std::make_shared<TextureManager>(
+        BASE_NAME + L"/TextureManager",
+        resourceFolder,
+        pDescHeapManager,
+        2 * capacity        // (albedo + normal) * count
+    );
+
+    m_pMaterialBuffer = CreateUploadBufferWithUpdater<MaterialCB>(
+        BASE_NAME + L"/MaterialCB",
+        pDeviceContext,
+        ResourceView::Cbv
+    );
+    m_materialBuffer.materials[0] = { 0, 0, 0, 0 };
+    m_pMaterialBuffer->UpdateAll(&m_materialBuffer, 1);
+}
+
+std::shared_ptr<DescRange> MaterialManager::GetMaterialCbvRange() const {
+    return m_pMaterialBuffer->GetDescRange(DescRangeType::Cbv);
+}
+
+std::shared_ptr<DescRange> MaterialManager::GetMaterialSrvRange() const {
+    return m_pTexManager->GetSrvRange();
+}
+
+size_t MaterialManager::GetCreateMaterial(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    const std::wstring& albedoFilepath,
+    const std::wstring& normalFilepath
 ) {
-	m_pTextureAtlas = std::make_shared<Atlas<DDSTexture>>(resourceFolder);
+    MaterialKey key{ albedoFilepath, normalFilepath };
 
-	m_pCBVsRange = pDescHeapManager->AllocateRange(
-		BASE_NAME + L"/Ranges/Cbv",
-		1,
-		D3D12_DESCRIPTOR_RANGE_TYPE_CBV
-	);
-	m_pSRVsRange = pDescHeapManager->AllocateRange(
-		BASE_NAME + L"/Ranges/Srv",
-		2 * capacity,	// (albedo + normal) * count
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
-	);
+    std::unique_lock matMapLock(m_materialIdMapMutex);
+    if (auto it = m_materialIdMap.find(key); it != m_materialIdMap.end())
+        return it->second;
 
-	m_pMaterialCB = std::make_shared<ConstantBuffer>(
-		BASE_NAME + L"/MaterialCB",
-		pDevice,
-		sizeof(MaterialCB),
-		&m_materialCB
-	);
-	m_pMaterialCB->CreateConstantBufferView(pDevice, m_pCBVsRange->GetNextCpuHandle());
+    size_t materialId = m_materialIdMap.size() + 1;
+    if (materialId >= m_capacity)
+        throw std::runtime_error("Material limit exceeded");
 
-	m_pMaterials.reserve(capacity);
+    m_materialIdMap[key] = materialId;
+    matMapLock.unlock();
 
-	// empty material
-	m_pMaterials.push_back(std::make_shared<RenderMaterial>(nullptr, nullptr));
-}
+    m_materialBuffer.materials[materialId] = {
+        static_cast<UINT>(m_pTexManager->GetCreateTextureId(albedoFilepath, pDeviceContext, pCommandList)),
+        static_cast<UINT>(m_pTexManager->GetCreateTextureId(normalFilepath, pDeviceContext, pCommandList)),
+        0,
+        0
+    };
+    m_pMaterialBuffer->UpdateAll(&m_materialBuffer, 1);
 
-MaterialManager::~MaterialManager() {
-	m_pMaterials.clear();
-}
-
-std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialCBVsRange() const {
-	return m_pCBVsRange;
-}
-
-std::shared_ptr<DescHeapRange> MaterialManager::GetMaterialSRVsRange() const {
-	return m_pSRVsRange;
-}
-
-size_t MaterialManager::AddMaterial(
-	std::shared_ptr<DeviceContext> pDeviceContext,
-	std::shared_ptr<CommandList> pCommandListDirect,
-	const std::wstring& albedoFilepath,
-	const std::wstring& normalFilepath
-) {
-	std::shared_ptr<TextureResource> pAlbedo{
-		m_pTextureAtlas->Assign(albedoFilepath, pDeviceContext, pCommandListDirect)
-	};
-	std::shared_ptr<DDSTexture> pNormal{
-		m_pTextureAtlas->Assign(normalFilepath, pDeviceContext, pCommandListDirect)
-	};
-	m_pMaterials.push_back(std::make_shared<RenderMaterial>(pAlbedo, pNormal));
-
-	size_t materialId{ m_pMaterials.size() - 1 };
-	m_materialCB.materials[materialId] = {
-		static_cast<UINT>(AddTexture(pDeviceContext->GetDevice(), pAlbedo)),
-		static_cast<UINT>(AddTexture(pDeviceContext->GetDevice(), pNormal)),
-		0,
-		0
-	};
-	m_pMaterialCB->Update(&m_materialCB);
-
-	return materialId;
-}
-
-size_t MaterialManager::AddTexture(
-	std::shared_ptr<Device> pDevice,
-	std::shared_ptr<TextureResource> pTex
-) {
-	size_t id{ m_pSRVsRange->GetNextId() };
-
-	auto handle = m_pSRVsRange->GetCpuHandle(id);
-	pTex->CreateShaderResourceView(pDevice, handle);
-
-	return id;
+    return materialId;
 }

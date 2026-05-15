@@ -17,9 +17,9 @@ class Texture {
 
 	std::vector<std::shared_ptr<TextureResource>> m_pTextures{};
 
-	std::shared_ptr<DescHeapRange> m_pSrvsRange{};
-	std::shared_ptr<DescHeapRange> m_pRtvsRange{};
-	std::shared_ptr<DescHeapRange> m_pUavsRange{};
+	std::shared_ptr<DescRange> m_pSrvsRange{};
+	std::shared_ptr<DescRange> m_pRtvsRange{};
+	std::shared_ptr<DescRange> m_pUavsRange{};
 
 public:
 	Texture(
@@ -87,8 +87,8 @@ public:
 			m_pTextures[i] = std::make_shared<TextureResource>(
 				m_name + L"/Texture" + std::to_wstring(i),
 				pDevice,
-				GPUResource::HeapData{},
-				GPUResource::ResourceData{ m_desc }
+				GPUResource::AllocationDesc{},
+				GPUResource::ResourceDesc{ m_desc }
 			);
 			if (m_pRtvsRange) {
 				m_pTextures[i]->CreateRenderTargetView(pDevice, m_pRtvsRange->GetNextCpuHandle());
@@ -173,5 +173,54 @@ public:
 			TRUE,
 			pDepthBuffer ? &pDepthBuffer->GetDsvCpuDescHandle() : nullptr
 		);
+	}
+};
+
+#include "EnumFence.h"
+
+enum class GBufferState : uint8_t {
+	InvalidState = 0,
+
+	Write,
+	Read,
+
+	FlushState = std::numeric_limits<uint8_t>::max()
+};
+
+class GBuffer : public Texture {
+	// tex1: uv, materialId
+	// tex2: tbn
+	static inline constexpr size_t GBufferSize{ 2 };
+	static constexpr D3D12_RESOURCE_DESC GetGBufferTexDesc(size_t width, size_t height) {
+		return D3D12_RESOURCE_DESC{
+			.Dimension{ D3D12_RESOURCE_DIMENSION_TEXTURE2D },
+			.Width{ static_cast<UINT64>(width) },
+			.Height{ static_cast<UINT>(height) },
+			.DepthOrArraySize{ 1 },
+			.MipLevels{ 0 },
+			.Format{ DXGI_FORMAT_R32G32B32A32_FLOAT },
+			.SampleDesc{ 1, 0 },
+			.Flags{ D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET }
+		};
+	}
+
+	std::shared_ptr<EnumFence<GBufferState>> m_pGBufferFence{};
+
+public:
+	GBuffer(
+		const std::wstring& name,
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		size_t width,
+		size_t height
+	) : Texture(name, pDeviceContext, GetGBufferTexDesc(width, height), GBufferSize),
+		m_pGBufferFence(std::make_shared<EnumFence<GBufferState>>(
+			name + L"/Fence",
+			pDeviceContext->GetDevice(),
+			GBufferState::Write
+		))
+	{}
+
+	std::shared_ptr<EnumFence<GBufferState>> GetFence() const {
+		return m_pGBufferFence;
 	}
 };

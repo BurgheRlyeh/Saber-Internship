@@ -26,8 +26,8 @@ void DDSTexture::LoadFromDDS(
 	CreateResource(
 		filename,
 		pDeviceContext->GetDevice(),
-		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-		ResourceData{
+		AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+		ResourceDesc{
 			CD3DX12_RESOURCE_DESC::Tex2D(
 				image.GetMetadata().format,
 				image.GetMetadata().width,

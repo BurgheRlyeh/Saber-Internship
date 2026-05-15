@@ -51,11 +51,11 @@ public:
 		if (m_pIndirectCommandBuffer) {
 			IndirectCommand indirectCommand;
 			pMeshObject->FillIndirectCommand(indirectCommand);
-			m_pIndirectCommandBuffer->SetUpdateAt(id, indirectCommand);
+			m_pIndirectCommandBuffer->UpdateAt(id, indirectCommand);
 		}
 		if (m_pModelBuffers) {
 			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
-			m_pModelBuffers->SetUpdateAt(id, modelBuffer);
+			m_pModelBuffers->UpdateAt(id, modelBuffer);
 		}
 	}
 
@@ -70,9 +70,12 @@ public:
 		}
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
+		if (m_pModelBuffers->GetResource()->GetState() != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
+			m_pModelBuffers->GetResource()->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+		}
 		pCommandList->GetD3D12CommandList()->SetGraphicsRootShaderResourceView(
 			2,
-			m_pModelBuffers->GetResource()->GetResource()->GetGPUVirtualAddress()
+			m_pModelBuffers->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
 		);
 		m_pIndirectCommandBuffer->Execute(pCommandList);
 	}
@@ -85,15 +88,16 @@ public:
 			m_name + L"/ModelBuffers",
 			pDeviceContext,
 			m_capacity,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-			GPUResource::ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(0), D3D12_RESOURCE_STATE_GENERIC_READ }
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceDesc{ CD3DX12_RESOURCE_DESC::Buffer(0) }
 		);
-		m_pModelBuffers->CreateUpdater<InstUploadBufferUpdater<ModelBuffer>>();
+		m_pModelBuffers->CreateStorage<VectorBufferStorage<ModelBuffer>>();
+		m_pModelBuffers->CreateUpdater<RangeBufferUpdater<ModelBuffer>>();
 
 		for (size_t i{}; i < m_objects.size(); ++i) {
 			auto pMeshObject = std::dynamic_pointer_cast<MeshRenderObject<ModelBuffer>>(m_objects[i]);
 			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
-			m_pModelBuffers->SetUpdateAt(i, modelBuffer);
+			m_pModelBuffers->UpdateAt(i, modelBuffer);
 		}
 
 		return true;
@@ -121,13 +125,14 @@ public:
 			m_pIndirectCommandBuffer->CreateUpdater<DynamicBufferUpdater<IndirectCommand>>(pIndirectUpdater);
 		}
 		else {
-			m_pIndirectCommandBuffer->CreateUpdater<StaticBufferUpdater<IndirectCommand>>();
+			m_pIndirectCommandBuffer->CreateStorage<VectorBufferStorage<IndirectCommand>>();
+			m_pIndirectCommandBuffer->CreateUpdater<RangeBufferUpdater<IndirectCommand>>();
 		}
 
 		for (size_t i{}; i < m_objects.size(); ++i) {
 			IndirectCommand indirectCommand;
 			m_objects[i]->FillIndirectCommand(indirectCommand);
-			m_pIndirectCommandBuffer->SetUpdateAt(i, indirectCommand);
+			m_pIndirectCommandBuffer->UpdateAt(i, indirectCommand);
 		}
 
 		return true;

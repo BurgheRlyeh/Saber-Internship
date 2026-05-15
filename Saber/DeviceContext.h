@@ -51,6 +51,7 @@ public:
 		D3D12_DESCRIPTOR_HEAP_FLAGS flags{};
 	};
 	DeviceContext(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
+	~DeviceContext();
 	void InitializeContext(
 		const std::array<DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 	);
@@ -93,6 +94,10 @@ public:
 
 	std::shared_ptr<Atlas<Mesh>> GetMeshAtlas() const {
 		return m_pMeshAtlas;
+	}
+
+	void SetMaterialManager(std::shared_ptr<MaterialManager> pMaterialManager) {
+		m_pMaterialManager = pMaterialManager;
 	}
 	std::shared_ptr<MaterialManager> GetMaterialManager() const {
 		return m_pMaterialManager;

@@ -15,6 +15,8 @@ bool FenceBasedRawRingBuffer::Allocate(size_t size, size_t & offset) {
         return false;
     }
 
+    size_t addSize{ size };
+
     //        tail          head                  
     //        |             |                     
     //  [xxxxx              xxxxxxxxxxxxxxxxxxx]  
@@ -23,19 +25,20 @@ bool FenceBasedRawRingBuffer::Allocate(size_t size, size_t & offset) {
 
     //           head             tail        capacity  
     //           |                |           |         
-    //  [        xxxxxxxxxxxxxxxxx            ]         
-    if (m_head < m_tail && m_tail + size > m_capacity) {
+    //  [        xxxxxxxxxxxxxxxxx            ]        
+    if (m_head <= m_tail && m_tail + size > m_capacity) {
         if (size > m_head)
             return false;
 
-        size += (m_capacity - m_tail);
+        addSize += (m_capacity - m_tail);
         m_tail = 0;
     }
 
     offset = m_tail;
+
     m_tail += size;
-    m_size += size;
-    m_currFrameSize += size;
+    m_size += addSize;
+    m_currFrameSize += addSize;
 
     return true;
 }
@@ -64,23 +67,23 @@ GPURingBuffer::GPURingBuffer(
     switch (type) {
     case RingBufferType::CPU: {
 		m_pBuffer = std::make_shared<GPUResource>(
-			L"RingBuffer/Upload",
+			L"RingBuffer/Upload" + std::to_wstring(capacity),
 			pDevice,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_UPLOAD },
-			GPUResource::ResourceData{
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_UPLOAD },
+			GPUResource::ResourceDesc{
 				CD3DX12_RESOURCE_DESC::Buffer(GetCapacity()),
 				D3D12_RESOURCE_STATE_GENERIC_READ
 			}
 		);
-		m_pBuffer->GetResource()->Map(0, nullptr, &m_cpuVirtualAddress);
+		m_pBuffer->GetD3D12Resource()->Map(0, nullptr, &m_cpuVirtualAddress);
         break;
     }
     case RingBufferType::GPU: {
 		m_pBuffer = std::make_shared<GPUResource>(
-			L"RingBuffer/Default",
+			L"RingBuffer/Default" + std::to_wstring(capacity),
 			pDevice,
-			GPUResource::HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-			GPUResource::ResourceData{
+			GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+			GPUResource::ResourceDesc{
 				CD3DX12_RESOURCE_DESC::Buffer(
 					GetCapacity(),
 					D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -94,7 +97,7 @@ GPURingBuffer::GPURingBuffer(
         throw std::runtime_error("An attempt was made to create a ring buffer with unknown type");
     }
 
-    m_gpuVirtualAddress = m_pBuffer->GetResource()->GetGPUVirtualAddress();
+    m_gpuVirtualAddress = m_pBuffer->GetD3D12Resource()->GetGPUVirtualAddress();
 }
 
 GPURingBuffer::~GPURingBuffer() {
@@ -113,12 +116,19 @@ DynamicAllocation GPURingBuffer::Allocate(size_t size) {
         DynAlloc.cpuAddress = reinterpret_cast<char*>(DynAlloc.cpuAddress) + offset;
     }
 
-    return DynAlloc;
+    return DynamicAllocation{
+        m_pBuffer,
+        offset,
+        size,
+        !m_cpuVirtualAddress ? nullptr
+            : reinterpret_cast<char*>(m_cpuVirtualAddress) + offset,
+        m_gpuVirtualAddress + offset
+    };
 }
 
 void GPURingBuffer::Destroy() {
     if (m_pBuffer && m_cpuVirtualAddress) {
-        m_pBuffer->GetResource()->Unmap(0, nullptr);
+        m_pBuffer->GetD3D12Resource()->Unmap(0, nullptr);
     }
     m_cpuVirtualAddress = nullptr;
     m_gpuVirtualAddress = 0;

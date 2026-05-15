@@ -2,11 +2,55 @@
 
 #include "Headers.h"
 
+#include <bit>
+#include <optional>
+
 #include "D3D12MemAlloc.h"
+
+#include "EnumHelpers.h"
 
 class CommandList;
 class Device;
+class DeviceContext;
 
+// ResourceView and helper functions
+enum class ResourceView : uint8_t {
+	None = 0,
+	Srv = 1 << 0,
+	Uav = 1 << 1,
+	Cbv = 1 << 2,
+	Rtv = 1 << 3,
+	Dsv = 1 << 4,
+	Num = 5,
+	Any = Srv | Uav | Cbv | Rtv | Dsv
+};
+ENABLE_ENUM_FLAGS(ResourceView);
+
+constexpr std::wstring ToName(EnumFlags<ResourceView> viewType) {
+	if (viewType == ResourceView::None) return L"None";
+
+	std::wstring result;
+	if (viewType & ResourceView::Srv) result += L"Srv";
+	if (viewType & ResourceView::Uav) result += L"Uav";
+	if (viewType & ResourceView::Cbv) result += L"Cbv";
+	if (viewType & ResourceView::Rtv) result += L"Rtv";
+	if (viewType & ResourceView::Dsv) result += L"Dsv";
+
+	return result.empty() ? L"UnknownResourceViewType" : result;
+}
+
+template <>
+constexpr std::underlying_type_t<ResourceView> ToId<ResourceView>(ResourceView res) {
+	assert(res != ResourceView::None);
+	return std::countr_zero(ToUnderlying(res));
+}
+template <>
+constexpr ResourceView FromId<ResourceView>(std::underlying_type_t<ResourceView> id) {
+	assert(0 <= id && id < static_cast<std::underlying_type_t<ResourceView>>(ResourceView::Num));
+	return static_cast<ResourceView>(1 << id);
+}
+
+// GPUResource class
 class GPUResource {
 	static std::shared_ptr<GPUResource> pCounterResetter;
 
@@ -19,21 +63,21 @@ protected:
 	GPUResource() = default;
 
 public:
-	struct HeapData {
+	struct AllocationDesc {
 		D3D12_HEAP_TYPE heapType{ D3D12_HEAP_TYPE_DEFAULT };
-		D3D12_HEAP_FLAGS heapFlags{};
+		D3D12_HEAP_FLAGS heapFlags{ D3D12_HEAP_FLAG_NONE };
+		D3D12MA::ALLOCATION_FLAGS allocationFlags{ D3D12MA::ALLOCATION_FLAG_NONE };
 	};
-	struct ResourceData {
+	struct ResourceDesc {
 		D3D12_RESOURCE_DESC resDesc{};
-		D3D12_RESOURCE_STATES resInitState{};
+		D3D12_RESOURCE_STATES resInitState{ D3D12_RESOURCE_STATE_COMMON };
 		const D3D12_CLEAR_VALUE* pResClearValue{};
 	};
 	GPUResource(
 		const std::wstring& name,
 		std::shared_ptr<Device> pDevice,
-		const HeapData& heapData,
-		const ResourceData& resData,
-		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+		const AllocationDesc& allocDesc,
+		const ResourceDesc& resDesc
 	);
 
 	D3D12_RESOURCE_STATES GetState() const {
@@ -44,36 +88,35 @@ public:
 		const D3D12_RESOURCE_STATES& toState
 	);
 
-	void ResetCounter(
-		std::shared_ptr<CommandList> pCommandList,
-		uint64_t counterOffset
-	) const;
-
 	void CreateResource(
 		const std::wstring& name,
 		std::shared_ptr<Device> pDevice,
-		const HeapData& heapData,
-		const ResourceData& resData,
-		const D3D12MA::ALLOCATION_FLAGS& allocationFlags = D3D12MA::ALLOCATION_FLAG_NONE
+		const AllocationDesc& allocDesc,
+		const ResourceDesc& resDesc
 	);
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> GetResource() const;
+	Microsoft::WRL::ComPtr<ID3D12Resource> GetD3D12Resource() const;
 
 	D3D12_RESOURCE_DESC GetResourceDesc() const {
-		return GetResource()->GetDesc();
+		return GetD3D12Resource()->GetDesc();
 	}
 
 	D3D12_HEAP_PROPERTIES GetHeapProperties() const {
 		D3D12_HEAP_PROPERTIES heapProps;
-		GetResource()->GetHeapProperties(&heapProps, nullptr);
+		GetD3D12Resource()->GetHeapProperties(&heapProps, nullptr);
 		return heapProps;
 	}
 
 	D3D12_HEAP_FLAGS GetHeapFlags() const {
 		D3D12_HEAP_FLAGS heapFlags;
-		GetResource()->GetHeapProperties(nullptr, &heapFlags);
+		GetD3D12Resource()->GetHeapProperties(nullptr, &heapFlags);
 		return heapFlags;
 	}
+
+	size_t GetIntermediateSize(
+		UINT firstSubresource = 0,
+		UINT numSubresources = 1
+	);
 
 	std::shared_ptr<GPUResource> CreateIntermediate(
 		std::shared_ptr<Device> pDevice,
@@ -99,8 +142,15 @@ public:
 		UINT numSubresources = 1
 	);
 
+	bool SupportsView(ResourceView viewType) const;
+	void CreateResourceView(
+		ResourceView viewType,
+		std::shared_ptr<Device> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle
+	);
+
 	bool IsSrv() const;
-	virtual const D3D12_SHADER_RESOURCE_VIEW_DESC* GetSrvDesc() const;
+	virtual std::optional<D3D12_SHADER_RESOURCE_VIEW_DESC> GetSrvDesc() const;
 	void CreateShaderResourceView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
@@ -108,7 +158,7 @@ public:
 	);
 
 	bool IsUav() const;
-	virtual const D3D12_UNORDERED_ACCESS_VIEW_DESC* GetUavDesc() const;
+	virtual std::optional<D3D12_UNORDERED_ACCESS_VIEW_DESC> GetUavDesc() const;
 	void CreateUnorderedAccessView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
@@ -116,12 +166,28 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
 	);
 
+	bool IsCbv() const;
+	virtual std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GetCbvDesc() const;
+	void CreateConstantBufferView(
+		std::shared_ptr<Device> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_CONSTANT_BUFFER_VIEW_DESC* pCbvDesc = nullptr
+	);
+
 	bool IsRtv() const;
-	virtual const D3D12_RENDER_TARGET_VIEW_DESC* GetRtvDesc() const;
+	virtual std::optional<D3D12_RENDER_TARGET_VIEW_DESC> GetRtvDesc() const;
 	void CreateRenderTargetView(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc = nullptr
+	);
+
+	bool IsDsv() const;
+	virtual std::optional<D3D12_DEPTH_STENCIL_VIEW_DESC> GetDsvDesc() const;
+	void CreateDepthStencilView(
+		std::shared_ptr<Device> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_DEPTH_STENCIL_VIEW_DESC* pDsvDesc = nullptr
 	);
 
 	void ClearRenderTarget(
@@ -130,65 +196,32 @@ public:
 		const float* clearColor = nullptr
 	);
 
-	//static void InitCounterResetter(
-	//	std::shared_ptr<DeviceContext> pDeviceContext,
-	//	std::shared_ptr<CommandQueue> pCommandQueueDirect
-	//) {
-	//	if (pCounterResetter) {
-	//		return;
-	//	}
+	void ClearDepthTarget(
+		std::shared_ptr<CommandList> pCommandList,
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
+		float depth = 0.f,
+		const D3D12_CLEAR_FLAGS& clearFlags = D3D12_CLEAR_FLAG_DEPTH,
+		uint8_t stencil = 0
+	);
 
-	//	pCounterResetter = std::make_shared<GPUResource>(
-	//		L"GPUResource/CounterResetter",
-	//		pDeviceContext->GetAllocator(),
-	//		HeapData{ D3D12_HEAP_TYPE_DEFAULT },
-	//		ResourceData{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
-	//	);
-
-	//	UINT zero{};
-	//	D3D12_SUBRESOURCE_DATA subresData{
-	//		.pData{ &zero },
-	//		.RowPitch{ sizeof(UINT) },
-	//		.SlicePitch{ subresData.RowPitch }
-	//	};
-
-	//	std::shared_ptr<GPUResource> pIntermediate{
-	//		pCounterResetter->CreateIntermediate(pDeviceContext->GetAllocator())
-	//	};
-
-	//	std::shared_ptr<CommandList> pCommandListCopy{
-	//		pCommandQueueDirect->GetCommandList(pDeviceContext)
-	//	};
-	//	pCounterResetter->UpdateSubresources(
-	//		pCommandListCopy,
-	//		pIntermediate,
-	//		&subresData
-	//	);
-	//	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListCopy);
-
-	//	std::shared_ptr<CommandList> pCommandListDirect{
-	//		pCommandQueueDirect->GetCommandList(pDeviceContext)
-	//	};
-	//	pCounterResetter->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	//	pCommandQueueDirect->ExecuteCommandListImmediately(pCommandListDirect);
-	//}
-	static void DestroyCounterResetter() {
-		pCounterResetter.reset();
-	}
+	// CounterResetter related methods
+	static void InitCounterResetter(
+		std::shared_ptr<DeviceContext> pDevice,
+		std::shared_ptr<CommandList> pCommandList
+	);
+	static void DestroyCounterResetter();
+	void ResetCounter(
+		std::shared_ptr<CommandList> pCommandList,
+		uint64_t counterOffset
+	) const;
 };
 
-static UINT AlignSize(UINT size, UINT alignment) {
-	return (size + (alignment - 1)) & ~(alignment - 1);
-}
+// Helper functions
+UINT AlignSize(UINT size, UINT alignment);
 
-static bool IsSrvDesc(const D3D12_RESOURCE_DESC& desc) {
-	return !(desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
-}
-
-static bool IsUavDesc(const D3D12_RESOURCE_DESC& desc) {
-	return desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-}
-
-static bool IsRtvDesc(const D3D12_RESOURCE_DESC& desc) {
-	return desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-}
+bool SupportsView(ResourceView viewType, const D3D12_RESOURCE_DESC& desc);
+bool IsCbvDesc(const D3D12_RESOURCE_DESC& desc);
+bool IsSrvDesc(const D3D12_RESOURCE_DESC& desc);
+bool IsUavDesc(const D3D12_RESOURCE_DESC& desc);
+bool IsRtvDesc(const D3D12_RESOURCE_DESC& desc);
+bool IsDsvDesc(const D3D12_RESOURCE_DESC& desc);

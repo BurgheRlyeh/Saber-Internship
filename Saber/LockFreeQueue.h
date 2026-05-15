@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <atomic>
+#include <bit>
 #include <memory>
 #include <vector>
 #include <thread>
@@ -79,13 +80,18 @@ public:
     }
 };
 
-enum ArrayLockFreeQueueOptimizationType {
-    SPEED, MEMORY
+enum class ArrayLockFreeQueueCapacityType {
+    DegreeOfTwo,
+    Exact
 };
 
 // Bounded Ring Buffer Lock-Free Queue
 // https://www.codeproject.com/Articles/153898/Yet-another-implementation-of-a-lock-free-circul
-template <typename T, ArrayLockFreeQueueOptimizationType Optimization = SPEED, bool DestructAfterPop = false>
+template <
+    typename T,
+    ArrayLockFreeQueueCapacityType Optimization = ArrayLockFreeQueueCapacityType::DegreeOfTwo,
+    bool DestructAfterPop = false
+>
 class ArrayLockFreeQueue {
     T* m_data{};
 
@@ -98,13 +104,9 @@ class ArrayLockFreeQueue {
 
 public:
     ArrayLockFreeQueue(size_t capacity = 255) {
-        if (Optimization == SPEED) {
-            m_capacityMask = capacity;
-            for (size_t i{ 1 }; i < sizeof(size_t) + 1; i <<= 1) {
-                m_capacityMask |= m_capacityMask >> i;
-            }
-            m_capacity = m_capacityMask + 1;
-
+        if constexpr (Optimization == ArrayLockFreeQueueCapacityType::DegreeOfTwo) {
+            m_capacity = std::bit_ceil(capacity);
+            m_capacityMask = m_capacity - 1;
             m_data = new T[m_capacity];
         }
         else {
@@ -178,6 +180,9 @@ public:
 
 private:
     size_t ToRingBufId(size_t id) {
-        return Optimization == SPEED ? id & m_capacityMask : id % m_capacity;
+        if constexpr (Optimization == ArrayLockFreeQueueCapacityType::DegreeOfTwo)
+            return id & m_capacityMask;
+        else
+            return id % m_capacity;
     }
 };
