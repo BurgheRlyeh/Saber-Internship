@@ -43,9 +43,8 @@ public:
 		for (size_t rangeTypeId{}; rangeTypeId < static_cast<size_t>(DescRangeType::ResNumTypes); ++rangeTypeId) {
 			ResourceView view{ FromId<ResourceView>(rangeTypeId) };
 			if ((view & views) && SupportsView(view, resDesc.resDesc)) {
-				m_pDescHeapRanges[rangeTypeId] = pDeviceContext->GetDescriptorHeap()->AllocateRange(
-					m_name + L"/Ranges/" + ToName(FromId<DescRangeType>(rangeTypeId)), 1
-				);
+				auto rangeType{ FromId<DescRangeType>(rangeTypeId) };
+				m_pDescHeapRanges[rangeTypeId] = pDeviceContext->AllocateDescRange(m_name, rangeType, 1);
 			}
 		}
 
@@ -183,11 +182,11 @@ protected:
 
 		for (size_t rangeTypeId{}; rangeTypeId < static_cast<size_t>(DescRangeType::ResNumTypes); ++rangeTypeId) {
 			if (auto& pRange = m_pDescHeapRanges[rangeTypeId]) {
-				pRange->Clear();
+				pRange->FreeAll();
 				m_pResource->CreateResourceView(
 					FromId<ResourceView>(rangeTypeId),
 					pDevice,
-					pRange->GetNextCpuHandle()
+					pRange->AllocateGetCpuHandle()
 				);
 			}
 		}

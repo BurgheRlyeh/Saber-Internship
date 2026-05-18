@@ -17,7 +17,7 @@ class Camera;
 class CommandList;
 class ComputeObject;
 class DepthBuffer;
-class DescriptorHeapManager;
+class DescriptorHeap;
 class Device;
 class DeviceContext;
 class GBuffer;
@@ -140,7 +140,7 @@ public:
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
         std::shared_ptr<CommandList> pCommandListCompute,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        std::shared_ptr<DescriptorHeap> pResDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
         UINT width,
         UINT height
@@ -149,7 +149,7 @@ public:
     void SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing);
     void RenderPostProcessing(
         std::shared_ptr<CommandList> pCommandListDirect,
-        std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+        std::shared_ptr<DescriptorHeap> pResDescHeapManager,
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView

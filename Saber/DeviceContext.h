@@ -3,12 +3,15 @@
 #include "Headers.h"
 
 #include <array>
+#include <stdexcept>
 
 #include "Atlas.h"
 #include "DynamicUploadRingBuffer.h"
+#include "DescriptorHeapManager.h"
 #include "FencedQueue.h"
 
 class CommandQueue;
+class DescriptorHeap;
 class DescriptorHeapManager;
 class Device;
 template <typename T>
@@ -31,7 +34,7 @@ class DeviceContext {
 	std::shared_ptr<CommandQueue> m_pCommandQueueCompute{};
 	std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
 
-	std::array<std::shared_ptr<DescriptorHeapManager>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_pDescHeaps{};
+	std::shared_ptr<DescriptorHeapManager> m_pDescHeapManager{};
 
 	// Atlases
 	std::shared_ptr<Atlas<RootSignatureResource>> m_pRootSignatureAtlas{};
@@ -46,14 +49,10 @@ class DeviceContext {
 	std::shared_ptr<FrameDataBuffer<std::shared_ptr<GPUResource>>> m_pFrameDataBuffer{};
 
 public:
-	struct DescHeapArgs {
-		size_t size{};
-		D3D12_DESCRIPTOR_HEAP_FLAGS flags{};
-	};
 	DeviceContext(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
 	~DeviceContext();
 	void InitializeContext(
-		const std::array<DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
+		const std::array<DescriptorHeapManager::DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 	);
 
 	std::shared_ptr<Device> GetDevice() const {
@@ -75,11 +74,13 @@ public:
 		}
 	}
 
-	std::shared_ptr<DescriptorHeapManager> GetDescriptorHeap(
-		const D3D12_DESCRIPTOR_HEAP_TYPE& type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-	) const {
-		assert(0 <= type && type < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
-		return m_pDescHeaps[type];
+	std::shared_ptr<DescriptorHeap> GetDescriptorHeap(DescRangeType descRangeType) const {
+		return m_pDescHeapManager->GetDescHeap(descRangeType);
+	}
+
+	template <std::derived_from<DescRange> DescRangeImpl = StackDescRange>
+	std::shared_ptr<DescRange> AllocateDescRange(const std::wstring& basename, DescRangeType descRangeType, size_t size) {
+		return m_pDescHeapManager->AllocateRange<DescRangeImpl>(basename, descRangeType, size);
 	}
 
 	std::shared_ptr<Atlas<RootSignatureResource>> GetRootSignatureAtlas() const {

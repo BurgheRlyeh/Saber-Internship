@@ -3,67 +3,125 @@
 #include "Headers.h"
 
 #include <optional>
+#include <vector>
+#include <mutex>
+
+class DescriptorHeap;
 
 enum class DescRangeType : uint8_t {
-	Srv = 0,
-	Uav = 1,
-	Cbv = 2,
+	Cbv = 0,
+	Srv = 1,
+	Uav = 2,
 	Rtv = 3,
 	Dsv = 4,
 	Smp = 5,
 	NumTypes = 6,
 
+	// TODO: add smth like "BufferStartType = Cbv", and same for textures
 	ResNumTypes = 5
 };
 
+constexpr D3D12_DESCRIPTOR_HEAP_TYPE ToD3D12DescHeapType(DescRangeType type) {
+	switch (type) {
+	case DescRangeType::Cbv:
+	case DescRangeType::Srv:
+	case DescRangeType::Uav:
+		return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	case DescRangeType::Rtv:
+		return D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	case DescRangeType::Dsv:
+		return D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	case DescRangeType::Smp:
+		return D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+	default:
+		return D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES;
+	}
+}
+
 constexpr std::wstring ToName(DescRangeType type) {
 	switch (type) {
+	case DescRangeType::Cbv: return L"Cbv";
 	case DescRangeType::Srv: return L"Srv";
 	case DescRangeType::Uav: return L"Uav";
-	case DescRangeType::Cbv: return L"Cbv";
 	case DescRangeType::Rtv: return L"Rtv";
 	case DescRangeType::Dsv: return L"Dsv";
 	case DescRangeType::Smp: return L"Smp";
 	default: return L"";
 	}
-}	
+}
 
 class DescRange {
+protected:
 	const std::wstring m_name{};
 
-	UINT m_handleIncSize{};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_cpuHandle{};
-	D3D12_GPU_DESCRIPTOR_HANDLE m_gpuHandle{};
-	std::optional<D3D12_DESCRIPTOR_RANGE_TYPE> m_type{};
+	std::weak_ptr<DescriptorHeap> m_pDescHeapManager{};
+	size_t m_startId{};
 
-	size_t m_size{};
 	size_t m_capacity{};
 
 public:
 	DescRange() = delete;
-	DescRange(const DescRange& other) = default;
+	DescRange(
+		const std::wstring& name,
+		std::shared_ptr<DescriptorHeap>& pDescHeapManager,
+		size_t startId,
+		size_t capacity
+	);
 
-	DescRange(
-		const std::wstring& name,
-		const size_t& capacity,
-		const UINT& handleIncSize,
-		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,
-		const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle,
-		const std::optional<D3D12_DESCRIPTOR_RANGE_TYPE>& type = std::nullopt
-	);
-	DescRange(
-		const std::wstring& name,
-		const DescRange& other
-	);
+	virtual ~DescRange() = default;
+
+	DescRange(const DescRange& other) = default;
+	DescRange& operator=(const DescRange& other) = default;
+
+	DescRange(DescRange&& other) noexcept = default;
+	DescRange& operator=(DescRange&& other) noexcept = default;
+
+	inline const std::wstring& GetName() const { return m_name; }
+
+	virtual size_t GetSize() const = 0;
+	inline size_t GetCapacity() const { return m_capacity; }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(size_t id = 0) const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(size_t id = 0) const;
 
-	size_t GetSize() const;
+	virtual size_t Allocate() = 0;
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateGetCpuHandle();
 
-	size_t GetNextId();
-	D3D12_CPU_DESCRIPTOR_HANDLE GetNextCpuHandle();
+	virtual void Free(size_t id) = 0;
+	void Free(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
 
-	void Clear();
+	virtual void FreeAll() = 0;
 };
 
+class StackDescRange : public DescRange {
+	size_t m_size{};
+
+public:
+	using DescRange::DescRange;
+
+	size_t GetSize() const override { return m_size; };
+
+	size_t Allocate() override;
+	void Free(size_t id) override;
+	void FreeAll();
+};
+
+class PoolDescRange : public DescRange {
+	std::vector<size_t> m_freeIndices{};
+
+public:
+	PoolDescRange(
+		const std::wstring& name,
+		std::shared_ptr<DescriptorHeap>& pDescHeapManager,
+		size_t startId,
+		size_t capacity
+	);
+
+	inline size_t GetSize() const override {
+		return m_capacity - m_freeIndices.size();
+	};
+
+	size_t Allocate() override;
+	void Free(size_t id) override;
+	void FreeAll() override;
+};

@@ -44,8 +44,8 @@ Renderer::~Renderer() {
     m_pScenes.clear();
     m_pGBuffers.clear();
     m_pDepthBuffers.clear();
-    m_pDeviceContext->GetMaterialManager().reset();
-    m_pDeviceContext->GetDescriptorHeap().reset();
+    m_pDeviceContext->SetMaterialManager(nullptr);
+    m_pDeviceContext.reset();
 }
 
 void Renderer::Initialize(HWND hWnd) {
@@ -69,7 +69,7 @@ void Renderer::Initialize(HWND hWnd) {
 
     constexpr size_t GBUFFER_SIZE{ 2 }; // uvMaterial + tbn
     m_pDeviceContext = std::make_shared<DeviceContext>(pAdapter);
-    m_pDeviceContext->InitializeContext(std::to_array<DeviceContext::DescHeapArgs>({
+    m_pDeviceContext->InitializeContext(std::to_array<DescriptorHeapManager::DescHeapArgs>({
         // CBV_SRV_UAV
         { 8192, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE },
         // SAMPLER
@@ -82,14 +82,13 @@ void Renderer::Initialize(HWND hWnd) {
     m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
         L"../../Resources/Textures/",
         m_pDeviceContext,
-        m_pDeviceContext->GetDescriptorHeap(),
         1024
     ));
 
     m_pSwapChain = CreateSwapChain(hWnd, m_pDeviceContext->GetCommandQueue()->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
-    m_pBackBuffersDescHeapRange = m_pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(L"BackBuffersRange", m_numFrames);
+    m_pBackBuffersDescHeapRange = m_pDeviceContext->AllocateDescRange(L"BackBuffers", DescRangeType::Rtv, m_numFrames);
     m_pBackBuffers = CreateBackBuffers(m_pDeviceContext->GetDevice(), m_pSwapChain, m_pBackBuffersDescHeapRange);
 
 	m_pDepthBuffers.resize(1);
@@ -544,7 +543,7 @@ void Renderer::Render() {
             commandListForHZB->PixBeginEvent(L"Building HZB");
             pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
-                m_pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap()
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap()
             );
             commandListForHZB->SetReadyForExecution();
         }
@@ -553,7 +552,7 @@ void Renderer::Render() {
             commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
             pScene->RunDeferredShading(
                 commandListForDeferredShading,
-                m_pDeviceContext->GetDescriptorHeap(),
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
                 m_pDeviceContext->GetMaterialManager(),
                 m_clientWidth,
                 m_clientHeight
@@ -565,7 +564,7 @@ void Renderer::Render() {
             commandListAfterFrame->PixBeginEvent(L"Post Processing");
             pScene->RenderPostProcessing(
                 commandListAfterFrame,
-                m_pDeviceContext->GetDescriptorHeap(),
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
                 m_viewport,
                 m_scissorRect,
                 rtv
@@ -804,12 +803,12 @@ std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
 
     std::vector<std::shared_ptr<TextureResource>> backBuffers{ desc.BufferCount };
 
-    pDescHeapRange->Clear();
+    pDescHeapRange->FreeAll();
     for (size_t i{}; i < desc.BufferCount; ++i) {
         backBuffers[i] = TextureResource::FromSwapChain(pSwapChain, i);
         backBuffers[i]->CreateRenderTargetView(
             pDevice,
-            pDescHeapRange->GetNextCpuHandle()
+            pDescHeapRange->AllocateGetCpuHandle()
         );
     }
 

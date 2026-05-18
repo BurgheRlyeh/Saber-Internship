@@ -12,14 +12,10 @@
 TextureManager::TextureManager(
 	const std::wstring& name,
 	const std::wstring& resourceFolder,
-	std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
+	std::shared_ptr<DescriptorHeap> pDescHeapManager,
 	size_t capacity
 ) : m_name(name), m_resourceFolder(resourceFolder) {
-	m_pSrvRange = pDescHeapManager->AllocateRange(
-		m_name + L"/Srv",
-		capacity,
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV
-	);
+	m_pSrvRange = pDescHeapManager->AllocateRange(m_name, DescRangeType::Srv, capacity);
 }
 
 std::shared_ptr<DescRange> TextureManager::GetSrvRange() const {
@@ -35,7 +31,7 @@ size_t TextureManager::GetCreateTextureId(
 	if (auto it = m_textureIdMap.find(filename); it != m_textureIdMap.end())
 		return it->second;
 
-    size_t srvId{ m_pSrvRange->GetNextId() };
+    size_t srvId{ m_pSrvRange->Allocate() };
     m_textureIdMap[filename] = srvId;
     lock.unlock();
 
@@ -53,13 +49,12 @@ const std::wstring MaterialManager::BASE_NAME = L"MaterialManager";
 MaterialManager::MaterialManager(
     const std::wstring& resourceFolder,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
     size_t capacity
 ) : m_capacity(capacity) {
     m_pTexManager = std::make_shared<TextureManager>(
         BASE_NAME + L"/TextureManager",
         resourceFolder,
-        pDescHeapManager,
+        pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
         2 * capacity        // (albedo + normal) * count
     );
 

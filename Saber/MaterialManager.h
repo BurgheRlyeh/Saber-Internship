@@ -11,7 +11,7 @@ template <typename T>
 class Buffer;
 class CommandList;
 class DDSTexture;
-class DescriptorHeapManager;
+class DescriptorHeap;
 class DescRange;
 class Device;
 class DeviceContext;
@@ -32,7 +32,7 @@ public:
 	TextureManager(
 		const std::wstring& name,
 		const std::wstring& resourceFolder,
-		std::shared_ptr<DescriptorHeapManager> heap,
+		std::shared_ptr<DescriptorHeap> heap,
 		size_t capacity
 	);
 
@@ -77,7 +77,6 @@ public:
     MaterialManager(
         const std::wstring& resourceFolder,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<DescriptorHeapManager> pDescHeapManager,
         size_t capacity
     );
 

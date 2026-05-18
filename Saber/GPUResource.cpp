@@ -150,6 +150,28 @@ void GPUResource::CreateResourceView(
 	}
 }
 
+bool GPUResource::IsCbv() const {
+	return IsCbvDesc(GetResourceDesc());
+}
+std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GPUResource::GetCbvDesc() const {
+	return D3D12_CONSTANT_BUFFER_VIEW_DESC{
+		.BufferLocation{ GetD3D12Resource()->GetGPUVirtualAddress() },
+		.SizeInBytes{ static_cast<UINT>(GetD3D12Resource()->GetDesc().Width) }
+	};
+}
+void GPUResource::CreateConstantBufferView(
+	std::shared_ptr<Device> pDevice,
+	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+	const D3D12_CONSTANT_BUFFER_VIEW_DESC* pCbvDesc
+) {
+	assert(IsCbv());
+	auto desc{ GetCbvDesc() };
+	pDevice->GetD3D12Device()->CreateConstantBufferView(
+		pCbvDesc ? pCbvDesc : (desc ? &*desc : nullptr),
+		cpuDescHandle
+	);
+}
+
 bool GPUResource::IsSrv() const {
 	return IsSrvDesc(GetResourceDesc());
 }
@@ -188,28 +210,6 @@ void GPUResource::CreateUnorderedAccessView(
 		GetD3D12Resource().Get(),
 		pCounterResource.Get(),
 		pUavDesc ? pUavDesc : (desc ? &*desc : nullptr),
-		cpuDescHandle
-	);
-}
-
-bool GPUResource::IsCbv() const {
-	return IsCbvDesc(GetResourceDesc());
-}
-std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GPUResource::GetCbvDesc() const {
-	return D3D12_CONSTANT_BUFFER_VIEW_DESC{
-		.BufferLocation{ GetD3D12Resource()->GetGPUVirtualAddress() },
-		.SizeInBytes{ static_cast<UINT>(GetD3D12Resource()->GetDesc().Width) }
-	};
-}
-void GPUResource::CreateConstantBufferView(
-	std::shared_ptr<Device> pDevice,
-	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
-	const D3D12_CONSTANT_BUFFER_VIEW_DESC* pCbvDesc
-) {
-	assert(IsCbv());
-	auto desc{ GetCbvDesc() };
-	pDevice->GetD3D12Device()->CreateConstantBufferView(
-		pCbvDesc ? pCbvDesc : (desc ? &*desc : nullptr),
 		cpuDescHandle
 	);
 }

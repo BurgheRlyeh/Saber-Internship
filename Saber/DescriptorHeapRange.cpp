@@ -1,58 +1,101 @@
 #include "DescriptorHeapRange.h"
 
+#include "DescriptorHeapManager.h"
+
 #include <stdexcept>
+
+// DescRange
 
 DescRange::DescRange(
 	const std::wstring& name,
-	const size_t& capacity,
-	const UINT& handleIncSize,
-	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,
-	const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle,
-	const std::optional<D3D12_DESCRIPTOR_RANGE_TYPE>& type
-) : m_name(name)
-	, m_capacity(capacity)
-	, m_handleIncSize(handleIncSize)
-	, m_cpuHandle(cpuHandle)
-	, m_gpuHandle(gpuHandle)
-	, m_type(type)
+	std::shared_ptr<DescriptorHeap>& pDescHeapManager,
+	size_t startId,
+	size_t capacity
+) : m_name(name),
+	m_pDescHeapManager(pDescHeapManager),
+	m_startId(startId),
+	m_capacity(capacity)
 {}
 
-DescRange::DescRange(
-	const std::wstring & name,
-	const DescRange & other
-) : DescRange(other) {}
-
 D3D12_CPU_DESCRIPTOR_HANDLE DescRange::GetCpuHandle(size_t id) const {
-	assert(id < m_size);
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(
-		m_cpuHandle,
-		static_cast<UINT>(id),
-		m_handleIncSize
-	);
+	assert(id < m_capacity);
+	
+	auto pDescHeapManager{ m_pDescHeapManager.lock() };
+	assert(pDescHeapManager);
+
+	return pDescHeapManager->GetCpuHandle(m_startId + id);
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE DescRange::GetGpuHandle(size_t id) const {
-	assert(id < m_size);
-	return CD3DX12_GPU_DESCRIPTOR_HANDLE(
-		m_gpuHandle,
-		static_cast<UINT>(id),
-		m_handleIncSize
-	);
+	assert(id < m_capacity);
+
+	auto pDescHeapManager{ m_pDescHeapManager.lock() };
+	assert(pDescHeapManager);
+
+	return pDescHeapManager->GetGpuHandle(m_startId + id);
 }
 
-size_t DescRange::GetSize() const {
-	return m_size;
+D3D12_CPU_DESCRIPTOR_HANDLE DescRange::AllocateGetCpuHandle() {
+	return GetCpuHandle(Allocate());
 }
 
-size_t DescRange::GetNextId() {
+void DescRange::Free(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) {
+	assert(GetCpuHandle(0).ptr <= cpuHandle.ptr && cpuHandle.ptr <= GetCpuHandle(m_capacity - 1).ptr);
+
+	auto pDescHeapManager{ m_pDescHeapManager.lock() };
+	assert(pDescHeapManager);
+
+	auto handleIncSize{ pDescHeapManager->GetHandleIncrementSize() };
+	auto rangeCpuHandle{ pDescHeapManager->GetCpuHandle(m_startId) };
+	
+	Free((cpuHandle.ptr - rangeCpuHandle.ptr) / handleIncSize);
+}
+
+// StackDescRange
+
+size_t StackDescRange::Allocate() {
 	assert(m_size < m_capacity);
 	return m_size++;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescRange::GetNextCpuHandle() {
-	return GetCpuHandle(GetNextId());
+void StackDescRange::Free(size_t id) {
+	assert(id == m_size - 1);
+	--m_size;
 }
 
-void DescRange::Clear() {
+void StackDescRange::FreeAll() {
 	m_size = 0;
+}
+
+// PoolDescRange
+
+PoolDescRange::PoolDescRange(
+	const std::wstring& name,
+	std::shared_ptr<DescriptorHeap>& pDescHeapManager,
+	size_t startId,
+	size_t capacity
+) : DescRange(name, pDescHeapManager, startId, capacity) {
+	FreeAll();
+}
+
+size_t PoolDescRange::Allocate() {
+	assert(!m_freeIndices.empty());
+
+	const size_t id{ m_freeIndices.back() };
+	m_freeIndices.pop_back();
+
+	return id;
+}
+
+void PoolDescRange::Free(size_t id) {
+	assert(id < m_capacity);
+	m_freeIndices.push_back(id);
+}
+
+void PoolDescRange::FreeAll() {
+	m_freeIndices.clear();
+	m_freeIndices.reserve(m_capacity);
+	for (size_t i{}; i < m_capacity; ++i) {
+		m_freeIndices.push_back(m_capacity - i - 1);
+	}
 }

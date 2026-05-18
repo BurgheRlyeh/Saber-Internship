@@ -2,10 +2,14 @@
 
 #include "Headers.h"
 
+#include <array>
+
+#include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
 #include "TextureResource.h"
 
+// TODO: move code to .cpp
 class Texture {
 	std::wstring m_name{};
 
@@ -17,6 +21,7 @@ class Texture {
 
 	std::vector<std::shared_ptr<TextureResource>> m_pTextures{};
 
+	// TODO: replace with array as in Buffer.h
 	std::shared_ptr<DescRange> m_pSrvsRange{};
 	std::shared_ptr<DescRange> m_pRtvsRange{};
 	std::shared_ptr<DescRange> m_pUavsRange{};
@@ -27,6 +32,7 @@ public:
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		const D3D12_RESOURCE_DESC& desc,
 		size_t capacity = 1
+		//, const EnumFlags<ResourceView> views = ResourceView::Any
 	) : m_name(name),
 		m_desc(desc),
 		m_width(desc.Width),
@@ -34,13 +40,13 @@ public:
 		m_capacity(capacity)
 	{
 		if (IsSrvDesc(desc)) {
-			m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+			m_pSrvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Srv, m_capacity);
 		}
 		if (IsUavDesc(desc)) {
-			m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_capacity, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+			m_pUavsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Uav, m_capacity);
 		}
 		if (IsRtvDesc(desc)) {
-			m_pRtvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateRange(m_name + L"/Ranges/RTV", m_capacity);
+			m_pRtvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Rtv, m_capacity);
 		}
 
 		Resize(pDeviceContext->GetDevice(), desc.Width, desc.Height);
@@ -68,13 +74,13 @@ public:
 		UINT height
 	) {
 		if (m_pRtvsRange) {
-			m_pRtvsRange->Clear();
+			m_pRtvsRange->FreeAll();
 		}
 		if (m_pSrvsRange) {
-			m_pSrvsRange->Clear();
+			m_pSrvsRange->FreeAll();
 		}
 		if (m_pUavsRange) {
-			m_pUavsRange->Clear();
+			m_pUavsRange->FreeAll();
 		}
 
 		m_pTextures.clear();
@@ -91,13 +97,13 @@ public:
 				GPUResource::ResourceDesc{ m_desc }
 			);
 			if (m_pRtvsRange) {
-				m_pTextures[i]->CreateRenderTargetView(pDevice, m_pRtvsRange->GetNextCpuHandle());
+				m_pTextures[i]->CreateRenderTargetView(pDevice, m_pRtvsRange->AllocateGetCpuHandle());
 			}
 			if (m_pSrvsRange) {
-				m_pTextures[i]->CreateShaderResourceView(pDevice, m_pSrvsRange->GetNextCpuHandle());
+				m_pTextures[i]->CreateShaderResourceView(pDevice, m_pSrvsRange->AllocateGetCpuHandle());
 			}
 			if (m_pUavsRange) {
-				m_pTextures[i]->CreateUnorderedAccessView(pDevice, m_pUavsRange->GetNextCpuHandle());
+				m_pTextures[i]->CreateUnorderedAccessView(pDevice, m_pUavsRange->AllocateGetCpuHandle());
 			}
 		}
 	}

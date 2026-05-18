@@ -20,9 +20,9 @@ DepthBuffer::DepthBuffer(
 		pDeviceContext->GetDevice(),
 		DepthBufferState::DepthWriting
 	)) {
-	m_pDsvsRange = pDeviceContext->GetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateRange(m_name + L"/Ranges/DSV", 1);
-	m_pSrvsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/SRV", 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pUavsRange = pDeviceContext->GetDescriptorHeap()->AllocateRange(m_name + L"/Ranges/UAV", m_hzbSize, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pDsvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Dsv, 1);
+	m_pSrvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Srv, 2);
+	m_pUavsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Uav, m_hzbSize);
 
 	m_pSinglePassDownsampler = pSPD;
 	Resize(pDeviceContext->GetDevice(), width, height);
@@ -36,9 +36,9 @@ void DepthBuffer::Resize(
 	m_width = width;
 	m_height = height;
 
-	m_pDsvsRange->Clear();
-	m_pSrvsRange->Clear();
-	m_pUavsRange->Clear();
+	m_pDsvsRange->FreeAll();
+	m_pSrvsRange->FreeAll();
+	m_pUavsRange->FreeAll();
 	
 	D3D12_RESOURCE_DESC resDesc{ m_depthBufferDesc };
 	resDesc.Width = width;
@@ -64,7 +64,7 @@ void DepthBuffer::Resize(
 	};
 	m_pDepthBuffer->CreateDepthStencilView(
 		pDevice,
-		m_pDsvsRange->GetNextCpuHandle(),
+		m_pDsvsRange->AllocateGetCpuHandle(),
 		&dsv
 	);
 	
@@ -74,7 +74,7 @@ void DepthBuffer::Resize(
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ 1 } }
 	};
-	m_depthSrvId = m_pSrvsRange->GetNextId();
+	m_depthSrvId = m_pSrvsRange->Allocate();
 	m_pDepthBuffer->CreateShaderResourceView(
 		pDevice, m_pSrvsRange->GetCpuHandle(m_depthSrvId), &srvDesc
 	);
@@ -120,7 +120,7 @@ bool DepthBuffer::ResizeHZB(
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ mipLevels } }
 	};
-	m_hzbSrvId = m_pSrvsRange->GetNextId();
+	m_hzbSrvId = m_pSrvsRange->Allocate();
 	m_pHZBuffer->CreateShaderResourceView(pDevice, m_pSrvsRange->GetCpuHandle(m_hzbSrvId), &srvDesc);
 
 	for (size_t i{ 1 }; i < mipLevels; ++i) {
@@ -129,7 +129,7 @@ bool DepthBuffer::ResizeHZB(
 			.ViewDimension{ D3D12_UAV_DIMENSION_TEXTURE2D },
 			.Texture2D{ .MipSlice{ static_cast<UINT>(i) } }
 		};
-		m_pHZBuffer->CreateUnorderedAccessView(pDevice, m_pUavsRange->GetNextCpuHandle(), &uavDesc);
+		m_pHZBuffer->CreateUnorderedAccessView(pDevice, m_pUavsRange->AllocateGetCpuHandle(), &uavDesc);
 	}
 
 	m_pSinglePassDownsampler->Resize(pDevice, width, height);

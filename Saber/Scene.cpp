@@ -271,7 +271,7 @@ void Scene::RenderObjects(
             0,
             m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
         );
-        pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap()->GetDescriptorHeap().GetAddressOf());
+        pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap().GetAddressOf());
         if (type & RenderSubsystemType::AlphaKill) {
             const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
             pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
@@ -292,7 +292,7 @@ void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDefe
 
 void Scene::RunDeferredShading(
     std::shared_ptr<CommandList> pCommandListCompute,
-    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    std::shared_ptr<DescriptorHeap> pResDescHeapManager,
     std::shared_ptr<MaterialManager> pMaterialManager,
     UINT width,
     UINT height
@@ -322,7 +322,7 @@ void Scene::RunDeferredShading(
                 rootParamId++,
                 m_pLightCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             );
-            pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+            pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetD3D12DescriptorHeap().GetAddressOf());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pTargetTexture->GetUavDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
@@ -338,7 +338,7 @@ void Scene::SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing) {
 
 void Scene::RenderPostProcessing(
     std::shared_ptr<CommandList> pCommandList,
-    std::shared_ptr<DescriptorHeapManager> pResDescHeapManager,
+    std::shared_ptr<DescriptorHeap> pResDescHeapManager,
     D3D12_VIEWPORT viewport,
     D3D12_RECT scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
@@ -363,7 +363,7 @@ void Scene::RenderPostProcessing(
 
         pD3D12CommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
 
-        pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetDescriptorHeap().GetAddressOf());
+        pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetD3D12DescriptorHeap().GetAddressOf());
         pD3D12CommandList->SetGraphicsRootDescriptorTable(
             rootParameterIndex++,
             m_pTargetTexture->GetSrvDescHandle()

@@ -24,13 +24,26 @@ DeviceContext::DeviceContext(
 }
 
 DeviceContext::~DeviceContext() {
+	for (auto& pRingBuffer : m_pRingBuffers) {
+		pRingBuffer.reset();
+	}
+	m_pFrameDataBuffer.reset();
+
+	m_pRootSignatureAtlas.reset();
+	m_pShaderAtlas.reset();
+	m_pPSOLibrary.reset();
+
+	m_pMeshAtlas.reset();
+
 	m_pCommandQueueDirect.reset();
 	m_pCommandQueueCompute.reset();
 	m_pCommandQueueCopy.reset();
+
+	m_pDescHeapManager.reset();
 }
 
 void DeviceContext::InitializeContext(
-	const std::array<DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
+	const std::array<DescriptorHeapManager::DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 ) {
 	m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_name, m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_name, m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -44,15 +57,11 @@ void DeviceContext::InitializeContext(
 	//	m_pCommandQueueDirect
 	//);
 
-	for (size_t i{}; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i) {
-		m_pDescHeaps[i] = std::make_shared<DescriptorHeapManager>(
-			m_name + L"/DescriptorHeap" + std::to_wstring(i),
-			m_pDevice,
-			static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i),
-			descHeapArgs.at(i).size,
-			descHeapArgs.at(i).flags
-		);
-	}
+	m_pDescHeapManager = std::make_shared<DescriptorHeapManager>(
+		m_name + L"/DescriptorHeapManager",
+		m_pDevice,
+		descHeapArgs
+	);
 
 	m_pRootSignatureAtlas = std::make_shared<Atlas<RootSignatureResource>>(L"");
 	m_pShaderAtlas = std::make_shared<Atlas<ShaderResource>>(L"");

@@ -16,13 +16,13 @@ class DeviceContext;
 // ResourceView and helper functions
 enum class ResourceView : uint8_t {
 	None = 0,
-	Srv = 1 << 0,
-	Uav = 1 << 1,
-	Cbv = 1 << 2,
+	Cbv = 1 << 0,
+	Srv = 1 << 1,
+	Uav = 1 << 2,
 	Rtv = 1 << 3,
 	Dsv = 1 << 4,
 	Num = 5,
-	Any = Srv | Uav | Cbv | Rtv | Dsv
+	Any = Cbv | Srv | Uav | Rtv | Dsv
 };
 ENABLE_ENUM_FLAGS(ResourceView);
 
@@ -30,9 +30,9 @@ constexpr std::wstring ToName(EnumFlags<ResourceView> viewType) {
 	if (viewType == ResourceView::None) return L"None";
 
 	std::wstring result;
+	if (viewType & ResourceView::Cbv) result += L"Cbv";
 	if (viewType & ResourceView::Srv) result += L"Srv";
 	if (viewType & ResourceView::Uav) result += L"Uav";
-	if (viewType & ResourceView::Cbv) result += L"Cbv";
 	if (viewType & ResourceView::Rtv) result += L"Rtv";
 	if (viewType & ResourceView::Dsv) result += L"Dsv";
 
@@ -149,6 +149,14 @@ public:
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle
 	);
 
+	bool IsCbv() const;
+	virtual std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GetCbvDesc() const;
+	void CreateConstantBufferView(
+		std::shared_ptr<Device> pDevice,
+		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
+		const D3D12_CONSTANT_BUFFER_VIEW_DESC* pCbvDesc = nullptr
+	);
+
 	bool IsSrv() const;
 	virtual std::optional<D3D12_SHADER_RESOURCE_VIEW_DESC> GetSrvDesc() const;
 	void CreateShaderResourceView(
@@ -164,14 +172,6 @@ public:
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc = nullptr,
 		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
-	);
-
-	bool IsCbv() const;
-	virtual std::optional<D3D12_CONSTANT_BUFFER_VIEW_DESC> GetCbvDesc() const;
-	void CreateConstantBufferView(
-		std::shared_ptr<Device> pDevice,
-		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
-		const D3D12_CONSTANT_BUFFER_VIEW_DESC* pCbvDesc = nullptr
 	);
 
 	bool IsRtv() const;
