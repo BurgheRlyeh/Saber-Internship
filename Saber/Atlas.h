@@ -2,147 +2,155 @@
 
 #include <cassert>
 #include <functional>
-#include <iostream>
-#include <map>
+#include <concepts>
+#include <unordered_map>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 
-using atlas_string = std::wstring;
+// KeyHashers
 
-template <typename T, typename STRING_TYPE = atlas_string>
-class StringAtlas {
-    STRING_TYPE m_resourceFolder;
-    std::map<const STRING_TYPE, std::weak_ptr<T>> m_map;
+template <typename T>
+concept KeyHasherConcept = requires {
+    typename T::KeyType;
+};
 
-    struct Deleter {
-        Deleter(StringAtlas* pAtlas, const STRING_TYPE& filename)
-            : m_pAtlas(pAtlas)
-            , m_filename(filename)
-        {}
+template<typename StringType>
+struct IdentityKeyHasher {
+    using KeyType = StringType;
 
-        void operator()(T* pItem) {
-            m_pAtlas->m_map.erase(m_filename);
-
-            delete pItem;
-        }
-
-        StringAtlas* m_pAtlas;
-        STRING_TYPE m_filename;
-    };
-
-public:
-    StringAtlas(const STRING_TYPE& resourceFolder)
-        : m_resourceFolder(resourceFolder) 
-    {}
-    ~StringAtlas() {
-        assert(m_map.empty());
-    }
-
-    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
-        auto res = m_map.find(filename);
-        return res != m_map.end() ? res->second.lock() : std::shared_ptr<T>(nullptr);
-    }
-
-    template <typename... Params>
-    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
-        std::shared_ptr<T> res{ Find(filename) };
-        if (res) {
-            return res;
-        }
-        res = std::shared_ptr<T>(new T(m_resourceFolder + filename, params...), Deleter(this, filename));
-        m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, res));
-        return res;
-    }
-
-    bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
-        if (Find(filename)) {
-            return false;
-        }
-        
-        m_map.insert(std::pair<const STRING_TYPE, std::weak_ptr<T>>(filename, val));
-        return true;
-    }
-
-    void Clean() {
-
-    }
-
-    const STRING_TYPE& GetResourceFolder() const {
-        return m_resourceFolder;
+    KeyType operator()(const StringType& str) const {
+        return str;
     }
 };
 
-template <typename T, typename STRING_TYPE = atlas_string>
-class HashAtlas {
-    std::hash<STRING_TYPE> m_hasher;
-    STRING_TYPE m_resourceFolder;
-    std::map<const size_t, std::weak_ptr<T>> m_map;
+template<typename StringType>
+struct HashKeyHasher {
+    using KeyType = size_t;
 
-    struct Deleter {
-        Deleter(HashAtlas* pAtlas, const size_t& filenameHash)
-            : m_pAtlas(pAtlas)
-            , m_filenameHash(filenameHash)
-        {}
-
-        void operator()(T* pItem) {
-            m_pAtlas->m_map.erase(m_filenameHash);
-
-            delete pItem;
-        }
-
-        HashAtlas* m_pAtlas;
-        size_t m_filenameHash;
-    };
-
-public:
-    HashAtlas(const STRING_TYPE& resourceFolder)
-        : m_resourceFolder(resourceFolder)
-    {}
-    ~HashAtlas() {
-        assert(m_map.empty());
-    }
-
-    std::shared_ptr<T> Find(const size_t& hash) {
-        auto res = m_map.find(hash);
-        return res != m_map.end() ? res->second.lock() : std::shared_ptr<T>(nullptr);
-    }
-
-    std::shared_ptr<T> Find(const STRING_TYPE& filename) {
-        return Find(m_hasher(filename));
-    }
-
-    template <typename... Params>
-    std::shared_ptr<T> Assign(const STRING_TYPE& filename, Params... params) {
-        size_t hash{ m_hasher(filename) };
-        std::shared_ptr<T> res{ Find(hash) };
-        if (res) {
-            return res;
-        }
-
-        res = std::shared_ptr<T>(new T(m_resourceFolder + filename, params...), Deleter(this, hash));
-        m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, res));
-        return res;
-    }
-
-    bool Add(const STRING_TYPE& filename, std::shared_ptr<T> val) {
-        size_t hash{ m_hasher(filename) };
-        if (Find(hash)) {
-            return false;
-        }
-
-        m_map.insert(std::pair<const size_t, std::weak_ptr<T>>(hash, val));
-        return true;
-    }
-
-    void Clean() {}
-
-    const STRING_TYPE& GetResourceFolder() const {
-        return m_resourceFolder;
+    KeyType operator()(const StringType& str) const {
+        return std::hash<StringType>{}(str);
     }
 };
 
+// Default types
+
+using DefaultAtlasString = std::wstring;
+
+template <typename StringType>
+using DefaultAtlasKeyHasher =
 #ifdef _DEBUG
-#define  Atlas StringAtlas
+    IdentityKeyHasher<StringType>;
 #else
-#define  Atlas HashAtlas
+    HashKeyHasher<StringType>;
 #endif
+
+// Atlas
+
+template <
+    typename T,
+    typename StringType = DefaultAtlasString,
+    KeyHasherConcept KeyHasher = DefaultAtlasKeyHasher<StringType>
+>
+class Atlas : public std::enable_shared_from_this<Atlas<T, StringType, KeyHasher>> {
+    using AtlasType = Atlas<T, StringType, KeyHasher>;
+    using KeyType = typename KeyHasher::KeyType;
+
+    StringType m_prefix;
+
+    struct IdentityHasher {
+        size_t operator()(size_t v) const noexcept {
+            return v;
+        }
+    };
+    using MapHasher = std::conditional_t<
+        std::is_same_v<KeyType, size_t>,
+        IdentityHasher,
+        std::hash<KeyType>
+    >;
+
+    std::unordered_map<KeyType, std::weak_ptr<T>, MapHasher> m_map;
+
+    [[no_unique_address]]
+    KeyHasher m_keyProvider;
+
+    struct Deleter {
+        std::weak_ptr<AtlasType> m_pAtlas;
+        KeyType m_key;
+
+        Deleter(const std::shared_ptr<AtlasType>& pAtlas, const KeyType& key)
+            : m_pAtlas(pAtlas), m_key(key)
+        {}
+
+        template<typename U>
+        void operator()(U* pItem) const {
+            if (auto atlas = m_pAtlas.lock()) {
+                atlas->m_map.erase(m_key);
+            }
+
+            delete pItem;
+        }
+    };
+
+public:
+    explicit Atlas(const StringType& prefix)
+        : m_prefix(prefix)
+    {}
+
+    ~Atlas() {
+        assert(m_map.empty());
+    }
+
+    const StringType& GetPrefix() const {
+        return m_prefix;
+    }
+
+    size_t Size() const {
+        return m_map.size();
+    }
+
+    bool Empty() const {
+        return m_map.empty();
+    }
+
+    template<std::derived_from<T> U = T>
+    std::shared_ptr<U> Find(const StringType& name) {
+        return FindByKey<U>(ToKey(name));
+    }
+
+    template <std::derived_from<T> U = T, typename... Params>
+    std::shared_ptr<U> Assign(const StringType& name, Params&&... params) {
+        KeyType key{ ToKey(name) };
+
+        auto existing{ FindByKey<U>(key) };
+        if (existing) {
+            return existing;
+        }
+
+        std::shared_ptr<U> res{
+            new U(m_prefix + name, std::forward<Params>(params)...),
+            Deleter(this->shared_from_this(), key)
+        };
+
+        m_map.emplace(key, res);
+        return res;
+    }
+
+private:
+    KeyType ToKey(const StringType& name) const {
+        return m_keyProvider(name);
+    }
+
+    template <std::derived_from<T> U = T>
+    std::shared_ptr<U> FindByKey(const KeyType& key) {
+        auto it{ m_map.find(key) };
+        if (it == m_map.end()) {
+            return nullptr;
+        }
+
+        auto casted{ std::dynamic_pointer_cast<U>(it->second.lock()) };
+        assert(casted && "Type mismatch in Atlas");
+        return casted;
+    }
+};

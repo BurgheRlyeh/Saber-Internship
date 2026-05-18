@@ -100,49 +100,6 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
 	return SUCCEEDED(hr) ? pPSO : nullptr;
 }
 
-bool PSOLibrary::Add(
-	std::shared_ptr<Device> pDevice,
-	const std::wstring& filename,
-	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
-) {
-	if (Find(filename, pPSODesc)) {
-		return false;
-	}
-
-	std::scoped_lock lock(m_pipelineLibraryMutex);
-
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
-	ThrowIfFailed(pDevice->GetD3D12Device()->CreateGraphicsPipelineState(pPSODesc, IID_PPV_ARGS(&pPSO)));
-	if (FAILED(m_pPipelineLibrary->StorePipeline(filename.c_str(), pPSO.Get()))) {
-		return false;
-	}
-
-	m_isRenewed.store(true);
-	return true;
-}
-
-bool PSOLibrary::Add(
-	std::shared_ptr<Device> pDevice,
-	const std::wstring& filename,
-	const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
-) {
-	if (Find(filename, pPSODesc)) {
-		return false;
-	}
-
-	std::scoped_lock lock(m_pipelineLibraryMutex);
-
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
-	ThrowIfFailed(pDevice->GetD3D12Device()->CreateComputePipelineState(pPSODesc, IID_PPV_ARGS(&pPSO)));
-	if (FAILED(m_pPipelineLibrary->StorePipeline(filename.c_str(), pPSO.Get()))) {
-		return false;
-	}
-
-
-	m_isRenewed.store(true);
-	return true;
-}
-
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
 	std::shared_ptr<Device> pDevice,
 	const std::wstring& filename,
