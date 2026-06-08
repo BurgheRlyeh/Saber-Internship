@@ -4,7 +4,7 @@
 #include <cmath>
 
 void Camera::SetAspectRatio(float newAspectRatio) {
-	m_aspectRatio = newAspectRatio;
+	GetSettings().aspectRatio = newAspectRatio;
 }
 
 DirectX::XMMATRIX Camera::GetViewMatrix() const {
@@ -24,20 +24,22 @@ DirectX::XMMATRIX Camera::GetViewMatrix() const {
 }
 
 DirectX::XMMATRIX Camera::GetPerspectiveMatrix() const {
+	const Settings& settings{ GetSettings() };
 	return DirectX::XMMatrixPerspectiveFovRH(
-		DirectX::XMConvertToRadians(m_fov),
-		m_aspectRatio,
-		m_far,
-		m_near
+		DirectX::XMConvertToRadians(settings.fov),
+		settings.aspectRatio,
+		settings.farPlane,
+		settings.nearPlane
 	);
 }
 
 DirectX::XMMATRIX Camera::GetOrthographicMatrix() const {
+	const Settings& settings{ GetSettings() };
 	return DirectX::XMMatrixOrthographicRH(
-		m_orthographicViewWidth,
-		m_orthographicViewHeight,
-		m_far,
-		m_near
+		settings.orthographicViewWidth,
+		settings.orthographicViewHeight,
+		settings.farPlane,
+		settings.nearPlane
 	);
 }
 
@@ -50,7 +52,9 @@ DirectX::XMMATRIX Camera::GetViewOrthographicMatrix() const {
 }
 
 DirectX::XMMATRIX Camera::GetProjectionMatrix() const {
-	return m_projectionType == ProjectionType::Perspective ? GetPerspectiveMatrix() : GetOrthographicMatrix();
+	return GetSettings().projectionType == ProjectionType::Perspective
+		? GetPerspectiveMatrix()
+		: GetOrthographicMatrix();
 }
 
 DirectX::XMMATRIX Camera::GetViewProjectionMatrix() const {
@@ -82,28 +86,34 @@ void Camera::BuildViewFrustumPlanes(
 	planes[5] = extractPlane(t.r[3], DirectX::XMVectorNegate(t.r[2]));	// far
 }
 
+// StaticCamera
 StaticCamera::StaticCamera(
 	const DirectX::XMFLOAT3& pos,
 	const DirectX::XMFLOAT3& poi,
 	const DirectX::XMFLOAT3& upDir
-) : m_pos(pos), m_poi(poi), m_up(upDir) {}
+) {
+	m_settings.pos = pos;
+	m_settings.poi = poi;
+	m_settings.up = upDir;
+}
 
 DirectX::XMFLOAT3 StaticCamera::GetPosition() const {
-	return m_pos;
+	return m_settings.pos;
 }
 
 DirectX::XMFLOAT3 StaticCamera::GetPointOfInterest() const {
-	return m_poi;
+	return m_settings.poi;
 }
 
 DirectX::XMFLOAT3 StaticCamera::GetUpDirection() const {
-	return m_up;
+	return m_settings.up;
 }
 
 DirectX::XMFLOAT3 StaticCamera::GetViewDirection() const {
+	const Settings& settings{ m_settings };
 	DirectX::XMVECTOR subtractResult{ DirectX::XMVectorSubtract(
-		DirectX::XMLoadFloat3(&m_poi),
-		DirectX::XMLoadFloat3(&m_pos)
+		DirectX::XMLoadFloat3(&settings.poi),
+		DirectX::XMLoadFloat3(&settings.pos)
 	) };
 
 	DirectX::XMFLOAT3 result{};
@@ -112,49 +122,57 @@ DirectX::XMFLOAT3 StaticCamera::GetViewDirection() const {
 	return result;
 }
 
+// OrbitCamera
 DirectX::XMFLOAT3 OrbitCamera::GetPosition() const {
+	const Settings& settings{ m_settings };
 	return {
-		m_poi.x + m_radius * std::cos(m_phi) * std::cos(m_theta),
-		m_poi.y + m_radius * std::sin(m_phi),
-		m_poi.z + m_radius * std::cos(m_phi) * std::sin(m_theta)
+		settings.poi.x + settings.radius * std::cos(settings.phi) * std::cos(settings.theta),
+		settings.poi.y + settings.radius * std::sin(settings.phi),
+		settings.poi.z + settings.radius * std::cos(settings.phi) * std::sin(settings.theta)
 	};
 }
 
 DirectX::XMFLOAT3 OrbitCamera::GetViewDirection() const {
+	const Settings& settings{ m_settings };
 	DirectX::XMFLOAT3 pos{ GetPosition() };
 	return {
-		m_poi.x - pos.x,
-		m_poi.y - pos.y,
-		m_poi.z - pos.z
+		settings.poi.x - pos.x,
+		settings.poi.y - pos.y,
+		settings.poi.z - pos.z
 	};
 }
 
 void OrbitCamera::Rotate(float deltaTheta, float deltaPhi) {
-	m_theta -= deltaTheta * m_sensitivity;
-	m_phi += deltaPhi * m_sensitivity;
+	Settings& settings{ m_settings };
+	settings.theta -= deltaTheta * settings.sensitivity;
+	settings.phi += deltaPhi * settings.sensitivity;
 
 	constexpr float eps{ std::numeric_limits<float>::epsilon() };
-	m_phi = std::clamp(m_phi, eps - DirectX::XM_PIDIV2, DirectX::XM_PIDIV2 - eps);
+	settings.phi = std::clamp(settings.phi, eps - DirectX::XM_PIDIV2, DirectX::XM_PIDIV2 - eps);
 }
 
 void OrbitCamera::Zoom(float deltaRadius) {
-	m_radius += deltaRadius;
+	Settings& settings{ m_settings };
+	settings.radius += deltaRadius;
 	constexpr float minRadius = 0.1f;
-	m_radius = std::max(m_radius, minRadius);
+	settings.radius = std::max(settings.radius, minRadius);
 }
 
 void OrbitCamera::Move(float forwardCoef, float rightCoef, float upCoef) {
-	m_deltaForward += forwardCoef * m_speed;
-	m_deltaRight += rightCoef * m_speed;
+	const Settings& settings{ m_settings };
+	m_deltaForward += forwardCoef * settings.speed;
+	m_deltaRight += rightCoef * settings.speed;
 }
 
 void OrbitCamera::Update(float deltaTime) {
 	if (m_deltaForward != 0.f || m_deltaRight != 0.f) {
+		Settings& settings{ m_settings };
+
 		DirectX::XMFLOAT3 pos = GetPosition();
 		DirectX::XMFLOAT3 forward{
-			pos.x - m_poi.x,
+			pos.x - settings.poi.x,
 			0.f,
-			pos.z - m_poi.z
+			pos.z - settings.poi.z
 		};
 
 		DirectX::XMVECTOR forwardVec = DirectX::XMVector3Normalize(DirectX::XMLoadFloat3(&forward));
@@ -168,36 +186,42 @@ void OrbitCamera::Update(float deltaTime) {
 				DirectX::XMVectorScale(rightVec, m_deltaRight * deltaTime)
 			);
 
-		DirectX::XMVECTOR newPoi = DirectX::XMVectorAdd(DirectX::XMLoadFloat3(&m_poi), deltaVec);
-		DirectX::XMStoreFloat3(&m_poi, newPoi);
+		DirectX::XMVECTOR newPoi = DirectX::XMVectorAdd(DirectX::XMLoadFloat3(&settings.poi), deltaVec);
+		DirectX::XMStoreFloat3(&settings.poi, newPoi);
 	}
 }
 
+// FlyCamera
 DirectX::XMFLOAT3 FlyCamera::GetPointOfInterest() const {
+	const Settings& settings{ m_settings };
 	DirectX::XMFLOAT3 dir = GetViewDirection();
-	return { m_position.x + dir.x, m_position.y + dir.y, m_position.z + dir.z };
+	return { settings.position.x + dir.x, settings.position.y + dir.y, settings.position.z + dir.z };
 }
 
 DirectX::XMFLOAT3 FlyCamera::GetViewDirection() const {
+	const Settings& settings{ m_settings };
 	return {
-		std::cos(m_pitch)* std::sin(m_yaw),
-		std::sin(m_pitch),
-		std::cos(m_pitch)* std::cos(m_yaw)
+		std::cos(settings.pitch)* std::sin(settings.yaw),
+		std::sin(settings.pitch),
+		std::cos(settings.pitch)* std::cos(settings.yaw)
 	};
 }
 
 void FlyCamera::Rotate(float deltaYaw, float deltaPitch) {
-	m_yaw += deltaYaw * m_sensitivity;
-	m_pitch -= deltaPitch * m_sensitivity;
+	Settings& settings{ m_settings };
+
+	settings.yaw += deltaYaw * settings.sensitivity;
+	settings.pitch -= deltaPitch * settings.sensitivity;
 
 	constexpr float eps{ std::numeric_limits<float>::epsilon() };
-	m_pitch = std::clamp(m_pitch, -DirectX::XM_PIDIV2 + eps, DirectX::XM_PIDIV2 - eps);
+	settings.pitch = std::clamp(settings.pitch, -DirectX::XM_PIDIV2 + eps, DirectX::XM_PIDIV2 - eps);
 }
 
 void FlyCamera::Move(float forwardCoef, float rightCoef, float upCoef) {
-	m_velocity.x += rightCoef * m_speed;
-	m_velocity.y += upCoef * m_speed;
-	m_velocity.z -= forwardCoef * m_speed;
+	const Settings& settings{ m_settings };
+	m_velocity.x += rightCoef * settings.speed;
+	m_velocity.y += upCoef * settings.speed;
+	m_velocity.z -= forwardCoef * settings.speed;
 }
 
 void FlyCamera::Update(float deltaTime) {
@@ -216,6 +240,99 @@ void FlyCamera::Update(float deltaTime) {
 		)
 	) };
 
-	DirectX::XMVECTOR newPosVec{ DirectX::XMVectorAdd(DirectX::XMLoadFloat3(&m_position), deltaVec) };
-	DirectX::XMStoreFloat3(&m_position, newPosVec);
+	Settings& settings{ m_settings };
+	DirectX::XMVECTOR newPosVec{ DirectX::XMVectorAdd(DirectX::XMLoadFloat3(&settings.position), deltaVec) };
+	DirectX::XMStoreFloat3(&settings.position, newPosVec);
+}
+
+// UI
+
+#include "imgui.h"
+
+namespace {
+	// Shared widgets for the base Camera::Settings. No Begin/End — composed
+	// inside each concrete camera's window below.
+	void DrawBaseFields(Camera::Settings& s) {
+		ImGui::SeparatorText("Projection");
+
+		ImGui::SliderFloat("Near", &s.nearPlane, 0.01f, 10.0f);
+		ImGui::SliderFloat("Far", &s.farPlane, 10.0f, 1000.0f);
+
+		bool perspective{ s.projectionType == ProjectionType::Perspective };
+		if (ImGui::Checkbox("Perspective", &perspective)) {
+			s.projectionType = perspective
+				? ProjectionType::Perspective
+				: ProjectionType::Orthographic;
+		}
+
+		if (s.projectionType == ProjectionType::Perspective) {
+			ImGui::SliderFloat("FOV", &s.fov, 10.0f, 120.0f);
+			ImGui::SliderFloat("Aspect ratio", &s.aspectRatio, 0.1f, 4.0f);
+		}
+		else {
+			ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 20.0f);
+			ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 20.0f);
+		}
+	}
+
+	// Shared widgets for the DynamicCamera::Settings extension.
+	void DrawDynamicFields(DynamicCamera::Settings& s) {
+		ImGui::SeparatorText("Movement");
+		ImGui::SliderFloat("Sensitivity", &s.sensitivity, 0.1f, 5.0f);
+		ImGui::SliderFloat("Move speed", &s.speed, 0.1f, 50.0f);
+	}
+
+	void DrawSettings(StaticCamera::Settings& s) {
+		ImGui::Begin("Static Camera");
+
+		DrawBaseFields(s);
+
+		ImGui::SeparatorText("Placement");
+		ImGui::SliderFloat3("Position", &s.pos.x, -100.f, 100.f);
+		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
+		ImGui::SliderFloat3("Up", &s.up.x, -1.f, 1.f);
+
+		ImGui::End();
+	}
+
+	void DrawSettings(OrbitCamera::Settings& s) {
+		ImGui::Begin("Orbit Camera");
+
+		DrawBaseFields(s);
+		DrawDynamicFields(s);
+
+		ImGui::SeparatorText("Orbit");
+		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
+		ImGui::SliderAngle("Theta", &s.theta);
+		ImGui::SliderAngle("Phi", &s.phi, -89.f, 89.f);
+		ImGui::SliderFloat("Radius", &s.radius, 0.1f, 100.f);
+
+		ImGui::End();
+	}
+
+	void DrawSettings(FlyCamera::Settings& s) {
+		ImGui::Begin("Fly Camera");
+
+		DrawBaseFields(s);
+		DrawDynamicFields(s);
+
+		ImGui::SeparatorText("Fly");
+		ImGui::SliderFloat3("Position", &s.position.x, -100.f, 100.f);
+		ImGui::SliderAngle("Yaw", &s.yaw);
+		ImGui::SliderAngle("Pitch", &s.pitch, -89.f, 89.f);
+
+		ImGui::End();
+	}
+}
+
+void DrawCameraSettings(Camera& cam) {
+	if (auto* c = dynamic_cast<StaticCamera*>(&cam)) {
+		DrawSettings(c->GetSettings()); return;
+	}
+	if (auto* c = dynamic_cast<OrbitCamera*>(&cam))  {
+		DrawSettings(c->GetSettings()); return;
+	}
+	if (auto* c = dynamic_cast<FlyCamera*>(&cam))    {
+		DrawSettings(c->GetSettings()); return;
+	}
 }

@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include;$(SolutionDir)\utils\imgui</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include;$(SolutionDir)\utils\imgui</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -120,7 +120,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include;$(SolutionDir)\utils\imgui</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -142,7 +142,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectX-Headers\include\directx;$(SolutionDir)\utils\DirectXTex\DirectXTex;$(SolutionDir)\utils\glTF-SDK\GLTFSDK\Inc;$(SolutionDir)\utils\FidelityFX-SDK\sdk\include;$(SolutionDir)\utils\imgui</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -206,6 +206,10 @@
     <ClInclude Include="RenderObject.h" />
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="UIContext.h" />
+    <ClInclude Include="..\utils\imgui\imgui.h" />
+    <ClInclude Include="..\utils\imgui\backends\imgui_impl_win32.h" />
+    <ClInclude Include="..\utils\imgui\backends\imgui_impl_dx12.h" />
     <ClInclude Include="RenderSubsystem.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Resources.h" />
@@ -245,6 +249,14 @@
     <ClCompile Include="RenderObject.cpp" />
     <ClCompile Include="OutputContext.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="UIContext.cpp" />
+    <ClCompile Include="..\utils\imgui\imgui.cpp" />
+    <ClCompile Include="..\utils\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\utils\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\utils\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\utils\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\utils\imgui\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\utils\imgui\backends\imgui_impl_dx12.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SinglePassDownsampler.cpp" />
     <ClCompile Include="TextureResource.cpp" />

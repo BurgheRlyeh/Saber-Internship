@@ -22,7 +22,8 @@ struct SceneBuffer {
         DirectX::XMFLOAT3 pos{ pCamera->GetPosition() };
         cameraPosition = { pos.x, pos.y, pos.z, 0.f };
 
-        nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+        const Camera::Settings& cameraSettings{ pCamera->GetSettings() };
+        nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
 
         pCamera->BuildViewFrustumPlanes(viewFrustumPlanes, &viewProjMatrix);
     }

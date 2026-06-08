@@ -25,20 +25,23 @@
 #include "Texture.h"
 #include "TextureResource.h"
 
+#include "UIContext.h"
+
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
     , m_clientWidth(resWidth)
     , m_clientHeight(resHeight)
-    , m_isVSync(isUseVSync)
     , m_isTearingSupported(CheckTearingSupport())
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(resWidth), static_cast<float>(resHeight)))
     , m_pJobSystem(pJobSystem)
 {
     m_numFrames = backBuffersCnt;
+    m_settings.vsync = isUseVSync;
 }
 
 Renderer::~Renderer() {
     Flush();
+    m_pUI.reset();
     GPUResource::DestroyCounterResetter();
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
@@ -111,6 +114,14 @@ void Renderer::Initialize(HWND hWnd) {
         m_clientWidth,
         m_clientHeight
 	);
+
+    m_pUI = std::make_unique<UIContext>(
+        hWnd,
+        m_pDeviceContext,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        m_numFrames
+    );
+    RegisterUIPanels();
 
     m_time = m_clock.now();
     m_isInitialized = true;
@@ -270,7 +281,7 @@ void Renderer::Resize(uint32_t width, uint32_t height) {
 }
 
 void Renderer::SwitchVSync() {
-    m_isVSync = !m_isVSync;
+    m_settings.vsync = !m_settings.vsync;
 }
 
 void Renderer::SetSceneId(size_t sceneId) {
@@ -569,6 +580,9 @@ void Renderer::Render() {
                 m_scissorRect,
                 rtv
             );
+
+            m_pUI->Render(commandListAfterFrame, m_pDeviceContext);
+
             backBuffer->ResourceTransition(
                 commandListAfterFrame,
                 D3D12_RESOURCE_STATE_PRESENT
@@ -584,7 +598,7 @@ void Renderer::Render() {
 
     // Present
     {
-        UINT syncInterval{ m_isVSync ? 1u : 0 };
+        UINT syncInterval{ m_settings.vsync ? 1u : 0 };
         UINT presentFlags{ m_isTearingSupported && !syncInterval ? DXGI_PRESENT_ALLOW_TEARING : 0 };
         ThrowIfFailed(m_pSwapChain->Present(
             // 0 - Cancel the remaining time on the previously presented frame 
@@ -820,4 +834,63 @@ std::vector<std::shared_ptr<TextureResource>> Renderer::CreateBackBuffers(
 void Renderer::Flush() {
     m_pDeviceContext->GetCommandQueue()->Flush();
     m_pDeviceContext->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->Flush();
+}
+
+// UI
+
+#include "imgui.h"
+
+void Renderer::RegisterUIPanels() {
+    // Stats
+    m_pUI->RegisterPanel([this]() {
+        float framerate{ ImGui::GetIO().Framerate };
+
+        ImGui::Begin("Stats");
+        ImGui::Text("%.2f ms/frame (%.0f FPS)", 1000.0f / framerate, framerate);
+        ImGui::Text("Resolution: %ux%u", m_clientWidth, m_clientHeight);
+        ImGui::Text("Scene id: %zu", m_currSceneId);
+        ImGui::End();
+    });
+
+    // Renderer settings
+    m_pUI->RegisterPanel([this] {
+        ImGui::Begin("Renderer Settings");
+
+        if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Checkbox("V-Sync", &m_settings.vsync);
+        }
+
+        ImGui::End();
+    });
+
+    // Scene settings
+    m_pUI->RegisterPanel([this]() {
+        ImGui::Begin("Scene");
+
+        int sceneId{ static_cast<int>(m_nextSceneId.load()) };
+        if (ImGui::SliderInt("Scene id", &sceneId, 0, static_cast<int>(m_pScenes.size()) - 1)) {
+            SetSceneId(static_cast<size_t>(sceneId));
+        }
+        if (ImGui::Button("Next camera"))
+            SwitchToNextCamera();
+        ImGui::SameLine();
+        if (ImGui::Button("Switch projection"))
+            SwitchCameraProjection();
+
+        ImGui::End();
+    });
+
+    // Camera's settings
+    m_pUI->RegisterPanel([this]() {
+        if (m_pScenes.empty())
+            return;
+        m_pScenes[m_currSceneId]->DrawCurrentCameraSettingsUI();
+    });
+
+    // Light settings
+    m_pUI->RegisterPanel([this]() {
+        if (m_pScenes.empty())
+            return;
+        m_pScenes[m_currSceneId]->DrawSettingsUI();
+    });
 }

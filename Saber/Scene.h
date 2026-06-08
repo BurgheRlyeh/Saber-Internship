@@ -163,4 +163,8 @@ private:
         std::shared_ptr<CommandList> pCommandList
     );
     void UpdateLightBuffer();
+
+public:
+    void DrawCurrentCameraSettingsUI();
+    void DrawSettingsUI();
 };

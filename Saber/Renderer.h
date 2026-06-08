@@ -20,8 +20,16 @@ class GBuffer;
 class Scene;
 class Texture;
 class TextureResource;
+class UIContext;
 
 class Renderer {
+public:
+    struct Settings {
+        bool vsync{ true };
+        bool showUI{ true };
+    };
+
+private:
     // The number of swap chain back buffers.
     uint8_t m_numFrames{};
 
@@ -47,7 +55,6 @@ class Renderer {
     // By default, enable V-Sync.
     // Can be toggled with the V key.
     bool m_isTearingSupported{};
-    bool m_isVSync{};
 
     uint64_t m_frameCounter{};
     double m_elapsedSeconds{};
@@ -81,6 +88,10 @@ class Renderer {
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
+
+    // Runtime-tweakable settings, edited by the UI, consumed each frame.
+    Settings m_settings{};
+    std::unique_ptr<UIContext> m_pUI{};
 
 public:
     Renderer(const Renderer&) = delete;
@@ -116,6 +127,9 @@ public:
     void MoveCamera(float forwardCoef, float rightCoef);
     void RotateCamera(float deltaX, float deltaY);
     void ZoomCamera(float delta);
+
+    Settings& GetSettings() { return m_settings; }
+    UIContext& GetUI() { return *m_pUI; }
 
 private:
     void RenderLoop();
@@ -160,4 +174,6 @@ private:
     // Ensure that any commands previously executed on the GPU have finished executing 
     // before the CPU thread is allowed to continue processing
     void Flush();
+
+    void RegisterUIPanels();
 };

@@ -7,6 +7,7 @@
 #include "OutputContext.h"
 #include "JobSystem.h"
 #include "Renderer.h"
+#include "UIContext.h"
 
 // Use WARP adapter
 bool g_useWarp{};
@@ -51,9 +52,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         return ::DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
+    if (UIContext::WndProcHandler(hwnd, message, wParam, lParam)) {
+        return true;
+    }
+
+    // When ImGui has focus on an input widget, suppress game input
+    const bool uiMouse{ UIContext::WantCaptureMouse() };
+    const bool uiKeys { UIContext::WantCaptureKeyboard() };
+
     switch (message) {
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN: {
+        if (uiKeys) break;
         bool alt{ (::GetAsyncKeyState(VK_MENU) & 0x8000) != 0 };
 
         switch (wParam) {
@@ -168,6 +178,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         break;
     }
     case WM_RBUTTONDOWN: {
+        if (uiMouse) break;
         g_isRButtonDown = true;
         g_mouseX = GET_X_LPARAM(lParam);
         g_mouseY = GET_Y_LPARAM(lParam);
@@ -178,6 +189,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         break;
     }
     case WM_MOUSEMOVE: {
+        if (uiMouse) break;
         if (g_isRButtonDown) {
             int oldX{ g_mouseX }, oldY{ g_mouseY };
             g_mouseX = GET_X_LPARAM(lParam);
@@ -191,6 +203,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         break;
     }
     case WM_MOUSEWHEEL: {
+        if (uiMouse) break;
         int delta{ GET_WHEEL_DELTA_WPARAM(wParam) };
         float scroll{ -1.f * delta / WHEEL_DELTA };
         g_pRenderer->ZoomCamera(scroll * g_speed);

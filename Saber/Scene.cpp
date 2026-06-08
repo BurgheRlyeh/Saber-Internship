@@ -197,7 +197,7 @@ void Scene::NextCamera() {
 
 void Scene::SwitchCameraProjection() {
     std::unique_lock<std::mutex> lock(m_camerasMutex);
-    ProjectionType& projectionType{ m_pCameras.at(m_currCameraId)->m_projectionType };
+    ProjectionType& projectionType{ m_pCameras.at(m_currCameraId)->GetSettings().projectionType };
     projectionType = static_cast<ProjectionType>(!static_cast<size_t>(projectionType));
 }
 
@@ -402,7 +402,8 @@ void Scene::UpdateSceneBuffer(
     m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
     m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
     m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+    const Camera::Settings& cameraSettings{ pCamera->GetSettings() };
+    m_sceneBuffer.nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
 
     camerasMutexLock.unlock();
 
@@ -417,5 +418,77 @@ void Scene::UpdateLightBuffer() {
     if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
         std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
         m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+    }
+}
+
+// UI
+
+#include "imgui.h"
+
+void Scene::DrawCurrentCameraSettingsUI() {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    if (m_pCameras.empty()) {
+        return;
+    }
+    DrawCameraSettings(*m_pCameras.at(m_currCameraId));
+}
+
+void Scene::DrawSettingsUI() {
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+
+    ImGui::Begin("Lights");
+
+    bool changed{ false };
+
+    ImGui::SeparatorText("Ambient");
+    changed |= ImGui::ColorEdit3("Color##ambient", &m_lightBuffer.ambientColorAndPower.x);
+    changed |= ImGui::SliderFloat("Power##ambient", &m_lightBuffer.ambientColorAndPower.w, 0.f, 10.f);
+
+    ImGui::SeparatorText("Sources");
+
+    uint32_t& count{ m_lightBuffer.lightsCount.x };
+    ImGui::Text("Count: %u / %d", count, LIGHTS_MAX_COUNT);
+
+    if (ImGui::Button("+")) {
+        if (count < LIGHTS_MAX_COUNT) {
+            m_lightBuffer.lights[count] = Light{
+                .position{ 0.f, 0.f, 0.f, 1.f },
+                .diffuseColorAndPower{ 1.f, 1.f, 1.f, 1.f },
+                .specularColorAndPower{ 1.f, 1.f, 1.f, 1.f }
+            };
+            ++count;
+            changed = true;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("-")) {
+        if (count > 0) {
+            --count;
+            changed = true;
+        }
+    }
+
+    for (uint32_t i{}; i < count; ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::TreeNode("source", "Light %u", i)) {
+            Light& light{ m_lightBuffer.lights[i] };
+
+            changed |= ImGui::DragFloat3("Position", &light.position.x, 0.1f, -100.f, 100.f);
+
+            changed |= ImGui::ColorEdit3("Diffuse", &light.diffuseColorAndPower.x);
+            changed |= ImGui::SliderFloat("Diffuse power", &light.diffuseColorAndPower.w, 0.f, 10.f);
+
+            changed |= ImGui::ColorEdit3("Specular", &light.specularColorAndPower.x);
+            changed |= ImGui::SliderFloat("Specular power", &light.specularColorAndPower.w, 0.f, 10.f);
+
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::End();
+
+    if (changed) {
+        m_isUpdateLightCB.store(true);
     }
 }
