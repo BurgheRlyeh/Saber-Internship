@@ -16,10 +16,12 @@ class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
+class DepthBuffer;
 class HiDepthBuffer;
 class DescriptorHeap;
 class Device;
 class DeviceContext;
+class DirectionalLight;
 class GBuffer;
 class MaterialManager;
 class RenderObject;
@@ -45,6 +47,12 @@ class Scene {
     std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
     std::mutex m_lightBufferMutex{};
     std::atomic<bool> m_isUpdateLightCB{};
+
+    std::shared_ptr<DirectionalLight> m_pDirLight{};
+    std::shared_ptr<Buffer<CameraBuffer>> m_pShadowCameraCB{};
+
+    static constexpr UINT m_shadowMapResolution{ 2048 };
+    std::shared_ptr<DepthBuffer> m_pShadowMap{};
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
@@ -160,9 +168,14 @@ private:
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList
     );
+    void UpdateShadowCameraBuffer();
     void UpdateLightBuffer();
 
 public:
+    std::shared_ptr<DirectionalLight> GetDirectionalLight() const { return m_pDirLight; }
+    std::shared_ptr<DepthBuffer> GetShadowMap() const { return m_pShadowMap; }
+
     void DrawCurrentCameraSettingsUI();
+    void DrawDirectionalLightUI();
     void DrawSettingsUI();
 };

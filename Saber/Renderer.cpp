@@ -26,6 +26,9 @@
 #include "TextureResource.h"
 
 #include "UIContext.h"
+#include "imgui.h"
+
+static constexpr size_t ScenesCount{ 4 };
 
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
@@ -80,7 +83,7 @@ void Renderer::Initialize(HWND hWnd) {
         // RTV
         { m_numFrames + GBUFFER_SIZE },
         // DSV
-        { 1 }
+        { 1 + ScenesCount }
     }));
     m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
         L"../../Resources/Textures/",
@@ -123,7 +126,6 @@ void Renderer::Initialize(HWND hWnd) {
     m_isInitialized = true;
 
     {
-        constexpr size_t ScenesCount{ 4 };
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
@@ -834,8 +836,6 @@ void Renderer::Flush() {
 
 // UI
 
-#include "imgui.h"
-
 void Renderer::RegisterUIPanels() {
     // Stats
     m_pUI->RegisterPanel([this]() {
@@ -888,5 +888,12 @@ void Renderer::RegisterUIPanels() {
         if (m_pScenes.empty())
             return;
         m_pScenes[m_currSceneId]->DrawSettingsUI();
+    });
+
+    // Directional light settings
+    m_pUI->RegisterPanel([this]() {
+        if (m_pScenes.empty())
+            return;
+        m_pScenes[m_currSceneId]->DrawDirectionalLightUI();
     });
 }

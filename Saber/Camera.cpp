@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "imgui.h"
+
 void Camera::SetAspectRatio(float newAspectRatio) {
 	GetSettings().aspectRatio = newAspectRatio;
 }
@@ -247,92 +249,85 @@ void FlyCamera::Update(float deltaTime) {
 
 // UI
 
-#include "imgui.h"
+void DrawSettings(Camera::Settings& s) {
+	ImGui::SeparatorText("Projection");
 
-namespace {
-	// Shared widgets for the base Camera::Settings. No Begin/End — composed
-	// inside each concrete camera's window below.
-	void DrawBaseFields(Camera::Settings& s) {
-		ImGui::SeparatorText("Projection");
+	ImGui::SliderFloat("Near", &s.nearPlane, 0.01f, 10.0f);
+	ImGui::SliderFloat("Far", &s.farPlane, 10.0f, 1000.0f);
 
-		ImGui::SliderFloat("Near", &s.nearPlane, 0.01f, 10.0f);
-		ImGui::SliderFloat("Far", &s.farPlane, 10.0f, 1000.0f);
-
-		bool perspective{ s.projectionType == ProjectionType::Perspective };
-		if (ImGui::Checkbox("Perspective", &perspective)) {
-			s.projectionType = perspective
-				? ProjectionType::Perspective
-				: ProjectionType::Orthographic;
-		}
-
-		if (s.projectionType == ProjectionType::Perspective) {
-			ImGui::SliderFloat("FOV", &s.fov, 10.0f, 120.0f);
-			ImGui::SliderFloat("Aspect ratio", &s.aspectRatio, 0.1f, 4.0f);
-		}
-		else {
-			ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 20.0f);
-			ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 20.0f);
-		}
+	bool perspective{ s.projectionType == ProjectionType::Perspective };
+	if (ImGui::Checkbox("Perspective", &perspective)) {
+		s.projectionType = perspective
+			? ProjectionType::Perspective
+			: ProjectionType::Orthographic;
 	}
 
-	// Shared widgets for the DynamicCamera::Settings extension.
-	void DrawDynamicFields(DynamicCamera::Settings& s) {
-		ImGui::SeparatorText("Movement");
-		ImGui::SliderFloat("Sensitivity", &s.sensitivity, 0.1f, 5.0f);
-		ImGui::SliderFloat("Move speed", &s.speed, 0.1f, 50.0f);
+	if (s.projectionType == ProjectionType::Perspective) {
+		ImGui::SliderFloat("FOV", &s.fov, 10.0f, 120.0f);
+		ImGui::SliderFloat("Aspect ratio", &s.aspectRatio, 0.1f, 4.0f);
 	}
-
-	void DrawSettings(StaticCamera::Settings& s) {
-		ImGui::Begin("Static Camera");
-
-		DrawBaseFields(s);
-
-		ImGui::SeparatorText("Placement");
-		ImGui::SliderFloat3("Position", &s.pos.x, -100.f, 100.f);
-		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
-		ImGui::SliderFloat3("Up", &s.up.x, -1.f, 1.f);
-
-		ImGui::End();
-	}
-
-	void DrawSettings(OrbitCamera::Settings& s) {
-		ImGui::Begin("Orbit Camera");
-
-		DrawBaseFields(s);
-		DrawDynamicFields(s);
-
-		ImGui::SeparatorText("Orbit");
-		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
-		ImGui::SliderAngle("Theta", &s.theta);
-		ImGui::SliderAngle("Phi", &s.phi, -89.f, 89.f);
-		ImGui::SliderFloat("Radius", &s.radius, 0.1f, 100.f);
-
-		ImGui::End();
-	}
-
-	void DrawSettings(FlyCamera::Settings& s) {
-		ImGui::Begin("Fly Camera");
-
-		DrawBaseFields(s);
-		DrawDynamicFields(s);
-
-		ImGui::SeparatorText("Fly");
-		ImGui::SliderFloat3("Position", &s.position.x, -100.f, 100.f);
-		ImGui::SliderAngle("Yaw", &s.yaw);
-		ImGui::SliderAngle("Pitch", &s.pitch, -89.f, 89.f);
-
-		ImGui::End();
+	else {
+		ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 20.0f);
+		ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 20.0f);
 	}
 }
 
-void DrawCameraSettings(Camera& cam) {
-	if (auto* c = dynamic_cast<StaticCamera*>(&cam)) {
-		DrawSettings(c->GetSettings()); return;
+void DrawSettings(StaticCamera::Settings& s) {
+	DrawSettings(static_cast<Camera::Settings&>(s));
+
+	ImGui::SeparatorText("Placement");
+	ImGui::SliderFloat3("Position", &s.pos.x, -100.f, 100.f);
+	ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
+	ImGui::SliderFloat3("Up", &s.up.x, -1.f, 1.f);
+}
+
+void DrawSettings(DynamicCamera::Settings& s) {
+	DrawSettings(static_cast<Camera::Settings&>(s));
+
+	ImGui::SeparatorText("Movement");
+	ImGui::SliderFloat("Sensitivity", &s.sensitivity, 0.1f, 5.0f);
+	ImGui::SliderFloat("Move speed", &s.speed, 0.1f, 50.0f);
+}
+
+void DrawSettings(OrbitCamera::Settings& s) {
+	DrawSettings(static_cast<DynamicCamera::Settings&>(s));
+
+	ImGui::SeparatorText("Orbit");
+	ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
+	ImGui::SliderAngle("Theta", &s.theta);
+	ImGui::SliderAngle("Phi", &s.phi, -89.f, 89.f);
+	ImGui::SliderFloat("Radius", &s.radius, 0.1f, 100.f);
+}
+
+void DrawSettings(FlyCamera::Settings& s) {
+	DrawSettings(static_cast<DynamicCamera::Settings&>(s));
+
+	ImGui::SeparatorText("Fly");
+	ImGui::SliderFloat3("Position", &s.position.x, -100.f, 100.f);
+	ImGui::SliderAngle("Yaw", &s.yaw);
+	ImGui::SliderAngle("Pitch", &s.pitch, -89.f, 89.f);
+}
+
+void DrawSettings(Camera& camera) {
+	if (auto* c = dynamic_cast<OrbitCamera*>(&camera)) {
+		ImGui::Begin("Orbit Camera");
+		DrawSettings(c->GetSettings());
 	}
-	if (auto* c = dynamic_cast<OrbitCamera*>(&cam))  {
-		DrawSettings(c->GetSettings()); return;
+	else if (auto* c = dynamic_cast<FlyCamera*>(&camera)) {
+		ImGui::Begin("Fly Camera");
+		DrawSettings(c->GetSettings());
 	}
-	if (auto* c = dynamic_cast<FlyCamera*>(&cam))    {
-		DrawSettings(c->GetSettings()); return;
+	else if (auto* c = dynamic_cast<DynamicCamera*>(&camera)) {
+		ImGui::Begin("Dynamic Camera");
+		DrawSettings(c->GetSettings());
 	}
+	else if (auto* c = dynamic_cast<StaticCamera*>(&camera)) {
+		ImGui::Begin("Static Camera");
+		DrawSettings(c->GetSettings());
+	}
+	else {
+		ImGui::Begin("Camera");
+		DrawSettings(camera.GetSettings());
+	}
+	ImGui::End();
 }

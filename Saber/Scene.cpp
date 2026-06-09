@@ -10,10 +10,13 @@
 #include "DescriptorHeapManager.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "DirectionalLight.h"
 #include "MaterialManager.h"
 #include "RenderObject.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
+
+#include "imgui.h"
 
 Scene::Scene(
     const std::wstring& name,
@@ -61,6 +64,19 @@ Scene::Scene(
         ),
         1
     );
+
+    m_pDirLight = std::make_shared<DirectionalLight>();
+
+    m_pShadowMap = std::make_shared<DepthBuffer>(
+        m_name + L"/ShadowMap",
+        pDeviceContext,
+        m_shadowMapResolution, m_shadowMapResolution,
+        DXGI_FORMAT_D32_FLOAT
+    );
+    m_pShadowCameraCB = CreateUploadBufferWithUpdater<CameraBuffer>(
+        m_name + L"/ShadowCameraCB", pDeviceContext
+    );
+    m_pShadowCameraCB->CreateStorage<WholeBufferStorage<CameraBuffer>>();
 }
 
 void Scene::Resize(
@@ -119,6 +135,7 @@ void Scene::Update(
 ) {
     UpdateCamera(deltaTime);
     UpdateCameraBuffer(pDeviceContext, pCommandList);
+    UpdateShadowCameraBuffer();
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
@@ -414,6 +431,27 @@ void Scene::UpdateCameraBuffer(
     m_pCameraCB->PerformUpdate(pDeviceContext, pCommandList);
 }
 
+void Scene::UpdateShadowCameraBuffer() {
+    if (!m_pDirLight || !m_pShadowCameraCB) {
+        return;
+    }
+
+    const Camera& lightCam{ m_pDirLight->GetShadowCamera() };
+
+    CameraBuffer shadowCameraBuffer{ *m_pShadowCameraCB->GetStorageData() };
+    shadowCameraBuffer.viewProjMatrix = m_pDirLight->GetViewProjectionMatrix();
+    shadowCameraBuffer.invViewProjMatrix =
+        DirectX::XMMatrixInverse(nullptr, shadowCameraBuffer.viewProjMatrix);
+
+    DirectX::XMFLOAT3 lightPos{ lightCam.GetPosition() };
+    shadowCameraBuffer.cameraPosition = { lightPos.x, lightPos.y, lightPos.z, 0.f };
+
+    const Camera::Settings& s{ lightCam.GetSettings() };
+    shadowCameraBuffer.nearFar = { s.nearPlane, s.farPlane, 0.f, 0.f };
+
+    m_pShadowCameraCB->UpdateAll(&shadowCameraBuffer, 1);
+}
+
 void Scene::UpdateLightBuffer() {
     bool expected{ true };
     if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
@@ -424,14 +462,20 @@ void Scene::UpdateLightBuffer() {
 
 // UI
 
-#include "imgui.h"
-
 void Scene::DrawCurrentCameraSettingsUI() {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     if (m_pCameras.empty()) {
         return;
     }
-    DrawCameraSettings(*m_pCameras.at(m_currCameraId));
+    DrawSettings(*m_pCameras.at(m_currCameraId));
+}
+
+void Scene::DrawDirectionalLightUI() {
+    if (m_pDirLight) {
+        ImGui::Begin("Directional Light");
+        DrawSettings(*m_pDirLight);
+        ImGui::End();
+    }
 }
 
 void Scene::DrawSettingsUI() {

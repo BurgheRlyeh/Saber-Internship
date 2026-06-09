@@ -177,6 +177,7 @@
     <ClInclude Include="DescriptorHeapRange.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="DeviceContext.h" />
+    <ClInclude Include="DirectionalLight.h" />
     <ClInclude Include="DynamicUploadRingBuffer.h" />
     <ClInclude Include="EnumFence.h" />
     <ClInclude Include="EnumHelpers.h" />
@@ -194,6 +195,7 @@
     <ClInclude Include="IndirectUpdater.h" />
     <ClInclude Include="JobSystem.h" />
     <ClInclude Include="LightBuffer.h" />
+    <ClInclude Include="LightSource.h" />
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="MaterialCB.h" />
@@ -235,11 +237,13 @@
     <ClCompile Include="DescriptorHeapRange.cpp" />
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="DeviceContext.cpp" />
+    <ClCompile Include="DirectionalLight.cpp" />
     <ClCompile Include="DynamicUploadRingBuffer.cpp" />
     <ClCompile Include="Fence.cpp" />
     <ClCompile Include="GLTFLoader.cpp" />
     <ClCompile Include="GPUResource.cpp" />
     <ClCompile Include="IncrementFence.cpp" />
+    <ClCompile Include="LightSource.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MaterialManager.cpp" />
     <ClCompile Include="MemoryMappedFile.cpp" />
