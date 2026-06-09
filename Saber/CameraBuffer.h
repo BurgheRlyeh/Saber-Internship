@@ -1,5 +1,5 @@
-#ifndef SCENE_BUFFER_H
-#define SCENE_BUFFER_H
+#ifndef CAMERA_BUFFER_H
+#define CAMERA_BUFFER_H
 
 #ifdef __cplusplus
 #include "Camera.h"
@@ -7,7 +7,7 @@
 
 #include "HlslTypesDef.h"
 
-struct SceneBuffer {
+struct CameraBuffer {
     matrix viewProjMatrix;
     matrix invViewProjMatrix;
     float4 cameraPosition;
@@ -32,4 +32,4 @@ struct SceneBuffer {
 
 #include "HlslTypesUndef.h"
 
-#endif  // SCENE_BUFFER_H
+#endif  // CAMERA_BUFFER_H
