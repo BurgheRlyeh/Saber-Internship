@@ -18,11 +18,11 @@
 Scene::Scene(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<DepthBuffer> pDepthBuffer,
+    std::shared_ptr<HiDepthBuffer> pDepthTarget,
     std::shared_ptr<GBuffer> pGBuffer
 ) : m_name(name),
-m_pDepthBuffer(pDepthBuffer),
-m_pGBuffer(pGBuffer)
+    m_pDepthTarget(pDepthTarget),
+    m_pGBuffer(pGBuffer)
 {
     for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
         m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
@@ -97,11 +97,11 @@ bool Scene::IsSceneReady() {
 }
 
 /* depth buffer */
-void Scene::SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer) {
-    m_pDepthBuffer = pDepthBuffer;
+void Scene::SetDepthTarget(std::shared_ptr<HiDepthBuffer> pDepthTarget) {
+    m_pDepthTarget = pDepthTarget;
 }
-std::shared_ptr<DepthBuffer> Scene::GetDepthBuffer() {
-    return m_pDepthBuffer;
+std::shared_ptr<HiDepthBuffer> Scene::GetDepthTarget() {
+    return m_pDepthTarget;
 }
 
 /* g-buffer */
@@ -122,7 +122,7 @@ void Scene::Update(
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
-    m_pDepthBuffer->Clear(pCommandList);
+    m_pDepthTarget->Clear(pCommandList);
     if (m_pGBuffer) {
         m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_pGBuffer->Clear(pCommandList);
@@ -264,7 +264,7 @@ void Scene::RenderObjects(
             static_cast<UINT>(rtvs.size()),
             rtvs.data(),
             FALSE,
-            &m_pDepthBuffer->GetDsvCpuDescHandle()
+            &m_pDepthTarget->GetDsvCpuDescHandle()
         );
 
         pD3D12CommandList->SetGraphicsRootConstantBufferView(
@@ -325,7 +325,7 @@ void Scene::RunDeferredShading(
             pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetD3D12DescriptorHeap().GetAddressOf());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pTargetTexture->GetUavDescHandle());
-            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthTarget->GetSrvGpuDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
         }

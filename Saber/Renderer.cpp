@@ -95,16 +95,12 @@ void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers = CreateBackBuffers(m_pDeviceContext->GetDevice(), m_pSwapChain, m_pBackBuffersDescHeapRange);
 
 	m_pDepthBuffers.resize(1);
-	m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
-		L"DepthBuffer",
+	m_pDepthBuffers[0] = std::make_shared<HiDepthBuffer>(
+		L"MainDepthTarget",
         m_pDeviceContext,
 		m_clientWidth,
 		m_clientHeight,
-		std::make_shared<SinglePassDownsampler>(
-			m_pDeviceContext,
-			m_clientWidth,
-			m_clientHeight
-		)
+        DXGI_FORMAT_D32_FLOAT
 	);
 
     m_pGBuffers.resize(1);
@@ -403,7 +399,7 @@ void Renderer::Render() {
     std::shared_ptr<CommandQueue>& pQueue{ m_pDeviceContext->GetCommandQueue() };
 
     std::shared_ptr<GBuffer>& pGBuf{ pScene->GetGBuffer() };
-    std::shared_ptr<DepthBuffer>& pDepthBuf{ pScene->GetDepthBuffer() };
+    std::shared_ptr<HiDepthBuffer>& pDepthBuf{ pScene->GetDepthTarget() };
 
     std::shared_ptr<EnumFence<GBufferState>>& pGBufFence{ pGBuf->GetFence() };
     std::shared_ptr<EnumFence<DepthBufferState>>& pDepthBufFence{ pDepthBuf->GetFence() };
@@ -552,9 +548,9 @@ void Renderer::Render() {
     m_pJobSystem->AddJob([&]() {
         {
             commandListForHZB->PixBeginEvent(L"Building HZB");
-            pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
+            pScene->GetDepthTarget()->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
-                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap()
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)
             );
             commandListForHZB->SetReadyForExecution();
         }

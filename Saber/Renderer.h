@@ -17,6 +17,7 @@ class DescRange;
 class Device;
 class DeviceContext;
 class GBuffer;
+class HiDepthBuffer;
 class Scene;
 class Texture;
 class TextureResource;
@@ -73,7 +74,7 @@ private:
     std::atomic<uint32_t> m_resolutionHeightForResize{};
 
     // Depth buffer.
-    std::vector<std::shared_ptr<DepthBuffer>> m_pDepthBuffers{};
+    std::vector<std::shared_ptr<HiDepthBuffer>> m_pDepthBuffers{};
 
     D3D12_VIEWPORT m_viewport{};
     D3D12_RECT m_scissorRect{ CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX) };
