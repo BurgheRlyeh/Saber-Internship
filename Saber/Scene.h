@@ -54,6 +54,10 @@ class Scene {
     static constexpr UINT m_shadowMapResolution{ 2048 };
     std::shared_ptr<DepthBuffer> m_pShadowMap{};
 
+    std::shared_ptr<Texture> m_pLightVolumeTarget{};
+    std::shared_ptr<RenderObject> m_pLightVolumeGrid{};
+    float m_lightVolumeShadowCoef{ 1.0f };
+
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
         static_cast<size_t>(RenderSubsystemType::Count)
@@ -73,6 +77,7 @@ class Scene {
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
     std::shared_ptr<RenderObject> m_pPostProcessing{};
+    std::shared_ptr<RenderObject> m_pLightVolumePostProcessing{};
 
 public:
     Scene() = delete;
@@ -143,6 +148,27 @@ public:
         D3D12_RECT scissorRect
     );
 
+    void InitLightVolumeGrid(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    );
+
+    void RenderLightVolumeGrid(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandListDirect,
+        D3D12_VIEWPORT viewport,
+        D3D12_RECT scissorRect
+    );
+
+	void RenderObjectsDepth(
+		const EnumFlags<RenderSubsystemType> type,
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		std::shared_ptr<CommandList> pCommandListDirect,
+		D3D12_VIEWPORT viewport,
+		D3D12_RECT scissorRect
+	);
+
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
         std::shared_ptr<CommandList> pCommandListCompute,
@@ -159,7 +185,16 @@ public:
         D3D12_VIEWPORT viewport,
         D3D12_RECT scissorRect,
         D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
-    );
+	);
+
+	void SetLightVolumePostProcessing(std::shared_ptr<RenderObject> pPostProcessing);
+	void RenderLightVolumePostProcessing(
+		std::shared_ptr<CommandList> pCommandListDirect,
+		std::shared_ptr<DescriptorHeap> pResDescHeapManager,
+		D3D12_VIEWPORT viewport,
+		D3D12_RECT scissorRect,
+		D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+	);
 
 private:
     bool UpdateCamera(float deltaTime);
@@ -177,5 +212,6 @@ public:
 
     void DrawCurrentCameraSettingsUI();
     void DrawDirectionalLightUI();
+    void DrawTestUI();
     void DrawSettingsUI();
 };

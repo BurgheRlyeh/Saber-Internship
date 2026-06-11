@@ -12,6 +12,7 @@
 #include "DeviceContext.h"
 #include "DirectionalLight.h"
 #include "MaterialManager.h"
+#include "MeshRenderObject.h"
 #include "RenderObject.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
@@ -63,7 +64,18 @@ Scene::Scene(
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
         ),
         1
-    );
+	);
+
+    m_pLightVolumeTarget = std::make_shared<Texture>(
+		m_name + L"/LightVolumeTarget",
+		pDeviceContext,
+		CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R16_FLOAT,
+			pGBuffer->GetWidth(), pGBuffer->GetHeight(), 1, 1, 1, 0,
+            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        ),
+		1
+	);
 
     m_pDirLight = std::make_shared<DirectionalLight>();
 
@@ -95,7 +107,9 @@ void Scene::InitializeRenderSubsystems(
         RenderSubsystemType type{ FromId<RenderSubsystemType>(i) };
         m_pRenderSubsystems[i]->InitializeIndirectCommandBuffer(
             pDeviceContext,
-            type & RenderSubsystemType::Dynamic ? pIndirectUpdater : nullptr
+            // TODO: those weird bug with indirect updater is still here!
+            // seems to occur because of states during multithread command lists filling (claude said so, needs to be checked)
+            type & RenderSubsystemType::Dynamic ? /*pIndirectUpdater*/ nullptr : nullptr
         );
         m_pRenderSubsystems[i]->InitializeModelBuffer(
             pDeviceContext,
@@ -140,6 +154,11 @@ void Scene::Update(
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
     m_pDepthTarget->Clear(pCommandList);
+    m_pShadowMap->Clear(pCommandList);
+
+    m_pLightVolumeTarget->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_pLightVolumeTarget->Clear(pCommandList);
+
     if (m_pGBuffer) {
         m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_pGBuffer->Clear(pCommandList);
@@ -294,13 +313,122 @@ void Scene::RenderObjects(
             pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
             pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
         }
-        };
+    };
 
     std::scoped_lock<std::mutex> sceneCBMutex(m_cameraBufferMutex);
     m_pRenderSubsystems[ToId(type)]->Render(
         pCommandList,
         commandListPrepare
     );
+}
+
+void Scene::InitLightVolumeGrid(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    const std::shared_ptr<CommandList>& pCommandList,
+    const DirectX::XMMATRIX& modelMatrix
+) {
+    m_pLightVolumeGrid = TestLightVolumeRenderObject::CreateLightVolume(
+        pDeviceContext,
+        pCommandList,
+        m_pLightVolumeTarget,
+        modelMatrix
+    );
+}
+
+void Scene::RenderLightVolumeGrid(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    D3D12_VIEWPORT viewport,
+    D3D12_RECT scissorRect
+) {
+    m_pLightVolumeGrid->SetPipelineStateAndRootSignature(pCommandList);
+
+	if (m_pShadowMap->GetTexture()->GetState() != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
+        m_pShadowMap->GetTexture()->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    }
+
+    auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+	pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	pD3D12CommandList->RSSetViewports(1, &CD3DX12_VIEWPORT(
+		0.0f,
+        0.0f,
+		static_cast<float>(m_pLightVolumeTarget->GetWidth()),
+		static_cast<float>(m_pLightVolumeTarget->GetHeight())
+	));
+	pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs{ m_pLightVolumeTarget->GetRtvs() };
+	pD3D12CommandList->OMSetRenderTargets(
+		static_cast<UINT>(rtvs.size()),
+		rtvs.data(),
+		FALSE,
+		nullptr
+	);
+
+	pD3D12CommandList->SetGraphicsRootConstantBufferView(
+		0,
+		m_pCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+	);
+	pD3D12CommandList->SetDescriptorHeaps(1, 
+        pDeviceContext
+            ->GetDescriptorHeap(DescRangeType::Srv)
+            ->GetD3D12DescriptorHeap().GetAddressOf()
+    );
+
+    DirectX::XMMATRIX mm{ DirectX::XMMatrixInverse(nullptr, m_pDirLight->GetViewProjectionMatrix()) };
+    pD3D12CommandList->SetGraphicsRoot32BitConstants(1, 16, &mm, 0);
+
+    pD3D12CommandList->SetGraphicsRootDescriptorTable(2, m_pShadowMap->GetSrvGpuDescHandle());
+
+    m_pLightVolumeGrid->Render(pCommandList, 0);
+}
+
+void Scene::RenderObjectsDepth(
+	const EnumFlags<RenderSubsystemType> type,
+	std::shared_ptr<DeviceContext> pDeviceContext,
+	std::shared_ptr<CommandList> pCommandList,
+	D3D12_VIEWPORT viewport,
+	D3D12_RECT scissorRect
+) {
+	if (m_pRenderSubsystems[ToId(type)]->IsUpdatePending()) {
+		m_pRenderSubsystems[ToId(type)]->PerformUpdate(pDeviceContext, pCommandList);
+	}
+
+	auto commandListPrepare = [&] {
+		auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+		pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		pD3D12CommandList->RSSetViewports(1, &CD3DX12_VIEWPORT(
+            0.0f, 0.0f,
+            static_cast<float>(m_shadowMapResolution), static_cast<float>(m_shadowMapResolution)
+        ));
+		pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+
+		pD3D12CommandList->OMSetRenderTargets(
+			0,
+			nullptr,
+			FALSE,
+			&m_pShadowMap->GetDsvCpuDescHandle()
+		);
+
+		pD3D12CommandList->SetGraphicsRootConstantBufferView(
+			0,
+            m_pShadowCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+		);
+		pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap().GetAddressOf());
+		if (type & RenderSubsystemType::AlphaKill) {
+			const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
+			pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
+			pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
+		}
+		};
+
+	std::scoped_lock<std::mutex> sceneCBMutex(m_cameraBufferMutex);
+	m_pRenderSubsystems[ToId(type)]->Render(
+		pCommandList,
+		commandListPrepare
+	);
 }
 
 void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO) {
@@ -390,6 +518,50 @@ void Scene::RenderPostProcessing(
     m_pPostProcessing->Render(pCommandList, rootParameterIndex);
 }
 
+void Scene::SetLightVolumePostProcessing(std::shared_ptr<RenderObject> pPostProcessing) {
+    m_pLightVolumePostProcessing = pPostProcessing;
+}
+
+void Scene::RenderLightVolumePostProcessing(
+	std::shared_ptr<CommandList> pCommandList,
+	std::shared_ptr<DescriptorHeap> pResDescHeapManager,
+	D3D12_VIEWPORT viewport,
+	D3D12_RECT scissorRect,
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+) {
+	if (!m_pLightVolumePostProcessing) {
+		return;
+	}
+
+
+	m_pLightVolumeTarget->ChangeState(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+
+	// prepare command list
+	UINT rootParameterIndex{};
+	{
+		auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+
+        m_pLightVolumePostProcessing->SetPipelineStateAndRootSignature(pCommandList);
+
+		pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		pD3D12CommandList->RSSetViewports(1, &viewport);
+		pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+
+		pD3D12CommandList->OMSetRenderTargets(1, &renderTargetView, TRUE, nullptr);
+
+		pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetD3D12DescriptorHeap().GetAddressOf());
+		pD3D12CommandList->SetGraphicsRootDescriptorTable(
+			rootParameterIndex++,
+            m_pLightVolumeTarget->GetSrvDescHandle()
+		);
+
+        pD3D12CommandList->SetGraphicsRoot32BitConstants(rootParameterIndex++, 1, &m_lightVolumeShadowCoef, 0);
+	}
+
+    m_pLightVolumePostProcessing->Render(pCommandList, rootParameterIndex);
+}
+
 bool Scene::UpdateCamera(float deltaTime) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     if (!m_isUpdateCamera.load()) {
@@ -471,11 +643,47 @@ void Scene::DrawCurrentCameraSettingsUI() {
 }
 
 void Scene::DrawDirectionalLightUI() {
-    if (m_pDirLight) {
+	if (m_pDirLight) {
         ImGui::Begin("Directional Light");
-        DrawSettings(*m_pDirLight);
+		DrawSettings(*m_pDirLight);
+
+		ImGui::Text("GPU handle = %p", m_pShadowMap->GetSrvGpuDescHandle().ptr);
+		ImGui::Text(
+            "size = %d x %d",
+            m_pShadowMap->GetTexture()->GetWidth(),
+            m_pShadowMap->GetTexture()->GetHeight()
+        );
+		// Note that we pass the GPU SRV handle here, *not* the CPU handle. We're passing the internal pointer value, cast to an ImTextureID
+		ImGui::Image(
+			(ImTextureID)m_pShadowMap->GetSrvGpuDescHandle().ptr,
+			ImVec2((float)m_pShadowMap->GetTexture()->GetWidth() / 10.0f,
+				    (float)m_pShadowMap->GetTexture()->GetHeight() / 10.0f)
+		);
+
         ImGui::End();
     }
+}
+
+void Scene::DrawTestUI() {
+    assert(m_pLightVolumeTarget);
+
+    ImGui::Begin("Test");
+
+    ImGui::SliderFloat("Shadow scale coef", &m_lightVolumeShadowCoef, 0.0f, 10.0f);
+
+	ImGui::Text("GPU handle = %p", m_pLightVolumeTarget->GetSrvDescHandle().ptr);
+	ImGui::Text(
+		"size = %d x %d",
+        m_pLightVolumeTarget->GetTexture()->GetWidth(),
+        m_pLightVolumeTarget->GetTexture()->GetHeight()
+	);
+	ImGui::Image(
+		(ImTextureID)m_pLightVolumeTarget->GetSrvDescHandle().ptr,
+		ImVec2((float)m_pLightVolumeTarget->GetWidth() / 2.0f,
+			    (float)m_pLightVolumeTarget->GetHeight() / 2.0f)
+	);
+
+    ImGui::End();
 }
 
 void Scene::DrawSettingsUI() {

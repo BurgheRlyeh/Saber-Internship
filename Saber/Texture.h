@@ -118,7 +118,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<TextureResource> GetTexture(size_t id) const {
+	std::shared_ptr<TextureResource> GetTexture(size_t id = 0) const {
 		return m_pTextures[id];
 	}
 

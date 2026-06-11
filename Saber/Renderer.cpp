@@ -81,9 +81,16 @@ void Renderer::Initialize(HWND hWnd) {
         // SAMPLER
         {},
         // RTV
-        { m_numFrames + GBUFFER_SIZE },
+        { 
+            m_numFrames
+            + GBUFFER_SIZE
+            + ScenesCount  // lightvolume targets
+        },
         // DSV
-        { 1 + ScenesCount }
+        {
+            1
+            + ScenesCount   // shadowmaps
+        }
     }));
     m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
         L"../../Resources/Textures/",
@@ -129,6 +136,7 @@ void Renderer::Initialize(HWND hWnd) {
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
+        auto testPostProcess{ std::make_shared<TestPostProcessing>(m_pDeviceContext) };
         auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext) };
         for (size_t i{}; i < ScenesCount; ++i) {
             std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
@@ -139,6 +147,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pGBuffers[0]
             );
             pScene->SetPostProcessing(copyPostProcess);
+            pScene->SetLightVolumePostProcessing(testPostProcess);
             pScene->SetDeferredShadingComputeObject(deferredShading);
         }
         
@@ -150,12 +159,20 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
-                m_pDeviceContext,
-                pCommandList,
-                m_pGBuffers[0],
-                DirectX::XMMatrixIdentity()
-            ));
+			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
+				m_pDeviceContext,
+				pCommandList,
+				m_pGBuffers[0],
+				DirectX::XMMatrixIdentity()
+			));
+
+            //float scale{ 100.0f };
+            //pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateHeightMap(
+            //    m_pDeviceContext,
+            //    pCommandList,
+            //    m_pGBuffers[0],
+            //    DirectX::XMMatrixScaling(scale, 2.50f, scale) * DirectX::XMMatrixTranslation(-scale / 2.0f, 1.0f, -scale / 2.0f)
+            //));
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -249,6 +266,12 @@ void Renderer::Initialize(HWND hWnd) {
                     m_pDeviceContext,
                     IndirectUpdater::CreateConstMesh4Updater(m_pDeviceContext)
                 );
+
+                std::shared_ptr<CommandList> pCommandList{
+                    m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+                };
+                pScene->InitLightVolumeGrid(m_pDeviceContext, pCommandList, DirectX::XMMatrixIdentity());
+				m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
 
                 pScene->SetSceneReadiness(true);
             });
@@ -441,7 +464,7 @@ void Renderer::Render() {
     }
 
     // two command lists: static (1), dynamic (2)
-    std::shared_ptr<CommandList> commandListForStaticObjects{ 
+    std::shared_ptr<CommandList> commandListForObjects{
         pQueue->GetDeferredCommandList(
             L"StaticObjects", m_pDeviceContext->GetDevice(), ++listPriority,
             [&] {
@@ -451,35 +474,67 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        commandListForStaticObjects->PixBeginEvent(L"Static Objects rendering");
-        pScene->RenderObjects(
-            RenderSubsystemType::Default,
-            m_pDeviceContext,
-            commandListForStaticObjects,
-            m_viewport,
-            m_scissorRect
-        );
-        commandListForStaticObjects->SetReadyForExecution();
-        });
-
-    std::shared_ptr<CommandList> commandListForAlphaObjects{
-        pQueue->GetDeferredCommandList(
-            L"StaticAlphakillObjects", m_pDeviceContext->GetDevice(), ++listPriority
-        )
-    };
-    m_pJobSystem->AddJob([&]() {
-        commandListForAlphaObjects->PixBeginEvent(L"Alphakill Objects rendering");
+		commandListForObjects->PixBeginEvent(L"Objects rendering");
+		pScene->RenderObjectsDepth(
+			RenderSubsystemType::Default,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+		pScene->RenderObjects(
+			RenderSubsystemType::Default,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+		pScene->RenderObjectsDepth(
+			RenderSubsystemType::AlphaKill,
+			m_pDeviceContext,
+			commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
         pScene->RenderObjects(
             RenderSubsystemType::AlphaKill,
             m_pDeviceContext,
-            commandListForAlphaObjects,
+            commandListForObjects,
             m_viewport,
             m_scissorRect
-        );
-        commandListForAlphaObjects->SetReadyForExecution();
+		);
+		pScene->RenderObjectsDepth(
+			RenderSubsystemType::Dynamic,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+		pScene->RenderObjectsDepth(
+			RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+		pScene->RenderObjects(
+			RenderSubsystemType::Dynamic,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+		pScene->RenderObjects(
+			RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
+			m_pDeviceContext,
+            commandListForObjects,
+			m_viewport,
+			m_scissorRect
+		);
+        commandListForObjects->SetReadyForExecution();
     });
 
-    std::shared_ptr<CommandList> commandListForDynamicObjects{
+    std::shared_ptr<CommandList> commandListForTestThings{
         pQueue->GetDeferredCommandList(
             L"DynamicObjects",
             m_pDeviceContext->GetDevice(),
@@ -492,22 +547,16 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        commandListForDynamicObjects->PixBeginEvent(L"Dynamic Objects rendering");
-        pScene->RenderObjects(
-            RenderSubsystemType::Dynamic,
+		commandListForTestThings->PixBeginEvent(L"Test things");
+
+        pScene->RenderLightVolumeGrid(
             m_pDeviceContext,
-            commandListForDynamicObjects,
+            commandListForTestThings,
             m_viewport,
             m_scissorRect
         );
-        pScene->RenderObjects(
-            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
-            m_pDeviceContext,
-            commandListForDynamicObjects,
-            m_viewport,
-            m_scissorRect
-        );
-        commandListForDynamicObjects->SetReadyForExecution();
+
+        commandListForTestThings->SetReadyForExecution();
         });
 
 
@@ -577,7 +626,14 @@ void Renderer::Render() {
                 m_viewport,
                 m_scissorRect,
                 rtv
-            );
+			);
+			pScene->RenderLightVolumePostProcessing(
+				commandListAfterFrame,
+				m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
+				m_viewport,
+				m_scissorRect,
+				rtv
+			);
 
             m_pUI->Render(commandListAfterFrame, m_pDeviceContext);
 
@@ -895,5 +951,12 @@ void Renderer::RegisterUIPanels() {
         if (m_pScenes.empty())
             return;
         m_pScenes[m_currSceneId]->DrawDirectionalLightUI();
-    });
+		});
+
+	// Test
+	m_pUI->RegisterPanel([this]() {
+		if (m_pScenes.empty())
+			return;
+		m_pScenes[m_currSceneId]->DrawTestUI();
+		});
 }

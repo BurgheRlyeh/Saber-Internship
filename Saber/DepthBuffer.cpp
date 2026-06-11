@@ -76,7 +76,9 @@ void DepthBuffer::Resize(
 }
 
 void DepthBuffer::Clear(std::shared_ptr<CommandList> pCommandList) {
-	m_pDepthTarget->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	if (m_pDepthTarget->GetState() != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+		m_pDepthTarget->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	}
 	m_pDepthTarget->ClearDepthTarget(pCommandList, GetDsvCpuDescHandle());
 }
 

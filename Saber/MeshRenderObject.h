@@ -17,6 +17,8 @@
 #include "Texture.h"
 #include "Vertices.h"
 
+#include "HeightMapGen.h"
+
 template <typename ModelBuffer>
 class MeshRenderObject : public RenderObject {
 protected:
@@ -72,7 +74,7 @@ public:
         UpdateModelBuffer();
     }
     void UpdateModelBuffer() {
-        m_pModelCb->Update(&m_modelBuffer);
+        //m_pModelCb->Update(&m_modelBuffer);
     }
 
     void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) override {
@@ -183,16 +185,16 @@ protected:
         std::shared_ptr<CommandList> pCommandListDirect,
         UINT& rootParamId
     ) const override {
-        auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
-        if (m_modelBufferId == static_cast<size_t>(-1)) {
-            pD3D12CommandList->SetGraphicsRootConstantBufferView(
-                rootParamId++,
-                m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
-            );
-        }
-        else {
-            pD3D12CommandList->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
-        }
+        //auto pD3D12CommandList{ pCommandListDirect->GetD3D12CommandList() };
+        //if (m_modelBufferId == static_cast<size_t>(-1)) {
+        //    pD3D12CommandList->SetGraphicsRootConstantBufferView(
+        //        rootParamId++,
+        //        m_pModelCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+        //    );
+        //}
+        //else {
+        //    pD3D12CommandList->SetGraphicsRoot32BitConstant(rootParamId++, m_modelBufferId, 0);
+        //}
     }
 
     void DrawCall(
@@ -314,6 +316,79 @@ public:
 
         return pObj;
     }
+
+	static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateHeightMap(
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		const std::shared_ptr<CommandList>& pCommandList,
+		std::shared_ptr<Texture> pGBuffer,
+		const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+	) {
+        std::vector<uint32_t> indices{};
+
+		std::vector<DirectX::XMFLOAT3> positions{};
+		std::vector<DirectX::XMFLOAT3> normals{};
+		std::vector<DirectX::XMFLOAT4> tangents{};
+		std::vector<DirectX::XMFLOAT2> uvs{};
+
+        GenerateHeightMapMesh(
+			100,
+			100,
+            indices,
+            positions,
+            normals,
+            tangents,
+            uvs
+        );
+
+		std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+			std::make_shared<MeshRenderObject<ModelBuffer>>(L"HeightMap", pDeviceContext->GetDevice())
+		};
+
+		Mesh::MeshDataIndicesVertices meshData{
+			// indices data
+			.indices{ indices.data()},
+			.indicesCnt{ indices.size()},
+			.indexSize{ sizeof(*indices.data()) },
+			.indexFormat{ DXGI_FORMAT_R32_UINT },
+			// vertices data
+			.verticesCnt{ positions.size() },
+			.verticesData{
+				{
+					.data{ positions.data() },
+					.size{ sizeof(*positions.data()) },
+					.handler{ pObj->VerticesPositionsBBHandler() }
+				},
+				{.data{ normals.data() }, .size{ sizeof(*normals.data()) } },
+				{.data{ tangents.data() }, .size{ sizeof(*tangents.data()) } },
+				{.data{ uvs.data() }, .size{ sizeof(*uvs.data()) } }
+			}
+		};
+		pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(meshData));
+		pObj->InitMaterial(
+			pDeviceContext,
+			RootSignatureData{
+				CreateRootSignatureBlob(),
+				L"GLTFRootSignature"
+			},
+			ShaderData{
+				L"SimpleVS.cso",
+				L"SimplePS.cso"
+			},
+			PipelineStateData{
+				CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
+			}
+		);
+
+		pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+		pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
+			pDeviceContext,
+			pCommandList,
+			L"Brick.dds",
+			L"BrickNM.dds"
+		));
+
+		return pObj;
+	}
 
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
@@ -573,4 +648,167 @@ protected:
 
         return pipelineStateStream.GraphicsDescV0();
     }
+};
+
+class TestLightVolumeRenderObject : protected TestRenderObject {
+public:
+	static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateLightVolume(
+		std::shared_ptr<DeviceContext> pDeviceContext,
+		const std::shared_ptr<CommandList>& pCommandList,
+		std::shared_ptr<Texture> pGBuffer,
+		const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+	) {
+		std::vector<uint32_t> indices{};
+
+		std::vector<DirectX::XMFLOAT3> positions{};
+		std::vector<DirectX::XMFLOAT3> normals{};
+		std::vector<DirectX::XMFLOAT4> tangents{};
+		std::vector<DirectX::XMFLOAT2> uvs{};
+
+		GenerateHeightMapMesh(
+			1000,
+			1000,
+			indices,
+			positions,
+			normals,
+			tangents,
+			uvs
+		);
+
+		std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+			std::make_shared<MeshRenderObject<ModelBuffer>>(L"LightVolumeGrid", pDeviceContext->GetDevice())
+		};
+
+		Mesh::MeshDataIndicesVertices meshData{
+			// indices data
+			.indices{ indices.data()},
+			.indicesCnt{ indices.size()},
+			.indexSize{ sizeof(*indices.data()) },
+			.indexFormat{ DXGI_FORMAT_R32_UINT },
+			// vertices data
+			.verticesCnt{ positions.size() },
+			.verticesData{
+				{
+					.data{ positions.data() },
+					.size{ sizeof(*positions.data()) },
+					.handler{ pObj->VerticesPositionsBBHandler() }
+				},
+				{.data{ normals.data() }, .size{ sizeof(*normals.data()) } },
+				{.data{ tangents.data() }, .size{ sizeof(*tangents.data()) } },
+				{.data{ uvs.data() }, .size{ sizeof(*uvs.data()) } }
+			}
+		};
+		pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(meshData));
+		pObj->InitMaterial(
+			pDeviceContext,
+			RootSignatureData{
+				CreateRootSignatureBlob(),
+				L"LightVolumeRootSignature"
+			},
+			ShaderData{
+				L"LightVolumeVS.cso",
+				L"LightVolumePS.cso"
+			},
+			PipelineStateData{
+                CreateLightVolumePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
+			}
+		);
+
+		pObj->GetModelBuffer().UpdateMatrices(modelMatrix);
+		pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
+			pDeviceContext,
+			pCommandList,
+			L"Brick.dds",
+			L"BrickNM.dds"
+		));
+
+		return pObj;
+	}
+
+protected:
+	static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
+		// Allow input layout and deny unnecessary access to certain pipeline stages.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
+		};
+
+		size_t rp{}, srCbv{}, srSrv{};
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3]{};
+		rootParameters[rp++].InitAsConstantBufferView(srCbv++); // camera CB
+
+		rootParameters[rp++].InitAsConstants(16, srCbv++); // model matrix
+
+        // shadow map
+		CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsMaterial[1]{};
+		rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, srSrv++);
+		rootParameters[rp++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial, D3D12_SHADER_VISIBILITY_VERTEX);
+
+		D3D12_STATIC_SAMPLER_DESC sampler{
+			.Filter{ D3D12_FILTER_MIN_MAG_MIP_POINT },
+			.AddressU{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+			.AddressV{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+			.AddressW{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+			.MipLODBias{},
+			.MaxAnisotropy{},
+			.ComparisonFunc{ D3D12_COMPARISON_FUNC_NEVER },
+			.BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
+			.MinLOD{},
+			.MaxLOD{ D3D12_FLOAT32_MAX },
+			.ShaderRegister{},
+			.RegisterSpace{},
+			.ShaderVisibility{ D3D12_SHADER_VISIBILITY_VERTEX }
+		};
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+		rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
+
+		// Serialize the root signature.
+		Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
+			&rootSignatureDescription,
+			D3D_ROOT_SIGNATURE_VERSION_1_1,
+			&rootSignatureBlob,
+			&errorBlob
+		));
+
+		return rootSignatureBlob;
+	}
+
+	static D3D12_GRAPHICS_PIPELINE_STATE_DESC CreateLightVolumePipelineStateDesc(
+		D3D12_INPUT_ELEMENT_DESC* inputLayout,
+		size_t inputLayoutSize,
+		const D3D12_RT_FORMAT_ARRAY& rtvFormats
+	) {
+		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc{ D3D12_DEFAULT };
+        depthStencilDesc.DepthEnable = FALSE;
+		depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+
+		CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT };
+		rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+		rasterizerDesc.FrontCounterClockwise = true;
+
+        CD3DX12_BLEND_DESC blendDesc{ D3D12_DEFAULT };
+        auto& rt = blendDesc.RenderTarget[0];
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_ONE;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_ONE;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+		CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
+		pipelineStateStream.InputLayout = { inputLayout, static_cast<UINT>(inputLayoutSize) };
+		pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pipelineStateStream.DSVFormat = DXGI_FORMAT_UNKNOWN;
+		pipelineStateStream.DepthStencilState = depthStencilDesc;
+		pipelineStateStream.RasterizerState = rasterizerDesc;
+		pipelineStateStream.RTVFormats = rtvFormats;
+        pipelineStateStream.BlendState = blendDesc;
+
+		return pipelineStateStream.GraphicsDescV0();
+	}
 };
