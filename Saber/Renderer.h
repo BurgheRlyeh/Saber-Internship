@@ -79,7 +79,7 @@ class Renderer {
     std::atomic<bool> m_isSwitchCameraProjection{};
 
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
-
+    std::shared_ptr<Texture> m_pSSAOTexture{};
     std::shared_ptr<JobSystem<>> m_pJobSystem{};
 
 public:

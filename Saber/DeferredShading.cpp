@@ -3,36 +3,38 @@
 #include "DeviceContext.h"
 
 std::shared_ptr<ComputeObject> DeferredShading::CreateDefferedShadingComputeObject(
-    std::shared_ptr<DeviceContext> pDeviceContext
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    bool DoSSAO
 ) {
     std::shared_ptr<ComputeObject> pComputeObj{ std::make_shared<ComputeObject>() };
     pComputeObj->InitMaterial(
         pDeviceContext,
         RootSignatureData(
-            CreateRootSignatureBlob(),
+            CreateRootSignatureBlob(DoSSAO),
             L"DeferredShadingRootSignature"
         ),
         ComputeShaderData(
-            L"DeferredShadingComputeShader.cso"
+            DoSSAO ? L"DeferredShadingVBAO_CS.cso" : L"DeferredShadingComputeShader.cso"
         )
     );
 
     return pComputeObj;
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> DeferredShading::CreateRootSignatureBlob() {
+Microsoft::WRL::ComPtr<ID3DBlob> DeferredShading::CreateRootSignatureBlob(bool DoSSAO) {
     size_t rpId{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[7]{};
     rootParameters[rpId++].InitAsConstantBufferView(0);
     rootParameters[rpId++].InitAsConstantBufferView(1);
 
-    CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsGbuffer[1]{};
+    CD3DX12_DESCRIPTOR_RANGE1 rangeSrvsGbuffer[2]{};
     rangeSrvsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
-    rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsGbuffer), rangeSrvsGbuffer);
+    rangeSrvsGbuffer[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE, 3);
+    rootParameters[rpId++].InitAsDescriptorTable(DoSSAO ? _countof(rangeSrvsGbuffer) : 1, rangeSrvsGbuffer);
 
     CD3DX12_DESCRIPTOR_RANGE1 rangeUavsGbuffer[1]{};
-    rangeUavsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-    rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeUavsGbuffer), rangeUavsGbuffer);
+	rangeUavsGbuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	    rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeUavsGbuffer), rangeUavsGbuffer);
 
     CD3DX12_DESCRIPTOR_RANGE1 rangeDepthBuffer[1]{};
     rangeDepthBuffer[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);

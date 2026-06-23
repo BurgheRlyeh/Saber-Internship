@@ -19,10 +19,12 @@ Scene::Scene(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<DepthBuffer> pDepthBuffer,
-    std::shared_ptr<GBuffer> pGBuffer
+    std::shared_ptr<GBuffer> pGBuffer,
+    std::shared_ptr<Texture> pSSAOTexture
 ) : m_name(name),
 m_pDepthBuffer(pDepthBuffer),
-m_pGBuffer(pGBuffer)
+m_pGBuffer(pGBuffer),
+m_pSSAOTexture(pSSAOTexture)
 {
     for (size_t i{}; i < static_cast<size_t>(RenderSubsystemType::Count); ++i) {
         m_pRenderSubsystems[i] = std::make_shared<RenderSubsystem<ConstMesh4IndirectCommand>>(
@@ -68,6 +70,7 @@ void Scene::Resize(
     uint64_t width, uint32_t height
 ) {
     m_pTargetTexture->Resize(pDevice, width, height);
+
     UpdateCamerasAspectRatio(static_cast<float>(width) / height);
 }
 
@@ -302,7 +305,8 @@ void Scene::RunDeferredShading(
     }
 
     m_pGBuffer->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	m_pSSAOTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     UpdateLightBuffer();
 
@@ -324,12 +328,15 @@ void Scene::RunDeferredShading(
             );
             pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeapManager->GetD3D12DescriptorHeap().GetAddressOf());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pGBuffer->GetSrvDescHandle());
-            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pTargetTexture->GetUavDescHandle());
+			pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pTargetTexture->GetUavDescHandle());
+			//pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pSSAOTexture->GetUavDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
         }
     );
+
+	m_pSSAOTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 }
 
 void Scene::SetPostProcessing(std::shared_ptr<RenderObject> pPostProcessing) {
@@ -347,7 +354,7 @@ void Scene::RenderPostProcessing(
         return;
     }
 
-    m_pTargetTexture->ChangeState(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	m_pTargetTexture->ChangeState(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
     // prepare command list
     UINT rootParameterIndex{};

@@ -12,6 +12,7 @@ Texture2D<float4> tbn : register(t1);
 Texture2D<float> depthBuffer : register(t2);
 
 RWTexture2D<float4> output : register(u0);
+RWTexture2D<float> output_vbao : register(u1);
 
 ConstantBuffer<MaterialCB> Materials : register(b2);
 Texture2D<float4> MaterialsTextures[] : register(t3);
@@ -86,7 +87,8 @@ void main(ComputeShaderInput IN)
     float2 uv = uvmi.xy;
     uint materialId = uvmi.z;
     
-    if (materialId == 0) {
+    if (materialId == 0)
+    {
         output[pixel.xy] = float4(.4f, .6f, .9f, 1.f);
         return;
     }
@@ -136,4 +138,6 @@ void main(ComputeShaderInput IN)
     float3 finalColor = albedo * lightColor;
     
     output[pixel.xy] = float4(finalColor, 1.f);
+    output_vbao[pixel.xy] = 0.25f;
+
 }

@@ -342,6 +342,9 @@
     <FxCompile Include="IndirectUpdaterCbConstMesh4.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="DeferredShadingVBAO_CS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

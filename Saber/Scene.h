@@ -60,7 +60,8 @@ class Scene {
 
     std::atomic<bool> m_isSceneReady{};
 
-    std::shared_ptr<Texture> m_pTargetTexture{};
+	std::shared_ptr<Texture> m_pTargetTexture{};
+	std::shared_ptr<Texture> m_pSSAOTexture{};
     std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
 
@@ -74,7 +75,8 @@ public:
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<DepthBuffer> m_pDepthBuffer,
-        std::shared_ptr<GBuffer> m_pGBuffer
+        std::shared_ptr<GBuffer> m_pGBuffer,
+        std::shared_ptr<Texture> m_pSSAOTexture
     );
 
     void Resize(

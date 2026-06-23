@@ -43,6 +43,7 @@ Renderer::~Renderer() {
     m_pBackBuffersDescHeapRange.reset();
     m_pScenes.clear();
     m_pGBuffers.clear();
+    m_pSSAOTexture.reset();
     m_pDepthBuffers.clear();
     m_pDeviceContext->SetMaterialManager(nullptr);
     m_pDeviceContext.reset();
@@ -115,19 +116,31 @@ void Renderer::Initialize(HWND hWnd) {
     m_time = m_clock.now();
     m_isInitialized = true;
 
+	m_pSSAOTexture = std::make_shared<Texture>(
+		L"SSAOTexture",
+        m_pDeviceContext,
+		CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R32_FLOAT,
+            m_pGBuffers[0]->GetWidth(), m_pGBuffers[0]->GetHeight(), 1, 0, 1, 0,
+			D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+		),
+		1
+	);
+
     {
         constexpr size_t ScenesCount{ 4 };
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
-        auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext) };
+        auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext, true) };
         for (size_t i{}; i < ScenesCount; ++i) {
             std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
             pScene = std::make_unique<Scene>(
                 L"Scene" + std::to_wstring(i),
                 m_pDeviceContext,
                 m_pDepthBuffers[0],
-                m_pGBuffers[0]
+                m_pGBuffers[0],
+                m_pSSAOTexture
             );
             pScene->SetPostProcessing(copyPostProcess);
             pScene->SetDeferredShadingComputeObject(deferredShading);
@@ -145,8 +158,22 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext,
                 pCommandList,
                 m_pGBuffers[0],
-                DirectX::XMMatrixIdentity()
+                DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
             ));
+
+			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
+				m_pDeviceContext,
+				pCommandList,
+				m_pGBuffers[0],
+				DirectX::XMMatrixTranslation(0.5f, -1.f, -0.5f)
+			));
+
+			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
+				m_pDeviceContext,
+				pCommandList,
+				m_pGBuffers[0],
+				DirectX::XMMatrixIdentity()
+			));
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -155,14 +182,14 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
-                m_pDeviceContext,
-                pCommandList,
-                filepath,
-                m_pGBuffers[0],
-                DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
-            ));
+            //std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+            //pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+            //    m_pDeviceContext,
+            //    pCommandList,
+            //    filepath,
+            //    m_pGBuffers[0],
+            //    DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+            //));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
 			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
 				m_pDeviceContext,
