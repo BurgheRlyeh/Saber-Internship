@@ -33,6 +33,13 @@ float3 WorldPositionFromDepth(float2 uv, float depth)
     return worldPos.xyz / worldPos.w;
 }
 
+float3 ViewPositionFromDepth(float2 uv, float depth)
+{
+    uv = float2(2.f, -2.f) * uv - float2(1.f, -1.f);
+    float4 viewPos = mul(SceneCB.invProjMatrix, float4(uv, depth, 1.f));
+    return viewPos.xyz / viewPos.w;
+}
+
 #define DDX_DDY_PIXEL_CHECK_CNT 4   // 2 / 4
 float2 BestUVDerivative(
     int3 pixel,
@@ -123,37 +130,41 @@ float ACos(float x)
 // end of VBAO Utility funcs
 
 static const int sampleCount = 5;
-static const float sampleRadius = 20.0;
-static const float sliceCount = 4.0;
-static const float hitThickness = 0.1;
+static const float sampleRadius = 50.0;
+//static const float sliceCount = 4.0;
+static float _AOInvRadiusSq = 1 / 0.05;
+//static const float hitThickness = 0.1;
 
 float3 CalculateSliceOcclusion(float2 direction, int3 pixel, uint w, uint h, float3 worldPos, float3 worldNormal)
 {
     uint occlusion = 0; 
     int3 samplePixel = pixel;
+    float3 viewPosition = mul(SceneCB.viewMatrix, float4(worldPos, 1.0)).xyz;
+    float3 viewNormal = mul(SceneCB.viewMatrix, float4(worldNormal, 0.0)).xyz;
     float3 Horizon = float3(0, 0, 0);
-    float3 camera = normalize(SceneCB.cameraPosition.xyz - worldPos);
+    float3 camera = normalize(-viewPosition);
     float2 TettaSign = float2(-1, -1);
     float2 Tetta = float2(0, 0);
     float test = 0.5;
-    float3 dirWorld = mul(SceneCB.viewProjMatrix, float4(direction, 0.0f, 0.f)).xyz;
-    float3 orthoAxis = (cross(camera, dirWorld));
-            //projectedNormal = normalize(worldNormal - orthoAxis * dot(orthoAxis, worldNormal));
-           // Horizon = cross(projectedNormal, orthoAxis);
-        Horizon = normalize(cross(worldNormal, orthoAxis));
-    float3 projectedNormal = normalize(cross(orthoAxis, Horizon));
+    float3 dirView = float3(direction.x, -direction.y,   0.f); // screen space vertical direction and view space are inverted
+    float3 orthoAxis = normalize(cross(camera, dirView));
+    float3 orthoDirection = dirView - dot(dirView, camera) * camera;
+  
+   
+    Horizon = normalize(cross(viewNormal, orthoAxis));
+    float3 projectedNormal = normalize(viewNormal - orthoAxis * dot(viewNormal, orthoAxis)); //    normalize(cross(orthoAxis, Horizon));
     
-        float d = sign(dot(Horizon, camera));
-            //if ( d < 0)
-        Horizon = select(d < 0, -Horizon, Horizon);
+    float d = sign(dot(Horizon, camera));
     
-    d = sign(dot(worldNormal, projectedNormal));
-
-    float step = sampleRadius / sampleCount;
+    Horizon = select(d < 0, -Horizon, Horizon);
+    //float progA = acos(projNormalLength);
+    //d = sign(dot(worldNormal, projectedNormal));
+    float depthSampleRadius = max(float(sampleCount), sampleRadius / abs(viewPosition.z));
+    float step = depthSampleRadius / sampleCount;
     float minTetta = 0;
     float maxTetta = pi;
 
-    for (int i = -sampleCount + 1; i < sampleCount; i++)
+    for (int i = -sampleCount + 1; i < sampleCount;   i++)
     {
         if (i == 0)
         {
@@ -178,46 +189,54 @@ float3 CalculateSliceOcclusion(float2 direction, int3 pixel, uint w, uint h, flo
         float depth = depthBuffer.Load(samplePixel);
             // world position
         float2 uvGlobal = float2(samplePixel.xy) / float2(w, h);
-        float3 sampleWorldPos = WorldPositionFromDepth(uvGlobal, depth) ;
-        float3 horizFront = (sampleWorldPos - worldPos);
-        float lengthV = length(horizFront);
-        horizFront /= lengthV;
-        float3 horizBack = normalize(horizFront - (camera * hitThickness));
-        
+        float3 sampleViewdPos = ViewPositionFromDepth(uvGlobal, depth) - float3(0.,0.,0.005);
+        float3 horizFront = (sampleViewdPos - viewPosition);
+        float lengthSQR = dot(horizFront, horizFront); //length(horizFront);
 
-        TettaSign = float2(dot(projectedNormal, horizFront), dot(projectedNormal, horizBack));
+        
+        horizFront *= rsqrt(lengthSQR);
+        
+        //if (lengthSQR > 0.01)
+        //{
+        //    continue;
+        //}
+        
+        //float3 horizBack = normalize(horizFront - (camera * hitThickness));
+        
+        //TettaSign = float2(dot(camera, horizFront), dot(camera, horizBack));
+        TettaSign = float2(dot(projectedNormal, horizFront), 0.0/*dot(projectedNormal, horizBack)*/);
         if (TettaSign.x < 0.)
         {
             continue;
         }
 
         
-        Tetta = acos(TettaSign);
-        TettaSign = sign(float2(dot(Horizon, horizFront), dot(Horizon, horizBack)));
+        Tetta.x = acos(TettaSign.x);
+        //Tetta = acos(TettaSign);
+        TettaSign = (float2(dot(Horizon, horizFront), 0.0/* dot(Horizon, horizBack)*/));
+        TettaSign = sign(TettaSign);
         Tetta = Tetta * TettaSign + halfPi;
         
-        if (TettaSign.x < 0.)
-        {
-            minTetta = max(Tetta.x, minTetta);
+        
 
+        float falloff = saturate(1.0 - (lengthSQR * _AOInvRadiusSq));
+        
+        
+         if (TettaSign.x < 0.)
+        {
+            float candidate = Tetta.x;
+            minTetta = select(candidate > minTetta, lerp(minTetta, candidate, falloff), lerp(minTetta, candidate, 0.03f));
         }
         else
         {
-            maxTetta = min(Tetta.x, maxTetta);
+            float candidate = Tetta.x;
+            maxTetta = select(candidate < maxTetta, lerp(maxTetta, candidate, falloff), lerp(maxTetta, candidate, 0.03f));
         }
-        
-        
-        //Tetta = Tetta / pi;
-        //Tetta = clamp(Tetta, 0.0, 1.0);
-        //occlusion = updateSectors(Tetta.x, Tetta.y, occlusion);
+    }  
     
-    }   
-    
-    float res = (maxTetta - minTetta) / pi;
-   // d = dot(Horizon, camera);
-    Horizon = Horizon * 0.5 + 0.5;
-    float3 visibility = float3(res, (minTetta) / pi, (maxTetta) / pi); //    mul(SceneCB.viewProjMatrix, float4(Horizon, 1.f)).xyz; //float2(0, 0);
-    //float3 visibility =  float(bitCount(occlusion)) / float(sectorCount);
+    occlusion = updateSectors(0.0, minTetta / pi, occlusion); // to integrate VBAO later
+    occlusion = updateSectors(maxTetta / pi, 1, occlusion);// to integrate VBAO later
+    float3 visibility = 1 - float(bitCount(occlusion)) / float(sectorCount); 
     return visibility;
 
 }
@@ -282,7 +301,7 @@ void main(ComputeShaderInput IN)
     float3 localNorm = normalize(2.f * nmValue - 1.f); // normalize to avoid unnormalized texture
     float4 tbnQuat = tbn.Load(pixel);
     matrix tbnMatrix = quaternion_to_matrix(tbnQuat);
-    float3 norm = mul(tbnMatrix, float4(localNorm, 0.f)).xyz;
+    float3 norm = normalize(mul(tbnMatrix, float4(localNorm, 0.f)).xyz);
     
     // world position
     float2 uvGlobal = float2(pixel.xy) / float2(w, h);
@@ -290,12 +309,12 @@ void main(ComputeShaderInput IN)
     
 #ifdef USE_VBAO
     
-    float3 ao = CalculateSliceOcclusion(float2(0, -1), pixel, w, h, worldPos, normalize(norm));
-    //ao = CalculateSliceOcclusion(float2(0, 1), pixel, w, h, worldPos, norm);
-    //ao += CalculateSliceOcclusion(normalize(float2(1, 1)), pixel, w, h, worldPos, norm);
-    //ao += CalculateSliceOcclusion(normalize(float2(-1, 1)), pixel, w, h, worldPos, norm);
-    //ao = ao / 4;
-    
+    float3 ao = CalculateSliceOcclusion(float2(1, 1), pixel, w, h, worldPos, norm);
+    ao += CalculateSliceOcclusion(float2(0, 1), pixel, w, h, worldPos, norm);
+    //ao = ao / 2;
+    ao += CalculateSliceOcclusion(normalize(float2(1, 1)), pixel, w, h, worldPos, norm);
+    ao += CalculateSliceOcclusion(normalize(float2(-1, 1)), pixel, w, h, worldPos, norm);
+    ao = ao / 4;
 #endif    
     float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
     for (uint i = 0; i < LightCB.lightsCount.x; ++i)
@@ -314,11 +333,11 @@ void main(ComputeShaderInput IN)
     
     float3 albedo = MaterialsTextures[NonUniformResourceIndex(material.x)].SampleGrad(s1, uv, uvDdx, uvDdy).rgb;
     
-    float3 finalColor = worldPos;// albedo * lightColor;
+    float3 finalColor =  albedo * lightColor;
     #ifdef USE_VBAO
     //output[pixel.xy] = float4(finalColor, 1.f);
-    output[pixel.xy] = float4(ao, 1.f);
-    output_vbao[pixel.xy] = ao;
+    output[pixel.xy] = float4(ao *  finalColor, 1.f);
+    output_vbao[pixel.xy] = ao.x;
     #else
     output[pixel.xy] = float4(finalColor, 1.f);
     output_vbao[pixel.xy] = 0.25f;

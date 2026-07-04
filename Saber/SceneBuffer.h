@@ -8,17 +8,22 @@
 #include "HlslTypesDef.h"
 
 struct SceneBuffer {
-    matrix viewProjMatrix;
-    matrix invViewProjMatrix;
+	matrix viewProjMatrix;
+	matrix viewMatrix;
+	matrix projMatrix;
+	matrix invViewProjMatrix;
+	matrix invProjMatrix;
     float4 cameraPosition;
     float4 nearFar; // x - near, y - far
     float4 viewFrustumPlanes[6];
 
 #ifdef __cplusplus
     void Update(const std::shared_ptr<Camera>& pCamera) {
-        viewProjMatrix = pCamera->GetViewProjectionMatrix();
+		viewProjMatrix = pCamera->GetViewProjectionMatrix();
+		viewMatrix = pCamera->GetViewMatrix();
         invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, viewProjMatrix);
-
+        projMatrix = pCamera->GetProjectionMatrix();
+        invProjMatrix = DirectX::XMMatrixInverse(nullptr, projMatrix);
         DirectX::XMFLOAT3 pos{ pCamera->GetPosition() };
         cameraPosition = { pos.x, pos.y, pos.z, 0.f };
 

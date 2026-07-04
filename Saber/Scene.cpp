@@ -406,10 +406,11 @@ void Scene::UpdateSceneBuffer(
 
     std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
 
-    m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
-    m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-    m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-    m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
+    m_sceneBuffer.Update(pCamera);
+    //m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
+    //m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
+    //m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
+    //m_sceneBuffer.nearFar = { pCamera->m_near, pCamera->m_far, 0.f, 0.f };
 
     camerasMutexLock.unlock();
 

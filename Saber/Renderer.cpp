@@ -154,12 +154,22 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
-                m_pDeviceContext,
-                pCommandList,
-                m_pGBuffers[0],
-                DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
-            ));
+
+
+			std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateModelFromGLTF(
+				m_pDeviceContext,
+				pCommandList,
+				filepath,
+				m_pGBuffers[0],
+				DirectX::XMMatrixScaling(2.f, 2.f, 2.f)* DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+			));
+			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
+				m_pDeviceContext,
+				pCommandList,
+				m_pGBuffers[0],
+				DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
+			));
 
 			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
 				m_pDeviceContext,
@@ -174,6 +184,7 @@ void Renderer::Initialize(HWND hWnd) {
 				m_pGBuffers[0],
 				DirectX::XMMatrixIdentity()
 			));
+			         
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -182,14 +193,14 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            //std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            //pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
-            //    m_pDeviceContext,
-            //    pCommandList,
-            //    filepath,
-            //    m_pGBuffers[0],
-            //    DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
-            //));
+            std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+            pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+                m_pDeviceContext,
+                pCommandList,
+                filepath,
+                m_pGBuffers[0],
+                DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+            ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
 			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
 				m_pDeviceContext,
