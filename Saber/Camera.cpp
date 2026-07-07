@@ -267,8 +267,8 @@ void DrawSettings(Camera::Settings& s) {
 		ImGui::SliderFloat("Aspect ratio", &s.aspectRatio, 0.1f, 4.0f);
 	}
 	else {
-		ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 20.0f);
-		ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 20.0f);
+		ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 200.0f);
+		ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 200.0f);
 	}
 }
 

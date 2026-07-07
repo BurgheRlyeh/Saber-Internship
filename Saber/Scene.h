@@ -56,7 +56,7 @@ class Scene {
 
     std::shared_ptr<Texture> m_pLightVolumeTarget{};
     std::shared_ptr<RenderObject> m_pLightVolumeGrid{};
-    float m_lightVolumeShadowCoef{ 1.0f };
+    float m_lightVolumeShadowCoef{ 0.1f };
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,

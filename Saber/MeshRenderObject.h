@@ -224,6 +224,8 @@ public:
         std::shared_ptr<DeviceContext> pDeviceContext,
         const std::shared_ptr<CommandList>& pCommandList,
         std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoPath,
+        const std::wstring& normalPath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         DirectX::XMFLOAT3 positions[24]{
@@ -310,8 +312,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"Brick.dds",
-            L"BrickNM.dds"
+            albedoPath,
+            normalPath
         ));
 
         return pObj;
@@ -321,6 +323,8 @@ public:
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		const std::shared_ptr<CommandList>& pCommandList,
 		std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoPath,
+        const std::wstring& normalPath,
 		const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
 	) {
         std::vector<uint32_t> indices{};
@@ -383,8 +387,8 @@ public:
 		pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
 			pDeviceContext,
 			pCommandList,
-			L"Brick.dds",
-			L"BrickNM.dds"
+            albedoPath,
+            normalPath
 		));
 
 		return pObj;
@@ -395,6 +399,8 @@ public:
         const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoPath,
+        const std::wstring& normalPath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -444,8 +450,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"barbarian_diffuse.dds",
-            L"barb2_n.dds"
+            albedoPath,
+            normalPath
         ));
 
         return pObj;
@@ -513,6 +519,8 @@ public:
         const std::shared_ptr<CommandList>& pCommandList,
         std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoPath,
+        const std::wstring& normalPath,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -562,8 +570,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"grassAlbedo.dds",
-            L"grassNormal.dds"
+            albedoPath,
+            normalPath
         ));
 
         return pObj;
@@ -783,7 +791,8 @@ protected:
 		const D3D12_RT_FORMAT_ARRAY& rtvFormats
 	) {
 		CD3DX12_DEPTH_STENCIL_DESC1 depthStencilDesc{ D3D12_DEFAULT };
-        depthStencilDesc.DepthEnable = FALSE;
+        depthStencilDesc.DepthEnable = TRUE;
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 		depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
 		CD3DX12_RASTERIZER_DESC rasterizerDesc{ D3D12_DEFAULT };
@@ -803,7 +812,7 @@ protected:
 		CD3DX12_PIPELINE_STATE_STREAM pipelineStateStream{};
 		pipelineStateStream.InputLayout = { inputLayout, static_cast<UINT>(inputLayoutSize) };
 		pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pipelineStateStream.DSVFormat = DXGI_FORMAT_UNKNOWN;
+        pipelineStateStream.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 		pipelineStateStream.DepthStencilState = depthStencilDesc;
 		pipelineStateStream.RasterizerState = rasterizerDesc;
 		pipelineStateStream.RTVFormats = rtvFormats;

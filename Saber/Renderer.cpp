@@ -28,7 +28,7 @@
 #include "UIContext.h"
 #include "imgui.h"
 
-static constexpr size_t ScenesCount{ 4 };
+static constexpr size_t ScenesCount{ 5 };
 
 Renderer::Renderer(std::shared_ptr<JobSystem<>> pJobSystem, uint8_t backBuffersCnt, bool isUseWarp, uint32_t resWidth, uint32_t resHeight, bool isUseVSync)
     : m_useWarp(isUseWarp)
@@ -155,71 +155,97 @@ void Renderer::Initialize(HWND hWnd) {
         sceneObjectAdders.resize(ScenesCount);
         sceneObjectAdders[0] = [&](std::unique_ptr<Scene>& pScene) {};
         sceneObjectAdders[1] = [&](std::unique_ptr<Scene>& pScene) {
-            std::shared_ptr<CommandList> pCommandList{
-                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
-            };
+   //         std::shared_ptr<CommandList> pCommandList{
+   //             m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+   //         };
 
-			pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
-				m_pDeviceContext,
-				pCommandList,
-				m_pGBuffers[0],
-				DirectX::XMMatrixIdentity()
-			));
+			//pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateTextureCube(
+			//	m_pDeviceContext,
+			//	pCommandList,
+			//	m_pGBuffers[0],
+   //             L"Brick.dds",
+   //             L"BrickNM.dds",
+			//	DirectX::XMMatrixIdentity()
+			//));
 
-            //float scale{ 100.0f };
-            //pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateHeightMap(
-            //    m_pDeviceContext,
-            //    pCommandList,
-            //    m_pGBuffers[0],
-            //    DirectX::XMMatrixScaling(scale, 2.50f, scale) * DirectX::XMMatrixTranslation(-scale / 2.0f, 1.0f, -scale / 2.0f)
-            //));
+   //         //float scale{ 100.0f };
+   //         //pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateHeightMap(
+   //         //    m_pDeviceContext,
+   //         //    pCommandList,
+   //         //    m_pGBuffers[0],
+   //         //    DirectX::XMMatrixScaling(scale, 2.50f, scale) * DirectX::XMMatrixTranslation(-scale / 2.0f, 1.0f, -scale / 2.0f)
+   //         //));
 
-            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
+   //         m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };
         sceneObjectAdders[2] = [&](std::unique_ptr<Scene>& pScene) {
+   //         std::shared_ptr<CommandList> pCommandList{
+   //             m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+   //         };
+
+   //         std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
+   //         pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+   //             m_pDeviceContext,
+   //             pCommandList,
+   //             filepath,
+   //             m_pGBuffers[0],
+   //             L"barbarian_diffuse.dds",
+   //             L"barb2_n.dds",
+   //             DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+   //         ));
+   //         std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
+			//pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+			//	m_pDeviceContext,
+			//	pCommandList,
+			//	filepathGrass,
+			//	m_pGBuffers[0],
+   //             L"grassAlbedo.dds",
+   //             L"grassNormal.dds",
+			//	DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
+			//));
+
+   //         m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
+        };
+        sceneObjectAdders[3] = [&](std::unique_ptr<Scene>& pScene) {
+            //std::shared_ptr<CommandList> pCommandList{
+            //    m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
+            //};
+
+            //std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
+            //DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
+
+            //std::random_device rd;
+            //std::mt19937 gen(rd());
+            //std::uniform_real_distribution<float> posDist(-10.f, 10.f);
+            //for (size_t i{}; i < 100; ++i) {
+            //    pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
+            //        m_pDeviceContext,
+            //        pCommandList,
+            //        filepathGrass,
+            //        m_pGBuffers[0],
+            //        L"grassAlbedo.dds",
+            //        L"grassNormal.dds",
+            //        scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
+            //    ));
+            //}
+
+            //m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
+        };
+        sceneObjectAdders[4] = [&](std::unique_ptr<Scene>& pScene) {
             std::shared_ptr<CommandList> pCommandList{
                 m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
             };
 
-            std::filesystem::path filepath{ L"../../Resources/StaticModels/barbarian_rig_axe_2_a.glb" };
-            pScene->AddObject(RenderSubsystemType::Dynamic, TestTextureRenderObject::CreateModelFromGLTF(
+            std::filesystem::path filepath{ L"../../Resources/StaticModels/city.glb" };
+            pScene->AddObject(RenderSubsystemType::Default, TestTextureRenderObject::CreateModelFromGLTF(
                 m_pDeviceContext,
                 pCommandList,
                 filepath,
                 m_pGBuffers[0],
-                DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
+                L"city.dds",
+                L"white.dds"
+                , DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2)//DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
-            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-			pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-				m_pDeviceContext,
-				pCommandList,
-				filepathGrass,
-				m_pGBuffers[0],
-				DirectX::XMMatrixScaling(.025f, .025f, .025f) * DirectX::XMMatrixTranslation(0.f, -2.f, -1.f)
-			));
-
-            m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
-        };
-        sceneObjectAdders[3] = [&](std::unique_ptr<Scene>& pScene) {
-            std::shared_ptr<CommandList> pCommandList{
-                m_pDeviceContext->GetCommandQueue()->GetCommandList(m_pDeviceContext->GetDevice())
-            };
-
-            std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
-            DirectX::XMMATRIX scale{ DirectX::XMMatrixScaling(.025f, .025f, .025f) };
-
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_real_distribution<float> posDist(-10.f, 10.f);
-            for (size_t i{}; i < 100; ++i) {
-                pScene->AddObject(RenderSubsystemType::AlphaKill, TestAlphaRenderObject::CreateAlphaModelFromGLTF(
-                    m_pDeviceContext,
-                    pCommandList,
-                    filepathGrass,
-                    m_pGBuffers[0],
-                    scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
-                ));
-            }
 
             m_pDeviceContext->GetCommandQueue()->ExecuteCommandListImmediately(pCommandList);
         };

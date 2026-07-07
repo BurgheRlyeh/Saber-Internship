@@ -118,5 +118,9 @@ void DrawSettings(DirectionalLight& light) {
 		light.SetDistance(dist);
 	}
 
-	//DrawSettings(static_cast<StaticCamera::Settings&>(light.GetShadowCamera().GetSettings()));
+	if (ImGui::CollapsingHeader("Shadow Camera")) {
+		ImGui::PushID("ShadowCamera");
+		DrawSettings(static_cast<StaticCamera::Settings&>(light.GetShadowCamera().GetSettings()));
+		ImGui::PopID();
+	}
 }

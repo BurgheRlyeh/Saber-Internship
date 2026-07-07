@@ -363,7 +363,7 @@ void Scene::RenderLightVolumeGrid(
 		static_cast<UINT>(rtvs.size()),
 		rtvs.data(),
 		FALSE,
-		nullptr
+        &m_pDepthTarget->GetDsvCpuDescHandle()
 	);
 
 	pD3D12CommandList->SetGraphicsRootConstantBufferView(
@@ -669,7 +669,7 @@ void Scene::DrawTestUI() {
 
     ImGui::Begin("Test");
 
-    ImGui::SliderFloat("Shadow scale coef", &m_lightVolumeShadowCoef, 0.0f, 10.0f);
+    ImGui::SliderFloat("Shadow scale coef", &m_lightVolumeShadowCoef, 0.0f, 0.1f);
 
 	ImGui::Text("GPU handle = %p", m_pLightVolumeTarget->GetSrvDescHandle().ptr);
 	ImGui::Text(
