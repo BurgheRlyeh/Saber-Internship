@@ -27,7 +27,7 @@ VSOutput main(
 {
     VSOutput vtxOut;
 
-    float depthSm = ShadowMap.SampleLevel(s1, uv, 0).r;
+    float depthSm = ShadowMap.SampleLevel(s1, uv, 0).r - 0.001f;
 
     float4 lightNdc = float4(uv.x * 2.f - 1.f, 1.f - uv.y * 2.f, depthSm, 1.f);
 
