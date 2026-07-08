@@ -96,6 +96,7 @@ void Scene::Resize(
     uint64_t width, uint32_t height
 ) {
     m_pTargetTexture->Resize(pDevice, width, height);
+    m_pLightVolumeTarget->Resize(pDevice, width, height);
     UpdateCamerasAspectRatio(static_cast<float>(width) / height);
 }
 

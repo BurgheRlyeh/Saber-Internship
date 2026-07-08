@@ -14,8 +14,6 @@ class Texture {
 	std::wstring m_name{};
 
 	D3D12_RESOURCE_DESC m_desc{};
-	UINT64 m_width{};
-	UINT m_height{};
 
 	size_t m_capacity{};
 
@@ -35,8 +33,6 @@ public:
 		//, const EnumFlags<ResourceView> views = ResourceView::Any
 	) : m_name(name),
 		m_desc(desc),
-		m_width(desc.Width),
-		m_height(desc.Height),
 		m_capacity(capacity)
 	{
 		if (IsSrvDesc(desc)) {
@@ -57,11 +53,11 @@ public:
 	}
 
 	UINT64 GetWidth() const {
-		return m_width;
+		return m_desc.Width;
 	}
 
 	UINT64 GetHeight() const {
-		return m_height;
+		return m_desc.Height;
 	}
 
 	D3D12_RESOURCE_STATES GetState() const {
