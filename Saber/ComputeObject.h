@@ -14,11 +14,11 @@ class ComputeObject {
 protected:
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
     std::shared_ptr<ShaderResource> m_pComputeShaderResource{};
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
+    Microsoft::WRL::ComPtr<D3D12PipelineState> m_pPipelineState{};
 
 public:
     struct RootSignatureData {
-        Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
+        Microsoft::WRL::ComPtr<D3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
     };
     struct ComputeShaderData {

@@ -6,11 +6,13 @@
 #include <stdexcept>
 
 #include "Atlas.h"
+#include "CommandListTypes.h"
 #include "DynamicUploadRingBuffer.h"
 #include "DescriptorHeapManager.h"
 #include "FencedQueue.h"
 
 class CommandQueue;
+class CommandListManager;
 class DescriptorHeap;
 class DescriptorHeapManager;
 class Device;
@@ -29,10 +31,7 @@ class DeviceContext {
 
 	std::shared_ptr<Device> m_pDevice{};
 
-	// Command Queues
-	std::shared_ptr<CommandQueue> m_pCommandQueueDirect{};
-	std::shared_ptr<CommandQueue> m_pCommandQueueCompute{};
-	std::shared_ptr<CommandQueue> m_pCommandQueueCopy{};
+	std::shared_ptr<CommandListManager> m_pCommandListMgr{};
 
 	std::shared_ptr<DescriptorHeapManager> m_pDescHeapManager{};
 
@@ -49,30 +48,21 @@ class DeviceContext {
 	std::shared_ptr<FrameDataBuffer<std::shared_ptr<GPUResource>>> m_pFrameDataBuffer{};
 
 public:
-	DeviceContext(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
-	~DeviceContext();
-	void InitializeContext(
+	DeviceContext(
+		Microsoft::WRL::ComPtr<DXGIAdapter> pAdapter,
 		const std::array<DescriptorHeapManager::DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 	);
+	~DeviceContext();
 
 	std::shared_ptr<Device> GetDevice() const {
 		return m_pDevice;
 	}
 
-	std::shared_ptr<CommandQueue> GetCommandQueue(
-		const D3D12_COMMAND_LIST_TYPE& type = D3D12_COMMAND_LIST_TYPE_DIRECT
-	) const {
-		switch (type) {
-		case D3D12_COMMAND_LIST_TYPE_DIRECT:
-			return m_pCommandQueueDirect;
-		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-			return m_pCommandQueueCompute;
-		case D3D12_COMMAND_LIST_TYPE_COPY:
-			return m_pCommandQueueCopy;
-		default:
-			throw std::runtime_error("Unsupported CommandQueue type");
-		}
+	// CommandListManager
+	std::shared_ptr<CommandListManager> GetCommandListManager() const {
+		return m_pCommandListMgr;
 	}
+	std::shared_ptr<CommandQueue> GetCommandQueue(CommandQueueType type = CommandQueueType::Direct) const;
 
 	std::shared_ptr<DescriptorHeap> GetDescriptorHeap(DescRangeType descRangeType) const {
 		return m_pDescHeapManager->GetDescHeap(descRangeType);
@@ -122,5 +112,5 @@ public:
 	}
 
 private:
-	static void SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice);
+	static void SetInfoQueueFilter(Microsoft::WRL::ComPtr<D3D12Device>& pDevice);
 };

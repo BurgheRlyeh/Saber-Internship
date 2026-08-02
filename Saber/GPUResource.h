@@ -57,7 +57,7 @@ class GPUResource {
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> m_pAllocation{};
 
 protected:
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_pResource{};
+	Microsoft::WRL::ComPtr<D3D12Resource> m_pResource{};
 	D3D12_RESOURCE_STATES m_state{};
 
 	GPUResource() = default;
@@ -95,7 +95,7 @@ public:
 		const ResourceDesc& resDesc
 	);
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> GetD3D12Resource() const;
+	Microsoft::WRL::ComPtr<D3D12Resource> GetD3D12Resource() const;
 
 	D3D12_RESOURCE_DESC GetResourceDesc() const {
 		return GetD3D12Resource()->GetDesc();
@@ -171,7 +171,7 @@ public:
 		std::shared_ptr<Device> pDevice,
 		const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc = nullptr,
-		Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource = nullptr
+		Microsoft::WRL::ComPtr<D3D12Resource> pCounterResource = nullptr
 	);
 
 	bool IsRtv() const;

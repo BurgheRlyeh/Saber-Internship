@@ -4,6 +4,7 @@
 
 #include <utility>
 
+#include "CommandListTypes.h"
 #include "ComputeObject.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
@@ -79,12 +80,12 @@ public:
 			buffer.RecreateBufferAndViews(
 				pDeviceContext->GetDevice(),
 				updCnt,
-				pCommandList->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+				pCommandList->GetType() == CommandListType::Copy
 				? D3D12_RESOURCE_STATE_COMMON
 				: D3D12_RESOURCE_STATE_COPY_DEST
 			);
 		}
-		else if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		else if (pCommandList->GetType() != CommandListType::Copy) {
 			buffer.GetResource()->ResourceTransition(
 				pCommandList,
 				D3D12_RESOURCE_STATE_COPY_DEST
@@ -131,7 +132,7 @@ public:
 		}
 		m_updRange = InvalidUpdRange;
 
-		if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		if (pCommandList->GetType() != CommandListType::Copy) {
 			buffer.GetResource()->ResourceTransition(
 				pCommandList,
 				prevState
@@ -175,12 +176,12 @@ public:
 			buffer.RecreateBufferAndViews(
 				pDeviceContext->GetDevice(),
 				updCnt,
-				pCommandList->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+				pCommandList->GetType() == CommandListType::Copy
 				? D3D12_RESOURCE_STATE_COMMON
 				: D3D12_RESOURCE_STATE_COPY_DEST
 			);
 		}
-		else if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		else if (pCommandList->GetType() != CommandListType::Copy) {
 			buffer.GetResource()->ResourceTransition(
 				pCommandList,
 				D3D12_RESOURCE_STATE_COPY_DEST
@@ -216,7 +217,7 @@ public:
 			);
 		}
 
-		if (pCommandList->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		if (pCommandList->GetType() != CommandListType::Copy) {
 			buffer.GetResource()->ResourceTransition(
 				pCommandList,
 				prevState

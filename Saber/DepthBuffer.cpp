@@ -153,7 +153,7 @@ void DepthBuffer::SetSinglePassDownsampler(
 
 void DepthBuffer::CreateHierarchicalDepthBuffer(
 	std::shared_ptr<CommandList> pCommandList,
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
+	Microsoft::WRL::ComPtr<D3D12DescriptorHeap> pDescHeap
 ) {
 	if (!m_pSinglePassDownsampler) {
 		return;

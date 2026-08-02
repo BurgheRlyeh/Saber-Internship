@@ -47,7 +47,7 @@ void DDSTexture::LoadFromDDS(
 		}
 	}
 
-	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+	if (pCommandListDirect->GetType() != CommandListType::Copy) {
 		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_DEST);
 	}
 	std::shared_ptr<GPUResource> pIntermediate{
@@ -61,7 +61,7 @@ void DDSTexture::LoadFromDDS(
 	);
 	pDeviceContext->AddIntermediate(pIntermediate);
 
-	if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+	if (pCommandListDirect->GetType() != CommandListType::Copy) {
 		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	}
 }

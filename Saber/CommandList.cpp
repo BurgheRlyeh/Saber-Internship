@@ -2,35 +2,42 @@
 
 #include "pix3.h"
 
+#include "CommandListManager.h"
+
 CommandList::CommandList(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+	CommandListManager& manager,
+	Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> pCommandList,
+	size_t priority,
 	std::function<void()> beforeExec,
 	std::function<void()> afterExec
 ) : m_name(name),
+	m_manager(manager),
 	m_pD3D12CommandList(pCommandList),
+	m_priority(priority),
 	m_beforeExec(beforeExec),
 	m_afterExec(afterExec) {
 	m_pD3D12CommandList->SetName(name.c_str());
 }
 
-Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandList::GetD3D12CommandList() const {
+Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> CommandList::GetD3D12CommandList() const {
 	return m_pD3D12CommandList;
 }
 
-D3D12_COMMAND_LIST_TYPE CommandList::GetType() const {
-	return m_pD3D12CommandList->GetType();
+CommandListType CommandList::GetType() const {
+	return ToListType(m_pD3D12CommandList->GetType());
 }
 
-bool CommandList::IsReadyForExecution() const {
-	return m_isReadyForExecution.load();
+uint64_t CommandList::Execute() {
+	return m_manager.ExecuteCommandList(shared_from_this());
 }
 
-void CommandList::SetReadyForExecution() {
-	while (m_pixEventsBegan) {
-		PixEndEvent();
-	}
-	m_isReadyForExecution.store(true);
+void CommandList::ExecuteImmediately() {
+	m_manager.ExecuteCommandListImmediately(shared_from_this());
+}
+
+void CommandList::PushForExecution() {
+	m_manager.PushForExecution(shared_from_this());
 }
 
 void CommandList::BeforeExecute() const {
@@ -51,4 +58,10 @@ void CommandList::PixEndEvent() {
 	assert(m_pixEventsBegan > 0);
 	--m_pixEventsBegan;
 	PIXEndEvent(GetD3D12CommandList().Get());
+}
+
+void CommandList::PixEndAllEvents() {
+	while (m_pixEventsBegan) {
+		PixEndEvent();
+	}
 }

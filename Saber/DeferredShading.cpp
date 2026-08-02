@@ -20,7 +20,7 @@ std::shared_ptr<ComputeObject> DeferredShading::CreateDefferedShadingComputeObje
     return pComputeObj;
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> DeferredShading::CreateRootSignatureBlob() {
+Microsoft::WRL::ComPtr<D3DBlob> DeferredShading::CreateRootSignatureBlob() {
     size_t rpId{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[7]{};
     rootParameters[rpId++].InitAsConstantBufferView(0);
@@ -66,7 +66,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> DeferredShading::CreateRootSignatureBlob() {
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
     // Serialize the root signature.
-    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+    Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
     ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
         &rootSignatureDescription,
         D3D_ROOT_SIGNATURE_VERSION_1_1,

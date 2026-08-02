@@ -32,7 +32,7 @@ private:
         return pComputeObj;
     }
 
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob() {
         size_t rpId{};
         CD3DX12_ROOT_PARAMETER1 rootParameters[4]{};
         rootParameters[rpId++].InitAsConstants(4, 0);
@@ -44,7 +44,7 @@ private:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters);
 
         // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+        Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
         HRESULT hr{ D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
             D3D_ROOT_SIGNATURE_VERSION_1_1,

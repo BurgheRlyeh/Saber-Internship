@@ -33,7 +33,7 @@ void GPUResource::ResourceTransition(
 	m_state = toState;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource> GPUResource::GetD3D12Resource() const {
+Microsoft::WRL::ComPtr<D3D12Resource> GPUResource::GetD3D12Resource() const {
 	return m_pResource;
 }
 
@@ -202,7 +202,7 @@ void GPUResource::CreateUnorderedAccessView(
 	std::shared_ptr<Device> pDevice,
 	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc,
-	Microsoft::WRL::ComPtr<ID3D12Resource> pCounterResource
+	Microsoft::WRL::ComPtr<D3D12Resource> pCounterResource
 ) {
 	assert(IsUav());
 	auto desc{ GetUavDesc() };

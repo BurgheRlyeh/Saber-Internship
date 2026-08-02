@@ -32,13 +32,51 @@
 #include <cassert>
 #include <exception>
 
+// Used DXGI and D3D12 types versions
+
+// DXGI
+using DXGIFactory = IDXGIFactory6;
+using DXGIAdapter = IDXGIAdapter4;
+using DXGISwapChain = IDXGISwapChain4;
+
+// Device
+using D3D12Device = ID3D12Device2;
+
+// Command submission
+using D3D12CommandQueue = ID3D12CommandQueue;
+using D3D12CommandAllocator = ID3D12CommandAllocator;
+using D3D12CommandList = ID3D12CommandList;
+using D3D12GraphicsCommandList = ID3D12GraphicsCommandList2;
+using D3D12CommandSignature = ID3D12CommandSignature;
+
+// Pipeline
+using D3D12RootSignature = ID3D12RootSignature;
+using D3D12PipelineState = ID3D12PipelineState;
+using D3D12PipelineLibrary = ID3D12PipelineLibrary1;
+using D3DBlob = ID3DBlob;
+
+// Resources
+using D3D12Resource = ID3D12Resource;
+using D3D12DescriptorHeap = ID3D12DescriptorHeap;
+
+// Synchronization
+using D3D12Fence = ID3D12Fence;
+
+// Debug & diagnostics
+using D3D12Debug = ID3D12Debug1;
+using D3D12InfoQueue = ID3D12InfoQueue;
+using D3D12DeviceRemovedExtendedData = ID3D12DeviceRemovedExtendedData;
+using D3D12DeviceRemovedExtendedDataSettings = ID3D12DeviceRemovedExtendedDataSettings;
+
+// Helper functions
+
 inline void ThrowIfFailed(HRESULT hr, Microsoft::WRL::ComPtr<ID3D12Device> pDevice = nullptr) {
     if (SUCCEEDED(hr)) {
         return;
     }
 
     // todo
-    if (Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> pDred;
+    if (Microsoft::WRL::ComPtr<D3D12DeviceRemovedExtendedData> pDred;
         pDevice && SUCCEEDED(pDevice.As(&pDred))
         ) {
         if (D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;

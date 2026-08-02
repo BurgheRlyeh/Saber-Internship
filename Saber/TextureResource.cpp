@@ -17,7 +17,7 @@ TextureResource::TextureResource(
 }
 
 std::shared_ptr<TextureResource> TextureResource::FromSwapChain(
-	Microsoft::WRL::ComPtr<IDXGISwapChain4> pSwapChain,
+	Microsoft::WRL::ComPtr<DXGISwapChain> pSwapChain,
 	size_t backBufferId
 ) {
 	struct MakeSharedEnabler : public TextureResource {};
@@ -29,40 +29,3 @@ std::shared_ptr<TextureResource> TextureResource::FromSwapChain(
 
 	return pTexRes;
 }
-
-//bool TextureResource::IsDsv() const {
-//	return GetResource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-//}
-//std::optional<D3D12_DEPTH_STENCIL_VIEW_DESC> GPUResource::GetDsvDesc() const {
-//	return std::nullopt;
-//}
-//void TextureResource::CreateDepthStencilView(
-//	std::shared_ptr<Device> pDevice,
-//	const D3D12_CPU_DESCRIPTOR_HANDLE& cpuDescHandle,
-//	const D3D12_DEPTH_STENCIL_VIEW_DESC* pDsvDesc
-//) {
-//	assert(IsDsv());
-//	pDevice->GetD3D12Device()->CreateDepthStencilView(
-//		GetResource().Get(),
-//		pDsvDesc ? pDsvDesc : GetDsvDesc(),
-//		cpuDescHandle
-//	);
-//}
-//
-//void TextureResource::ClearDepthTarget(
-//	std::shared_ptr<CommandList> pCommandList,
-//	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle,
-//	float depth,
-//	const D3D12_CLEAR_FLAGS& clearFlags,
-//	uint8_t stencil
-//) {
-//	assert(IsDsv());
-//	pCommandList->GetD3D12CommandList()->ClearDepthStencilView(
-//		cpuDescHandle,
-//		clearFlags,
-//		depth,
-//		stencil,
-//		0,
-//		nullptr
-//	);
-//}

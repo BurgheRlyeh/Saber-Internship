@@ -15,7 +15,7 @@ class DescriptorHeap : public std::enable_shared_from_this<DescriptorHeap> {
 	friend class DescRange;
 
 	D3D12_DESCRIPTOR_HEAP_DESC m_heapDesc{};
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pDescHeap{};
+	Microsoft::WRL::ComPtr<D3D12DescriptorHeap> m_pDescHeap{};
 	UINT m_handleIncSize{};
 
 	std::shared_ptr<Atlas<DescRange>> m_pRangesAtlas{};
@@ -29,7 +29,7 @@ public:
 		const D3D12_DESCRIPTOR_HEAP_DESC& heapDesc
 	);
 
-	inline Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> GetD3D12DescriptorHeap() const {
+	inline Microsoft::WRL::ComPtr<D3D12DescriptorHeap> GetD3D12DescriptorHeap() const {
 		return m_pDescHeap;
 	}
 

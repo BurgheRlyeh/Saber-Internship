@@ -23,7 +23,7 @@ CopyPostProcessing::CopyPostProcessing(
     );
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> CopyPostProcessing::CreateRootSignatureBlob() {
+Microsoft::WRL::ComPtr<D3DBlob> CopyPostProcessing::CreateRootSignatureBlob() {
     // Allow input layout and deny unnecessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -57,7 +57,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> CopyPostProcessing::CreateRootSignatureBlob() {
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
     // Serialize the root signature.
-    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+    Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
     ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
         &rootSignatureDescription,
         D3D_ROOT_SIGNATURE_VERSION_1_1,

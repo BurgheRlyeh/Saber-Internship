@@ -9,7 +9,7 @@
 #include <atomic>
 #include <mutex>
 
-#include "Scene.h"
+#include "CommandListTypes.h"
 #include "JobSystem.h"
 
 class DepthBuffer;
@@ -46,11 +46,11 @@ private:
     std::shared_ptr<DeviceContext> m_pDeviceContext{};
 
     // todo: move to some swapchain wrapper
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain{};
+    Microsoft::WRL::ComPtr<DXGISwapChain> m_pSwapChain{};
     std::vector<std::shared_ptr<TextureResource>> m_pBackBuffers{};
     std::shared_ptr<DescRange> m_pBackBuffersDescHeapRange{};
     UINT m_currBackBufferId{};
-    std::vector<uint64_t> m_frameFenceValues{ m_numFrames };
+    std::vector<FrameFenceValues> m_frameFenceValues{ m_numFrames };
 
     // By default, enable V-Sync.
     // Can be toggled with the V key.
@@ -137,37 +137,38 @@ private:
     bool CheckTearingSupport();
 
 #if defined(_DEBUG)
+    Microsoft::WRL::ComPtr<D3D12Debug> GetDebugInterface();
     void EnableDebugLayer();
     void EnableGPUBasedValidation();
     void EnableDRED();
 #endif
 
-	Microsoft::WRL::ComPtr<IDXGIFactory6> CreateDxgiFactory(UINT createFlags = 0) const;
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterWarp(
-		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory
+	Microsoft::WRL::ComPtr<DXGIFactory> CreateDxgiFactory(UINT createFlags = 0) const;
+	Microsoft::WRL::ComPtr<DXGIAdapter> GetDxgiAdapterWarp(
+		Microsoft::WRL::ComPtr<DXGIFactory> pDxgiFactory
 	) const;
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterByPreference(
-		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+	Microsoft::WRL::ComPtr<DXGIAdapter> GetDxgiAdapterByPreference(
+		Microsoft::WRL::ComPtr<DXGIFactory> pDxgiFactory,
 		const DXGI_GPU_PREFERENCE& preference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
 		size_t id = 0,
 		const DXGI_ADAPTER_FLAG& flags = DXGI_ADAPTER_FLAG_NONE
 	) const;
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetDxgiAdapterByVideoMemory(
-		Microsoft::WRL::ComPtr<IDXGIFactory6> pDxgiFactory,
+	Microsoft::WRL::ComPtr<DXGIAdapter> GetDxgiAdapterByVideoMemory(
+		Microsoft::WRL::ComPtr<DXGIFactory> pDxgiFactory,
 		size_t id = 0,
 		const DXGI_ADAPTER_FLAG& flags = DXGI_ADAPTER_FLAG_NONE
 	) const;
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain(
+    Microsoft::WRL::ComPtr<DXGISwapChain> CreateSwapChain(
         HWND hWnd,
-        Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
+        Microsoft::WRL::ComPtr<D3D12CommandQueue> commandQueue,
         uint32_t width,
         uint32_t height,
         uint32_t bufferCount
     );
     std::vector<std::shared_ptr<TextureResource>> CreateBackBuffers(
         std::shared_ptr<Device> pDevice,
-        Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain,
+        Microsoft::WRL::ComPtr<DXGISwapChain> swapChain,
         std::shared_ptr<DescRange> pDescHeapRange
     );
 

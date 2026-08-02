@@ -10,14 +10,14 @@
 
 template <IndirectCommandConcept IndirectCommand>
 class IndirectCommandBuffer : public Buffer<IndirectCommand> {
-	Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_pCommandSignature{};
+	Microsoft::WRL::ComPtr<D3D12CommandSignature> m_pCommandSignature{};
 
 public:
 	IndirectCommandBuffer(
 		const std::wstring& renderSubsystemName,
 		std::shared_ptr<DeviceContext> pDeviceContext,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
-		Microsoft::WRL::ComPtr<ID3D12RootSignature> pRootSignature,
+		Microsoft::WRL::ComPtr<D3D12RootSignature> pRootSignature,
 		uint32_t capacity
 	) : Buffer<IndirectCommand>(
 		renderSubsystemName,
@@ -53,14 +53,14 @@ public:
 	}
 
 protected:
-	static Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateCommandSignature(
+	static Microsoft::WRL::ComPtr<D3D12CommandSignature> CreateCommandSignature(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc,
-		const Microsoft::WRL::ComPtr<ID3D12RootSignature>& pRootSignature
+		const Microsoft::WRL::ComPtr<D3D12RootSignature>& pRootSignature
 	) {
 		assert(commandSignatureDesc.ByteStride == sizeof(IndirectCommand));
 
-		Microsoft::WRL::ComPtr<ID3D12CommandSignature> pCommandSignature{};
+		Microsoft::WRL::ComPtr<D3D12CommandSignature> pCommandSignature{};
 		ThrowIfFailed(pDevice->GetD3D12Device()->CreateCommandSignature(
 			&commandSignatureDesc,
 			pRootSignature.Get(),

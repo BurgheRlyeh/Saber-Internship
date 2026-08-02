@@ -121,7 +121,7 @@ void UIContext::Render(
     pCommandList->PixBeginEvent(L"ImGui");
     auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
 
-    const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pSrvHeap{
+    const Microsoft::WRL::ComPtr<D3D12DescriptorHeap> pSrvHeap{
         pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap()
     };
     pD3D12CommandList->SetDescriptorHeaps(1, pSrvHeap.GetAddressOf());

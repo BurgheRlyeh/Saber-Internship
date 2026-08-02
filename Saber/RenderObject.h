@@ -14,7 +14,7 @@ protected:
     std::shared_ptr<RootSignatureResource> m_pRootSignatureResource{};
     std::shared_ptr<ShaderResource> m_pVertexShaderResource{};
     std::shared_ptr<ShaderResource> m_pPixelShaderResource{};
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState{};
+    Microsoft::WRL::ComPtr<D3D12PipelineState> m_pPipelineState{};
 
     RenderObject() = default;
     RenderObject(const RenderObject&) = default;
@@ -22,7 +22,7 @@ protected:
 
 public:
     struct RootSignatureData {
-        Microsoft::WRL::ComPtr<ID3DBlob> pRootSignatureBlob{};
+        Microsoft::WRL::ComPtr<D3DBlob> pRootSignatureBlob{};
         std::wstring rootSignatureFilename{};
     };
     struct ShaderData {
@@ -49,8 +49,8 @@ public:
 		UINT rootParameterIndex
     ) const;
 
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> GetPipelineState() const;
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetRootSignature() const;
+    Microsoft::WRL::ComPtr<D3D12PipelineState> GetPipelineState() const;
+	Microsoft::WRL::ComPtr<D3D12RootSignature> GetRootSignature() const;
 
 	void SetPipelineStateAndRootSignature(
         std::shared_ptr<CommandList> pCommandList

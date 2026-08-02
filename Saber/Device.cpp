@@ -2,7 +2,7 @@
 
 Device::Device(
 	const std::wstring& name,
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
+	Microsoft::WRL::ComPtr<DXGIAdapter> pAdapter
 ) {
 	m_pDevice = CreateDevice(pAdapter);
 	m_pDevice->SetName(name.c_str());
@@ -19,7 +19,7 @@ Device::~Device() {
 	m_pDevice.Reset();
 }
 
-Microsoft::WRL::ComPtr<ID3D12Device2> Device::GetD3D12Device() const {
+Microsoft::WRL::ComPtr<D3D12Device> Device::GetD3D12Device() const {
 	return m_pDevice;
 }
 
@@ -27,11 +27,11 @@ Microsoft::WRL::ComPtr<D3D12MA::Allocator> Device::GetD3D12Allocator() const {
 	return m_pAllocator;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Device2> Device::CreateDevice(
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter,
+Microsoft::WRL::ComPtr<D3D12Device> Device::CreateDevice(
+	Microsoft::WRL::ComPtr<DXGIAdapter> pAdapter,
 	const D3D_FEATURE_LEVEL& featureLevel
 ) {
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice;
+	Microsoft::WRL::ComPtr<D3D12Device> pDevice;
 	ThrowIfFailed(D3D12CreateDevice(
 		pAdapter.Get(),
 		featureLevel,
@@ -41,8 +41,8 @@ Microsoft::WRL::ComPtr<ID3D12Device2> Device::CreateDevice(
 }
 
 Microsoft::WRL::ComPtr<D3D12MA::Allocator> Device::CreateAllocator(
-	Microsoft::WRL::ComPtr<ID3D12Device2> pDevice,
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter,
+	Microsoft::WRL::ComPtr<D3D12Device> pDevice,
+	Microsoft::WRL::ComPtr<DXGIAdapter> pAdapter,
 	const D3D12MA::ALLOCATOR_FLAGS& allocatorFlags
 ) {
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> pAllocator{};

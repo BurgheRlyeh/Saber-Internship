@@ -41,11 +41,11 @@ void RenderObject::Render(
     DrawCall(pCommandListDirect);
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> RenderObject::GetPipelineState() const {
+Microsoft::WRL::ComPtr<D3D12PipelineState> RenderObject::GetPipelineState() const {
     return m_pPipelineState;
 }
 
-Microsoft::WRL::ComPtr<ID3D12RootSignature> RenderObject::GetRootSignature() const {
+Microsoft::WRL::ComPtr<D3D12RootSignature> RenderObject::GetRootSignature() const {
     return m_pRootSignatureResource->pRootSignature;
 }
 

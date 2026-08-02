@@ -13,5 +13,5 @@ public:
     );
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob();
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob();
 };

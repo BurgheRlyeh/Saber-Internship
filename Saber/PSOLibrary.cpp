@@ -70,13 +70,13 @@ void PSOLibrary::FlushCacheToFile() {
 
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
+Microsoft::WRL::ComPtr<D3D12PipelineState> PSOLibrary::Find(
 	const std::wstring& filename,
 	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
 ) {
 	std::scoped_lock lock(m_pipelineLibraryMutex);
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
+	Microsoft::WRL::ComPtr<D3D12PipelineState> pPSO{};
 	HRESULT hr{ m_pPipelineLibrary->LoadGraphicsPipeline(
 		filename.c_str(),
 		pPSODesc,
@@ -85,13 +85,13 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
 	return SUCCEEDED(hr) ? pPSO : nullptr;
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
+Microsoft::WRL::ComPtr<D3D12PipelineState> PSOLibrary::Find(
 	const std::wstring& filename,
 	const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
 ) {
 	std::scoped_lock lock(m_pipelineLibraryMutex);
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{};
+	Microsoft::WRL::ComPtr<D3D12PipelineState> pPSO{};
 	HRESULT hr{ m_pPipelineLibrary->LoadComputePipeline(
 		filename.c_str(),
 		pPSODesc,
@@ -100,12 +100,12 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Find(
 	return SUCCEEDED(hr) ? pPSO : nullptr;
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
+Microsoft::WRL::ComPtr<D3D12PipelineState> PSOLibrary::Assign(
 	std::shared_ptr<Device> pDevice,
 	const std::wstring& filename,
 	const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pPSODesc
 ) {
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{ Find(filename, pPSODesc) };
+	Microsoft::WRL::ComPtr<D3D12PipelineState> pPSO{ Find(filename, pPSODesc) };
 	if (pPSO) {
 		return pPSO;
 	}
@@ -119,12 +119,12 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
 	return pPSO;
 }
 
-Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOLibrary::Assign(
+Microsoft::WRL::ComPtr<D3D12PipelineState> PSOLibrary::Assign(
 	std::shared_ptr<Device> pDevice,
 	const std::wstring& filename,
 	const D3D12_COMPUTE_PIPELINE_STATE_DESC* pPSODesc
 ) {
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> pPSO{ Find(filename, pPSODesc) };
+	Microsoft::WRL::ComPtr<D3D12PipelineState> pPSO{ Find(filename, pPSODesc) };
 	if (pPSO) {
 		return pPSO;
 	}

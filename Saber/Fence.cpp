@@ -41,7 +41,7 @@ Fence::~Fence() {
     ::CloseHandle(m_fenceEvent);
 }
 
-Microsoft::WRL::ComPtr<ID3D12Fence> Fence::GetD3D12Fence() const {
+Microsoft::WRL::ComPtr<D3D12Fence> Fence::GetD3D12Fence() const {
     return m_pFence;
 }
 

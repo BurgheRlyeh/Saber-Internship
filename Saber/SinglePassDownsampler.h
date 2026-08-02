@@ -47,7 +47,7 @@ public:
 
     void Dispatch(
         std::shared_ptr<CommandList> pCommandList,
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
+        Microsoft::WRL::ComPtr<D3D12DescriptorHeap> pDescHeap,
         D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
         D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
         D3D12_GPU_DESCRIPTOR_HANDLE mipsUavsHandle
@@ -60,5 +60,5 @@ protected:
     ) const override;
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob();
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob();
 };

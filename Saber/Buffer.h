@@ -134,12 +134,12 @@ public:
 		RecreateBufferAndViews(
 			pDeviceContext->GetDevice(),
 			numElements,
-			pCommandListDirect->GetType() == D3D12_COMMAND_LIST_TYPE_COPY
+			pCommandListDirect->GetType() == CommandListType::Copy
 			? D3D12_RESOURCE_STATE_COMMON
 			: D3D12_RESOURCE_STATE_COPY_DEST
 		);
 
-		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		if (pCommandListDirect->GetType() != CommandListType::Copy) {
 			pOldResource->ResourceTransition(
 				pCommandListDirect,
 				D3D12_RESOURCE_STATE_COPY_SOURCE
@@ -155,7 +155,7 @@ public:
 		);
 		pDeviceContext->AddIntermediate(pOldResource);
 
-		if (pCommandListDirect->GetType() != D3D12_COMMAND_LIST_TYPE_COPY) {
+		if (pCommandListDirect->GetType() != CommandListType::Copy) {
 			m_pResource->ResourceTransition(
 				pCommandListDirect,
 				oldState

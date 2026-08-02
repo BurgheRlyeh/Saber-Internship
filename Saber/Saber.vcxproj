@@ -165,7 +165,10 @@
     <ClInclude Include="BufferStorage.h" />
     <ClInclude Include="BufferUpdater.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CommandAllocatorPool.h" />
     <ClInclude Include="CommandList.h" />
+    <ClInclude Include="CommandListManager.h" />
+    <ClInclude Include="CommandListPool.h" />
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="ComputeObject.h" />
     <ClInclude Include="CppHlslTypesRedefine.h" />
@@ -224,7 +227,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CommandAllocatorPool.cpp" />
     <ClCompile Include="CommandList.cpp" />
+    <ClCompile Include="CommandListManager.cpp" />
+    <ClCompile Include="CommandListPool.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="ComputeObject.cpp" />
     <ClCompile Include="D3D12MemAlloc.cpp" />

@@ -80,7 +80,7 @@ void SinglePassDownsampler::Resize(
 
 void SinglePassDownsampler::Dispatch(
     std::shared_ptr<CommandList> pCommandListCompute,
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap,
+    Microsoft::WRL::ComPtr<D3D12DescriptorHeap> pDescHeap,
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle,
     D3D12_GPU_DESCRIPTOR_HANDLE midMipUavHandle,
     D3D12_GPU_DESCRIPTOR_HANDLE mipsUavsHandle
@@ -107,7 +107,7 @@ void SinglePassDownsampler::InnerRootParametersSetter(
 	pD3D12CommandList->SetComputeRootDescriptorTable(2, m_pSpdCounterBuffer->GetDescRange(DescRangeType::Uav)->GetGpuHandle());
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob() {
+Microsoft::WRL::ComPtr<D3DBlob> SinglePassDownsampler::CreateRootSignatureBlob() {
     size_t rp{};
     CD3DX12_ROOT_PARAMETER1 rootParameters[5]{};
 
@@ -156,7 +156,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> SinglePassDownsampler::CreateRootSignatureBlob(
     rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
 
     // Serialize the root signature.
-    Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+    Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
     HRESULT hr{ D3DX12SerializeVersionedRootSignature(
         &rootSignatureDescription,
         D3D_ROOT_SIGNATURE_VERSION_1_1,

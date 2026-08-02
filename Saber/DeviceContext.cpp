@@ -2,12 +2,14 @@
 
 #include "Device.h"
 #include "CommandQueue.h"
+#include "CommandListManager.h"
 #include "DescriptorHeapManager.h"
 #include "MaterialManager.h"
 #include "PSOLibrary.h"
 
 DeviceContext::DeviceContext(
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter
+	Microsoft::WRL::ComPtr<DXGIAdapter> pAdapter,
+	const std::array<DescriptorHeapManager::DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
 ) {
 	std::wstring adapterName{};
 	if (DXGI_ADAPTER_DESC adapterDesc; SUCCEEDED(pAdapter->GetDesc(&adapterDesc))) {
@@ -21,33 +23,8 @@ DeviceContext::DeviceContext(
 #if defined(_DEBUG)
 	SetInfoQueueFilter(m_pDevice->GetD3D12Device());
 #endif
-}
 
-DeviceContext::~DeviceContext() {
-	for (auto& pRingBuffer : m_pRingBuffers) {
-		pRingBuffer.reset();
-	}
-	m_pFrameDataBuffer.reset();
-
-	m_pRootSignatureAtlas.reset();
-	m_pShaderAtlas.reset();
-	m_pPSOLibrary.reset();
-
-	m_pMeshAtlas.reset();
-
-	m_pCommandQueueDirect.reset();
-	m_pCommandQueueCompute.reset();
-	m_pCommandQueueCopy.reset();
-
-	m_pDescHeapManager.reset();
-}
-
-void DeviceContext::InitializeContext(
-	const std::array<DescriptorHeapManager::DescHeapArgs, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES>& descHeapArgs
-) {
-	m_pCommandQueueDirect = std::make_shared<CommandQueue>(m_name, m_pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pCommandQueueCompute = std::make_shared<CommandQueue>(m_name, m_pDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_pCommandQueueCopy = std::make_shared<CommandQueue>(m_name, m_pDevice, D3D12_COMMAND_LIST_TYPE_COPY);
+	m_pCommandListMgr = std::make_shared<CommandListManager>(m_pDevice);
 
 	// todo: make CounterResetter part of DeviceContext
 	//GPUResource::InitCounterResetter(
@@ -88,8 +65,29 @@ void DeviceContext::InitializeContext(
 	m_pFrameDataBuffer = std::make_shared<FrameDataBuffer<std::shared_ptr<GPUResource>>>(3);
 }
 
-void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<ID3D12Device2>& pDevice) {
-	Microsoft::WRL::ComPtr<ID3D12InfoQueue> pInfoQueue;
+DeviceContext::~DeviceContext() {
+	for (auto& pRingBuffer : m_pRingBuffers) {
+		pRingBuffer.reset();
+	}
+	m_pFrameDataBuffer.reset();
+
+	m_pRootSignatureAtlas.reset();
+	m_pShaderAtlas.reset();
+	m_pPSOLibrary.reset();
+
+	m_pMeshAtlas.reset();
+
+	m_pCommandListMgr.reset();
+
+	m_pDescHeapManager.reset();
+}
+
+std::shared_ptr<CommandQueue> DeviceContext::GetCommandQueue(CommandQueueType type) const {
+	return m_pCommandListMgr->GetCommandQueue(type);
+}
+
+void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<D3D12Device>& pDevice) {
+	Microsoft::WRL::ComPtr<D3D12InfoQueue> pInfoQueue;
 	ThrowIfFailed(pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue)));
 
 	pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);

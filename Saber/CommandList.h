@@ -2,14 +2,21 @@
 
 #include "Headers.h"
 
-#include <functional>
+#include "CommandListTypes.h"
 
-class CommandList {
+#include <functional>
+#include <memory>
+
+class CommandListManager;
+
+class CommandList : public std::enable_shared_from_this<CommandList> {
 	std::wstring m_name{};
 
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_pD3D12CommandList{};
+	CommandListManager& m_manager;
 
-	std::atomic<bool> m_isReadyForExecution{};
+	Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> m_pD3D12CommandList{};
+
+	size_t m_priority{};
 
 	std::function<void()> m_beforeExec{};
 	std::function<void()> m_afterExec{};
@@ -19,20 +26,27 @@ class CommandList {
 public:
 	CommandList(
 		const std::wstring& name,
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList,
+		CommandListManager& manager,
+		Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> pCommandList,
+		size_t priority = 0,
 		std::function<void()> beforeExec = []{},
 		std::function<void()> afterExec = []{}
 	);
 
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetD3D12CommandList() const;
-	D3D12_COMMAND_LIST_TYPE GetType() const;
+	const std::wstring& GetName() const { return m_name; }
+	Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> GetD3D12CommandList() const;
+	CommandListType GetType() const;
 
-	bool IsReadyForExecution() const;
-	void SetReadyForExecution();
+	size_t GetPriority() const { return m_priority; }
+
+	uint64_t Execute();
+	void ExecuteImmediately();
+	void PushForExecution();
 
 	void BeforeExecute() const;
 	void AfterExecute() const;
 
 	void PixBeginEvent(const std::wstring& name, uint8_t r = 0, uint8_t g = 0, uint8_t b = 0);
 	void PixEndEvent();
+	void PixEndAllEvents();
 };

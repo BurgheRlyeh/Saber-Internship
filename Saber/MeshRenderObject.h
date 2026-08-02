@@ -377,7 +377,7 @@ public:
     }
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -397,7 +397,7 @@ private:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
         // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+        Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
             D3D_ROOT_SIGNATURE_VERSION_1_1,
@@ -495,7 +495,7 @@ public:
     }
 
 protected:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob() {
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob() {
         // Allow input layout and deny unnecessary access to certain pipeline stages.
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags{
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -540,7 +540,7 @@ protected:
         rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
         // Serialize the root signature.
-        Microsoft::WRL::ComPtr<ID3DBlob> rootSignatureBlob, errorBlob;
+        Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
             &rootSignatureDescription,
             D3D_ROOT_SIGNATURE_VERSION_1_1,

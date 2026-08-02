@@ -216,6 +216,15 @@
     <ClInclude Include="IncrementFence.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CommandListManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CommandAllocatorPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CommandListPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -327,6 +336,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="IncrementFence.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CommandListManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CommandAllocatorPool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CommandListPool.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

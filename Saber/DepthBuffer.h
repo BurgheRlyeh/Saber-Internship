@@ -80,7 +80,7 @@ public:
 
 	void CreateHierarchicalDepthBuffer(
 		std::shared_ptr<CommandList> pCommandList,
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pDescHeap
+		Microsoft::WRL::ComPtr<D3D12DescriptorHeap> pDescHeap
 	);
 
 	std::shared_ptr<TextureResource> GetTexture() const;

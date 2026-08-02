@@ -15,6 +15,6 @@ public:
     );
 
 private:
-    static Microsoft::WRL::ComPtr<ID3DBlob> CreateRootSignatureBlob();
+    static Microsoft::WRL::ComPtr<D3DBlob> CreateRootSignatureBlob();
     static D3D12_GRAPHICS_PIPELINE_STATE_DESC CreatePipelineStateDesc();
 };
