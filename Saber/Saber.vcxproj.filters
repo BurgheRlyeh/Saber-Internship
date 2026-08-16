@@ -108,6 +108,9 @@
     <ClInclude Include="GPUResource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ResourceStateTracker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="GLTFLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -291,6 +294,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="GPUResource.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ResourceStateTracker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="TextureResource.cpp">

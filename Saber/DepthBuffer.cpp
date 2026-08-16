@@ -1,6 +1,7 @@
 #include "DepthBuffer.h"
 
 #include "CommandList.h"
+#include "CommandQueue.h"
 #include "Device.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
@@ -211,4 +212,42 @@ D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetUavGpuDescHandleForMips() const {
 
 std::shared_ptr<EnumFence<DepthBufferState>> DepthBuffer::GetFence() const {
 	return m_pDepthBufferFence;
+}
+
+void DepthBuffer::SignalState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
+	pCommandList->AddAfterTask([&, state] {
+		pCommandList->GetQueue()->Signal(m_pDepthBufferFence, state);
+	});
+}
+
+void DepthBuffer::WaitState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
+	pCommandList->AddBeforeTask([state, pQueue = pCommandList->GetQueue(), pFence = m_pDepthBufferFence] {
+		pQueue->GpuWait(pFence, state);
+	});
+
+	switch (state) {
+	case DepthBufferState::InvalidState:
+		assert(false);
+		break;
+
+	case DepthBufferState::DepthWriting:
+		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		//m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
+		break;
+
+	case DepthBufferState::HierarchicalDepthBuilding:
+		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
+		break;
+
+	case DepthBufferState::DepthReading:
+		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		//m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COMMON);
+		break;
+
+	case DepthBufferState::FlushState:
+		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COMMON);
+		m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COMMON);
+		break;
+	}
 }

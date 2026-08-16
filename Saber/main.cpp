@@ -294,5 +294,13 @@ int CALLBACK wWinMain(
 
     g_pRenderer->StopRenderThread();
 
+    // Torn down here rather than left to static destruction, in reverse order of
+    // creation. By the time static destructors run the D3D12 runtime may already
+    // be unloading, and statics of other translation units (the global resource
+    // state of ResourceStateTracker among them) may already be gone.
+    g_pRenderer.reset();
+    g_pJobSystem.reset();
+    g_pOutputContext.reset();
+
     return 0;
 }

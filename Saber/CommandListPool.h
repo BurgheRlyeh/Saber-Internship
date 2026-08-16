@@ -8,7 +8,7 @@
 class Device;
 
 class CommandListPool {
-	static constexpr size_t DefaultCommandListPoolSize{ 16 };
+	static constexpr size_t DefaultCommandListPoolSize{ 32 };
 
 	CommandListType m_type{ CommandListType::None };
 

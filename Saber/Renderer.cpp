@@ -407,13 +407,9 @@ void Renderer::Render() {
         return;
 
     std::shared_ptr<CommandListManager> pClMgr{ m_pDeviceContext->GetCommandListManager() };
-    std::shared_ptr<CommandQueue>& pQueue{ m_pDeviceContext->GetCommandQueue() };
 
     std::shared_ptr<GBuffer>& pGBuf{ pScene->GetGBuffer() };
     std::shared_ptr<DepthBuffer>& pDepthBuf{ pScene->GetDepthBuffer() };
-
-    std::shared_ptr<EnumFence<GBufferState>>& pGBufFence{ pGBuf->GetFence() };
-    std::shared_ptr<EnumFence<DepthBufferState>>& pDepthBufFence{ pDepthBuf->GetFence() };
 
     size_t listPriority{};
 
@@ -459,14 +455,13 @@ void Renderer::Render() {
         pClMgr->GetDeferredCommandList(
             L"StaticObjects",
             CommandListType::Direct,
-            staticObjectsPriority,
-            [&] {
-                pQueue->GpuWait(pGBufFence, GBufferState::Write);
-                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthWriting);
-            }
+            staticObjectsPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
+        pGBuf->WaitState(commandListForStaticObjects, GBufferState::Write);
+        pDepthBuf->WaitState(commandListForStaticObjects, DepthBufferState::DepthWriting);
+
         commandListForStaticObjects->PixBeginEvent(L"Static Objects rendering");
         pScene->RenderObjects(
             RenderSubsystemType::Default,
@@ -503,12 +498,7 @@ void Renderer::Render() {
         pClMgr->GetDeferredCommandList(
             L"DynamicObjects",
             CommandListType::Direct,
-            dynamicObjectsPriority,
-            [] {},
-            [&]() {
-                pQueue->Signal(pGBufFence, GBufferState::Read);
-                pQueue->Signal(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
-            }
+            dynamicObjectsPriority
         )
     };
     m_pJobSystem->AddJob([&]() {
@@ -528,6 +518,9 @@ void Renderer::Render() {
             m_scissorRect
         );
 
+        pGBuf->SignalState(commandListForDynamicObjects, GBufferState::Read);
+        pDepthBuf->SignalState(commandListForDynamicObjects, DepthBufferState::HierarchicalDepthBuilding);
+
         commandListForDynamicObjects->PushForExecution();
     });
 
@@ -539,13 +532,7 @@ void Renderer::Render() {
         pClMgr->GetDeferredCommandList(
             L"HZB",
             CommandListType::Direct,
-            hzbPriority,
-            [&] {
-                pQueue->GpuWait(pDepthBufFence, DepthBufferState::HierarchicalDepthBuilding);
-            },
-            [&] {
-                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthReading);
-            }
+            hzbPriority
         )
     };
 
@@ -553,15 +540,7 @@ void Renderer::Render() {
         pClMgr->GetDeferredCommandList(
             L"DeferredShading",
             CommandListType::Direct,
-            deferredShadingPriority,
-            [&] {
-                pQueue->GpuWait(pGBufFence, GBufferState::Read);
-                pQueue->GpuWait(pDepthBufFence, DepthBufferState::DepthReading);
-            },
-            [&] {
-                pQueue->Signal(pGBufFence, GBufferState::Write);
-                pQueue->Signal(pDepthBufFence, DepthBufferState::DepthWriting);
-            }
+            deferredShadingPriority
         )
     };
     std::shared_ptr<CommandList> commandListAfterFrame{
@@ -574,15 +553,19 @@ void Renderer::Render() {
     m_pJobSystem->AddJob([&]() {
         {
             commandListForHZB->PixBeginEvent(L"Building HZB");
-            pScene->GetDepthBuffer()->CreateHierarchicalDepthBuffer(
+            pDepthBuf->WaitState(commandListForHZB, DepthBufferState::HierarchicalDepthBuilding);
+            pDepthBuf->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
                 m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap()
             );
+            pDepthBuf->SignalState(commandListForHZB, DepthBufferState::DepthReading);
             commandListForHZB->PushForExecution();
         }
 
         {
             commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
+            pGBuf->WaitState(commandListForDeferredShading, GBufferState::Read);
+            pDepthBuf->WaitState(commandListForDeferredShading, DepthBufferState::DepthReading);
             pScene->RunDeferredShading(
                 commandListForDeferredShading,
                 m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
@@ -590,11 +573,24 @@ void Renderer::Render() {
                 m_clientWidth,
                 m_clientHeight
             );
+            pGBuf->SignalState(commandListForDeferredShading, GBufferState::Write);
+            pDepthBuf->SignalState(commandListForDeferredShading, DepthBufferState::DepthWriting);
             commandListForDeferredShading->PushForExecution();
         }
 
         {
             commandListAfterFrame->PixBeginEvent(L"Post Processing");
+
+            // Declared even though the previous lists already left the back buffer
+            // in this state: the first transition of a resource within a command
+            // list is resolved at submit time and lands before everything else in
+            // it, so a list has to transition what it uses before using it.
+            // A redundant transition is dropped by the state tracker.
+            backBuffer->ResourceTransition(
+                commandListAfterFrame,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            );
+
             pScene->RenderPostProcessing(
                 commandListAfterFrame,
                 m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
@@ -607,6 +603,10 @@ void Renderer::Render() {
 
             backBuffer->ResourceTransition(
                 commandListAfterFrame,
+                D3D12_RESOURCE_STATE_PRESENT
+            );
+            commandListAfterFrame->TransitionBarrier(
+                backBuffer,
                 D3D12_RESOURCE_STATE_PRESENT
             );
 

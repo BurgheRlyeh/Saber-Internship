@@ -23,6 +23,10 @@ class IncrementFence;
 class CommandQueue {
 	std::wstring m_name;
 
+	// Needed to request the command lists the resolved pending barriers go into,
+	// see ExecuteCommandList
+	std::shared_ptr<Device> m_pDevice{};
+
 	Microsoft::WRL::ComPtr<D3D12CommandQueue> m_pCommandQueue{};
 
 	std::shared_ptr<IncrementFence> m_pIncFence{};
@@ -53,32 +57,32 @@ public:
 	void ExecuteCommandListImmediately(std::shared_ptr<CommandList> commandList);
 
 	// Fence
-	void Signal(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
-	void CpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
-	void GpuWait(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
-	void Flush(std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void Signal(const std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void CpuWait(const std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void GpuWait(const std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
+	void Flush(const std::shared_ptr<Fence>& pFence, uint64_t fenceValue);
 
 	// IncrementFence
-	uint64_t Signal(std::shared_ptr<IncrementFence>& pFence);
-	void CpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
-	void GpuWait(std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
-	void Flush(std::shared_ptr<IncrementFence>& pFence);
+	uint64_t Signal(const std::shared_ptr<IncrementFence>& pFence);
+	void CpuWait(const std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
+	void GpuWait(const std::shared_ptr<IncrementFence>& pFence, uint64_t fenceValue);
+	void Flush(const std::shared_ptr<IncrementFence>& pFence);
 
 	// EnumFence
 	template <EnumConcept Enum>
-	void Signal(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+	void Signal(const std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
 		Signal(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
 	}
 	template <EnumConcept Enum>
-	void CpuWait(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+	void CpuWait(const std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
 		CpuWait(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
 	}
 	template <EnumConcept Enum>
-	void GpuWait(std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
+	void GpuWait(const std::shared_ptr<EnumFence<Enum>>& pFence, Enum fenceValue) {
 		GpuWait(std::static_pointer_cast<Fence>(pFence), static_cast<uint64_t>(fenceValue));
 	}
 	template <EnumConcept Enum>
-	void Flush(std::shared_ptr<EnumFence<Enum>>& pFence) {
+	void Flush(const std::shared_ptr<EnumFence<Enum>>& pFence) {
 		Flush(pFence, std::numeric_limits<std::underlying_type_t<Enum>>::max());
 	}
 
@@ -95,9 +99,10 @@ public:
 	);
 
 private:
-	// Execute a command list.
-	// Returns the fence value to wait for for this command list.
-	uint64_t ExecuteD3D12CommandList(
-		Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> pD3D12CommandList
+	// Return a command list and its allocator to the pools once it has been
+	// submitted under the given fence value.
+	void DiscardD3D12CommandList(
+		Microsoft::WRL::ComPtr<D3D12GraphicsCommandList>& pD3D12CommandList,
+		uint64_t fenceValue
 	);
 };

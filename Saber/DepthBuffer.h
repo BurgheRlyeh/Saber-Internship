@@ -95,4 +95,6 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMips() const;
 
 	std::shared_ptr<EnumFence<DepthBufferState>> GetFence() const;
+	void SignalState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
+	void WaitState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
 };

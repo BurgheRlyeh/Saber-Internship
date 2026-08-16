@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "Fence.h"
 
 class CommandQueue;
@@ -22,7 +24,10 @@ public:
     bool IsCompleted(uint64_t fenceValue);
 
 private:
-    uint64_t m_fenceValue{ IncrementFenceInitValue };
+    // Atomic because command lists are submitted from several threads at once:
+    // loading goes through CommandQueue::ExecuteCommandListImmediately on the job
+    // system workers, and every submission increments this counter
+    std::atomic<uint64_t> m_fenceValue{ IncrementFenceInitValue };
 
     friend uint64_t Signal(CommandQueue*, IncrementFence*);
 };

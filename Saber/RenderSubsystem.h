@@ -57,6 +57,7 @@ public:
 			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
 			m_pModelBuffers->UpdateAt(id, modelBuffer);
 		}
+		return true;
 	}
 
 	void Render(
@@ -70,9 +71,7 @@ public:
 		}
 		m_objects.front()->SetPipelineStateAndRootSignature(pCommandList);
 		commandListPrepare();
-		if (m_pModelBuffers->GetResource()->GetState() != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
-			m_pModelBuffers->GetResource()->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-		}
+		m_pModelBuffers->GetResource()->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 		pCommandList->GetD3D12CommandList()->SetGraphicsRootShaderResourceView(
 			2,
 			m_pModelBuffers->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()

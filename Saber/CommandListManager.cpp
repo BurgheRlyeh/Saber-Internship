@@ -49,7 +49,7 @@ std::shared_ptr<CommandList> CommandListManager::GetDeferredCommandList(
     assert(priority < MaxPriority);
 
     std::shared_ptr<CommandList> pCommandList{ std::make_shared<CommandList>(
-        GetCommandQueue(ToQueueType(type))->GetName() + L"/CommandList",
+        GetCommandQueue(ToQueueType(type))->GetName() + L"/CommandList/" + name,
         *this,
         GetCommandQueue(ToQueueType(type))->GetD3D12CommandList(m_pDevice),
         priority,
@@ -77,8 +77,6 @@ void CommandListManager::ExecuteCommandListImmediately(
 }
 
 void CommandListManager::PushForExecution(std::shared_ptr<CommandList> pCommandList) {
-    pCommandList->PixEndAllEvents();
-
     DeferredLists& deferred{ m_deferredLists[pCommandList->GetPriority()] };
     std::unique_lock<std::mutex> readyLock(deferred.mutex);
     deferred.pCommandLists.push_back(pCommandList);
@@ -88,7 +86,6 @@ void CommandListManager::PushForExecution(std::shared_ptr<CommandList> pCommandL
 }
 
 void CommandListManager::ExecutionTask(FrameFenceValues& waitFenceValues) {
-    FrameFenceValues lastFrameFences{};
     std::array<bool, static_cast<size_t>(CommandQueueType::Count)> fenceWaited{};
 
     for (size_t p{}; p < MaxPriority;) {

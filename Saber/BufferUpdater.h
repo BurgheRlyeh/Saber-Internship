@@ -53,7 +53,8 @@ public:
 	) : BufferUpdater<T>(buffer) {}
 
 	virtual void UpdateAll(const T* pData, size_t count) override {
-		m_updRange = std::make_pair(0, count - 1);
+		m_updRange.first = 0;
+		m_updRange.second = std::max(m_updRange.second, count - 1);
 	}
 	virtual void UpdateAt(size_t id, const T& data) override {
 		m_updRange.first = std::min(m_updRange.first, id);
@@ -75,22 +76,18 @@ public:
 		size_t updCnt{ m_updRange.second - m_updRange.first + 1 };
 		size_t updSize{ updCnt * sizeof(T) };
 
-		D3D12_RESOURCE_STATES prevState{ buffer.GetResource()->GetState() };
-		if (updCnt > buffer.GetCapacity()) {
-			buffer.RecreateBufferAndViews(
-				pDeviceContext->GetDevice(),
-				updCnt,
-				pCommandList->GetType() == CommandListType::Copy
-				? D3D12_RESOURCE_STATE_COMMON
-				: D3D12_RESOURCE_STATE_COPY_DEST
-			);
-		}
-		else if (pCommandList->GetType() != CommandListType::Copy) {
-			buffer.GetResource()->ResourceTransition(
+		if (m_updRange.second + 1 > m_buffer.GetCapacity()) {
+			buffer.Expand(
+				pDeviceContext,
 				pCommandList,
-				D3D12_RESOURCE_STATE_COPY_DEST
+				static_cast<uint32_t>(m_updRange.second + 1)
 			);
 		}
+
+		buffer.GetResource()->ResourceTransition(
+			pCommandList,
+			D3D12_RESOURCE_STATE_COPY_DEST
+		);
 
 		if constexpr (MemoryType == BufferUpdaterMemoryType::Intermediate) {
 			auto pIntermediate{ std::make_shared<GPUResource>(
@@ -131,13 +128,6 @@ public:
 			);
 		}
 		m_updRange = InvalidUpdRange;
-
-		if (pCommandList->GetType() != CommandListType::Copy) {
-			buffer.GetResource()->ResourceTransition(
-				pCommandList,
-				prevState
-			);
-		}
 	}
 };
 
@@ -171,8 +161,8 @@ public:
 		Buffer<T>& buffer{ m_buffer };
 		size_t updCnt{ buffer.GetStorageDataSize() };
 
-		D3D12_RESOURCE_STATES prevState{ buffer.GetResource()->GetState() };
 		if (updCnt > buffer.GetCapacity()) {
+			pDeviceContext->AddIntermediate(buffer.GetResource());
 			buffer.RecreateBufferAndViews(
 				pDeviceContext->GetDevice(),
 				updCnt,
@@ -181,12 +171,11 @@ public:
 				: D3D12_RESOURCE_STATE_COPY_DEST
 			);
 		}
-		else if (pCommandList->GetType() != CommandListType::Copy) {
-			buffer.GetResource()->ResourceTransition(
-				pCommandList,
-				D3D12_RESOURCE_STATE_COPY_DEST
-			);
-		}
+
+		buffer.GetResource()->ResourceTransition(
+			pCommandList,
+			D3D12_RESOURCE_STATE_COPY_DEST
+		);
 
 		D3D12_SUBRESOURCE_DATA subresData{
 			.pData{ buffer.GetStorageData() },
@@ -214,13 +203,6 @@ public:
 				intermediateAllocation.pBuffer,
 				&subresData,
 				intermediateAllocation.offset
-			);
-		}
-
-		if (pCommandList->GetType() != CommandListType::Copy) {
-			buffer.GetResource()->ResourceTransition(
-				pCommandList,
-				prevState
 			);
 		}
 	}

@@ -6,6 +6,7 @@
 #include "CommandList.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "ResourceStateTracker.h"
 
 std::shared_ptr<GPUResource> GPUResource::pCounterResetter = nullptr;
 
@@ -18,19 +19,18 @@ GPUResource::GPUResource(
 	CreateResource(name, pDevice, allocDesc, resDesc);
 }
 
+GPUResource::~GPUResource() {
+	ResourceStateTracker::RemoveGlobalResourceState(*this);
+}
+
 void GPUResource::ResourceTransition(
 	std::shared_ptr<CommandList> pCommandList,
 	const D3D12_RESOURCE_STATES& toState
 ) {
-	pCommandList->GetD3D12CommandList()->ResourceBarrier(
-		1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			GetD3D12Resource().Get(),
-			m_state,
-			toState
-		)
-	);
-	m_state = toState;
+	// The state the resource is currently in is resolved by the tracker: this
+	// command list may well be recorded in parallel with the ones that run before
+	// it, so it cannot be known here
+	pCommandList->TransitionBarrier(*this, toState);
 }
 
 Microsoft::WRL::ComPtr<D3D12Resource> GPUResource::GetD3D12Resource() const {
@@ -300,6 +300,10 @@ void GPUResource::CreateResource(
 		.ExtraHeapFlags{ allocDesc.heapFlags }
 	};
 
+	// The global state is keyed by the raw resource pointer, and the allocator may
+	// well reuse the address of the resource that is about to be released here
+	ResourceStateTracker::RemoveGlobalResourceState(*this);
+
 	ThrowIfFailed(pDevice->GetD3D12Allocator()->CreateResource(
 		&allocationDesc,
 		&resDesc.resDesc,
@@ -309,7 +313,8 @@ void GPUResource::CreateResource(
 		IID_PPV_ARGS(&m_pResource)
 	));
 	m_pResource->SetName(name.c_str());
-	m_state = resDesc.resInitState;
+
+	ResourceStateTracker::AddGlobalResourceState(*this, resDesc.resInitState);
 }
 
 // CounterResetter related methods
@@ -338,6 +343,12 @@ void GPUResource::InitCounterResetter(
 	std::shared_ptr<GPUResource> pIntermediate{
 		pCounterResetter->CreateIntermediate(pDeviceContext->GetDevice())
 	};
+
+	// The first transition of a resource within a command list is resolved at
+	// submit time and lands before everything else in it, so without this the
+	// transition to COPY_SOURCE below would end up before the upload
+	pCounterResetter->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
+
 	pCounterResetter->UpdateSubresources(
 		pCommandList,
 		pIntermediate,

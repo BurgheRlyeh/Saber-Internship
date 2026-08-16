@@ -21,7 +21,7 @@ void DDSTexture::LoadFromDDS(
 	// load texture from dds
 	DirectX::ScratchImage image{};
 	ThrowIfFailed(DirectX::LoadFromDDSFile(filename.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image));
-	
+
 	// create texture resource
 	CreateResource(
 		filename,
@@ -37,7 +37,7 @@ void DDSTexture::LoadFromDDS(
 			)
 		}
 	);
-	
+
 	// upload texture
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources{};
 	subresources.reserve(image.GetMetadata().mipLevels);
@@ -47,9 +47,7 @@ void DDSTexture::LoadFromDDS(
 		}
 	}
 
-	if (pCommandListDirect->GetType() != CommandListType::Copy) {
-		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_DEST);
-	}
+	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_COPY_DEST);
 	std::shared_ptr<GPUResource> pIntermediate{
 		CreateIntermediate(pDeviceContext->GetDevice(), 0, subresources.size())
 	};
@@ -60,8 +58,5 @@ void DDSTexture::LoadFromDDS(
 		0, 0, subresources.size()
 	);
 	pDeviceContext->AddIntermediate(pIntermediate);
-
-	if (pCommandListDirect->GetType() != CommandListType::Copy) {
-		ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-	}
+	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 }

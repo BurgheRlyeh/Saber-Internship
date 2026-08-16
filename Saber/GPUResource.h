@@ -58,7 +58,6 @@ class GPUResource {
 
 protected:
 	Microsoft::WRL::ComPtr<D3D12Resource> m_pResource{};
-	D3D12_RESOURCE_STATES m_state{};
 
 	GPUResource() = default;
 
@@ -80,9 +79,8 @@ public:
 		const ResourceDesc& resDesc
 	);
 
-	D3D12_RESOURCE_STATES GetState() const {
-		return m_state;
-	}
+	virtual ~GPUResource();
+
 	void ResourceTransition(
 		std::shared_ptr<CommandList> pCommandList,
 		const D3D12_RESOURCE_STATES& toState

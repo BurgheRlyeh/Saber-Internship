@@ -129,22 +129,23 @@ public:
 
 		std::shared_ptr<GPUResource> pOldResource{ m_pResource };
 		uint32_t oldCapacity{ static_cast<uint32_t>(GetCapacity()) };
-		D3D12_RESOURCE_STATES oldState{ pOldResource->GetState() };
 
 		RecreateBufferAndViews(
 			pDeviceContext->GetDevice(),
 			numElements,
 			pCommandListDirect->GetType() == CommandListType::Copy
-			? D3D12_RESOURCE_STATE_COMMON
-			: D3D12_RESOURCE_STATE_COPY_DEST
+				? D3D12_RESOURCE_STATE_COMMON
+				: D3D12_RESOURCE_STATE_COPY_DEST
 		);
 
-		if (pCommandListDirect->GetType() != CommandListType::Copy) {
-			pOldResource->ResourceTransition(
-				pCommandListDirect,
-				D3D12_RESOURCE_STATE_COPY_SOURCE
-			);
-		}
+		m_pResource->ResourceTransition(
+			pCommandListDirect,
+			D3D12_RESOURCE_STATE_COPY_DEST
+		);
+		pOldResource->ResourceTransition(
+			pCommandListDirect,
+			D3D12_RESOURCE_STATE_COPY_SOURCE
+		);
 
 		pCommandListDirect->GetD3D12CommandList()->CopyBufferRegion(
 			m_pResource->GetD3D12Resource().Get(),
@@ -154,13 +155,6 @@ public:
 			oldCapacity * sizeof(T)
 		);
 		pDeviceContext->AddIntermediate(pOldResource);
-
-		if (pCommandListDirect->GetType() != CommandListType::Copy) {
-			m_pResource->ResourceTransition(
-				pCommandListDirect,
-				oldState
-			);
-		}
 
 		return true;
 	}

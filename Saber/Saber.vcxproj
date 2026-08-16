@@ -216,6 +216,7 @@
     <ClInclude Include="RenderSubsystem.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Resources.h" />
+    <ClInclude Include="ResourceStateTracker.h" />
     <ClInclude Include="Saber.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="SceneBuffer.h" />
@@ -263,6 +264,7 @@
     <ClCompile Include="..\utils\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\utils\imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="..\utils\imgui\backends\imgui_impl_dx12.cpp" />
+    <ClCompile Include="ResourceStateTracker.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SinglePassDownsampler.cpp" />
     <ClCompile Include="TextureResource.cpp" />

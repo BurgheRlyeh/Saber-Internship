@@ -39,9 +39,7 @@ public:
 	}
 
 	void Execute(std::shared_ptr<CommandList> pCommandList) {
-		if (m_pResource->GetState() != D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT) {
-			m_pResource->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		}
+		m_pResource->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 		pCommandList->GetD3D12CommandList()->ExecuteIndirect(
 			m_pCommandSignature.Get(),
 			GetCapacity(),

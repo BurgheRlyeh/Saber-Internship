@@ -4,6 +4,8 @@
 
 #include <array>
 
+#include "CommandList.h"
+#include "CommandQueue.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
@@ -62,10 +64,6 @@ public:
 
 	UINT64 GetHeight() const {
 		return m_height;
-	}
-
-	D3D12_RESOURCE_STATES GetState() const {
-		return m_pTextures[0]->GetState();
 	}
 
 	void Resize(
@@ -228,5 +226,15 @@ public:
 
 	std::shared_ptr<EnumFence<GBufferState>> GetFence() const {
 		return m_pGBufferFence;
+	}
+	void SignalState(std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
+		pCommandList->AddAfterTask([&, state] {
+			pCommandList->GetQueue()->Signal(m_pGBufferFence, state);
+		});
+	}
+	void WaitState(std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
+		pCommandList->AddBeforeTask([&, state] {
+			pCommandList->GetQueue()->GpuWait(m_pGBufferFence, state);
+		});
 	}
 };
