@@ -5,6 +5,7 @@
 #include <concepts>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -72,6 +73,8 @@ class Atlas : public std::enable_shared_from_this<Atlas<T, StringType, KeyHasher
 
     std::unordered_map<KeyType, std::weak_ptr<T>, MapHasher> m_map;
 
+    mutable std::mutex m_mutex;
+
     [[no_unique_address]]
     KeyHasher m_keyProvider;
 
@@ -86,7 +89,14 @@ class Atlas : public std::enable_shared_from_this<Atlas<T, StringType, KeyHasher
         template<typename U>
         void operator()(U* pItem) const {
             if (auto atlas = m_pAtlas.lock()) {
-                atlas->m_map.erase(m_key);
+                std::scoped_lock<std::mutex> lock(atlas->m_mutex);
+
+				// Make sure entry still refers to the item being destroyed
+                // but not some other that was assigned under the same key
+                auto it{ atlas->m_map.find(m_key) };
+                if (it != atlas->m_map.end() && it->second.expired()) {
+                    atlas->m_map.erase(it);
+                }
             }
 
             delete pItem;
@@ -99,6 +109,7 @@ public:
     {}
 
     ~Atlas() {
+        std::scoped_lock<std::mutex> lock(m_mutex);
         assert(m_map.empty());
     }
 
@@ -107,10 +118,12 @@ public:
     }
 
     size_t Size() const {
+        std::scoped_lock<std::mutex> lock(m_mutex);
         return m_map.size();
     }
 
     bool Empty() const {
+        std::scoped_lock<std::mutex> lock(m_mutex);
         return m_map.empty();
     }
 
@@ -133,7 +146,16 @@ public:
             Deleter(this->shared_from_this(), key)
         };
 
-        m_map.emplace(key, res);
+        std::scoped_lock<std::mutex> lock(m_mutex);
+
+        auto [it, inserted] { m_map.try_emplace(key, res) };
+        if (!inserted) {
+            // Check if the same item was built by the other thread
+            if (auto winner{ std::dynamic_pointer_cast<U>(it->second.lock()) }) {
+                return winner;
+            }
+            it->second = res;   // other is expired, replace
+        }
         return res;
     }
 
@@ -144,11 +166,14 @@ private:
 
     template <std::derived_from<T> U = T>
     std::shared_ptr<U> FindByKey(const KeyType& key) {
+        std::scoped_lock<std::mutex> lock(m_mutex);
+
         auto it{ m_map.find(key) };
         if (it == m_map.end()) {
             return nullptr;
         }
 
+		assert(!it->second.expired() && "Atlas entry expired unexpectedly");
         auto casted{ std::dynamic_pointer_cast<U>(it->second.lock()) };
         assert(casted && "Type mismatch in Atlas");
         return casted;

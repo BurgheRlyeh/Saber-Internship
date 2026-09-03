@@ -2,6 +2,8 @@
 
 #include "Headers.h"
 
+#include <mutex>
+
 #include <array>
 #include <memory>
 
@@ -22,6 +24,9 @@ class DescriptorHeap : public std::enable_shared_from_this<DescriptorHeap> {
 
 	size_t m_firstFreeId{};
 
+	// Ranges are allocated from job system threads while scenes load
+	std::mutex m_mutex{};
+
 public:
 	DescriptorHeap(
 		const std::wstring& name,
@@ -36,8 +41,10 @@ public:
 	template <std::derived_from<DescRange> DescRangeImpl = StackDescRange>
 	std::shared_ptr<DescRange> AllocateRange(const std::wstring& basename, DescRangeType descRangeType, size_t size) {
 		assert(size);
-		assert(m_firstFreeId + size <= m_heapDesc.NumDescriptors);
 		assert(m_heapDesc.Type == ToD3D12DescHeapType(descRangeType));
+
+		std::scoped_lock<std::mutex> lock(m_mutex);
+		assert(m_firstFreeId + size <= m_heapDesc.NumDescriptors);
 
 		std::shared_ptr<DescRange> pRange{ m_pRangesAtlas->Assign<DescRangeImpl>(
 			basename + L"/Ranges/" + ToName(descRangeType),
