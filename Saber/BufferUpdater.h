@@ -277,7 +277,7 @@ public:
 		m_buffer.GetResource()->ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_pUpdater->Dispatch(
 			pCommandListDirect,
-			{ static_cast<uint32_t>(updCnt + threadBlockSize - 1 / threadBlockSize), 1, 1 },
+			{ static_cast<uint32_t>((updCnt + threadBlockSize - 1) / threadBlockSize), 1, 1 },
 			[&](std::shared_ptr<CommandList> pCommandList, UINT& rootParamId) {
 				auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
 				pD3D12CommandList->SetComputeRoot32BitConstant(rootParamId++, updCnt, 0);
