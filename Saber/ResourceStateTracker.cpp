@@ -232,7 +232,7 @@ uint32_t ResourceStateTracker::FlushPendingResourceBarriers(
 		if (transition.Subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES && resourceState.HasDifferentSubresourceState()) {
 			// The subresources are in different states, transition them one by one
 			for (const auto& [subresource, subresourceState] : resourceState.subresourceStates) {
-				if (transition.StateAfter == subresourceState) {
+				if (transition.StateAfter != subresourceState) {
 					D3D12_RESOURCE_BARRIER newBarrier{ pendingBarrier };
 					newBarrier.Transition.Subresource = subresource;
 					newBarrier.Transition.StateBefore = subresourceState;
