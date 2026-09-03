@@ -38,11 +38,19 @@ public:
 		);
 	}
 
-	void Execute(std::shared_ptr<CommandList> pCommandList) {
+	void Execute(
+		std::shared_ptr<CommandList> pCommandList,
+		size_t commandsCount
+	) {
+		assert(commandsCount <= GetCapacity());
+		if (!commandsCount) {
+			return;
+		}
+
 		m_pResource->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 		pCommandList->GetD3D12CommandList()->ExecuteIndirect(
 			m_pCommandSignature.Get(),
-			GetCapacity(),
+			static_cast<UINT>(commandsCount),
 			m_pResource->GetD3D12Resource().Get(),
 			0,
 			nullptr,

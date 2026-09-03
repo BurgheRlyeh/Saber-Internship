@@ -76,7 +76,7 @@ public:
 			2,
 			m_pModelBuffers->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
 		);
-		m_pIndirectCommandBuffer->Execute(pCommandList);
+		m_pIndirectCommandBuffer->Execute(pCommandList, m_objects.size());
 	}
 
 	bool InitializeModelBuffer(
