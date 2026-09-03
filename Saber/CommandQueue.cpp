@@ -60,6 +60,7 @@ uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandLi
 	Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> pPendingD3D12CommandList{
 		GetD3D12CommandList(m_pDevice)
 	};
+	pPendingD3D12CommandList->SetName((commandList->GetName() + L"/Pending").c_str());
 
 	commandList->Close();
 	commandList->BeforeExecute();
