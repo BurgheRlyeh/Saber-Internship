@@ -287,7 +287,7 @@ void ResourceStateTracker::AddGlobalResourceState(
 	const GPUResource& resource,
 	D3D12_RESOURCE_STATES state
 ) {
-	std::scoped_lock<std::mutex> lock(s_globalMutex);
+	GlobalLock lock{};
 	s_globalResourceState[resource.GetD3D12Resource().Get()].SetSubresourceState(
 		D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
 		state
@@ -295,6 +295,6 @@ void ResourceStateTracker::AddGlobalResourceState(
 }
 
 void ResourceStateTracker::RemoveGlobalResourceState(const GPUResource& resource) {
-	std::scoped_lock<std::mutex> lock(s_globalMutex);
+	GlobalLock lock{};
 	s_globalResourceState.erase(resource.GetD3D12Resource().Get());
 }
