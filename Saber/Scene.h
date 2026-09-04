@@ -9,7 +9,7 @@
 #include "DynamicUploadRingBuffer.h"
 #include "IndirectCommand.h"
 #include "LightBuffer.h"
-#include "SceneBuffer.h"
+#include "CameraBuffer.h"
 
 template <typename T>
 class Buffer;
@@ -38,10 +38,8 @@ ENABLE_ENUM_FLAGS(RenderSubsystemType);
 class Scene {
     std::wstring m_name{};
 
-    SceneBuffer m_sceneBuffer{};
-    std::shared_ptr<Buffer<SceneBuffer>> m_pSceneCb{};
-    std::mutex m_sceneBufferMutex{};
-    std::atomic<bool> m_isUpdSceneCb{ true };
+    std::shared_ptr<Buffer<CameraBuffer>> m_pCameraCB{};
+    std::mutex m_cameraBufferMutex{};
 
     LightBuffer m_lightBuffer{};
     std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
@@ -158,7 +156,7 @@ public:
 private:
     bool UpdateCamera(float deltaTime);
 
-    void UpdateSceneBuffer(
+    void UpdateCameraBuffer(
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList
     );

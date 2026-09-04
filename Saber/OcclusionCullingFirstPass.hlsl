@@ -1,6 +1,6 @@
-//#include "SceneBuffer.h"
+//#include "CameraBuffer.h"
 
-////ConstantBuffer<SceneBuffer> SceneCB : register(b0);
+////ConstantBuffer<CameraBuffer> CameraCB : register(b0);
 
 //RWByteAddressBuffer VisibilityBuffer : register(u0);
 
@@ -34,12 +34,12 @@
 //bool IsAABBInFrustum(float4 bbmin, float4 bbmax) {
 //    for (uint i = 0; i < 6; ++i) {
 //        float4 p = float4(
-//			SceneCB.viewFrustumPlanes[i].x < 0.f ? bbmin.x : bbmax.x,
-//			SceneCB.viewFrustumPlanes[i].y < 0.f ? bbmin.y : bbmax.y,
-//			SceneCB.viewFrustumPlanes[i].z < 0.f ? bbmin.z : bbmax.z,
+//			CameraCB.viewFrustumPlanes[i].x < 0.f ? bbmin.x : bbmax.x,
+//			CameraCB.viewFrustumPlanes[i].y < 0.f ? bbmin.y : bbmax.y,
+//			CameraCB.viewFrustumPlanes[i].z < 0.f ? bbmin.z : bbmax.z,
 //			1.f
 //		);
-//        if (dot(p, SceneCB.viewFrustumPlanes[i]) < 0.f) {
+//        if (dot(p, CameraCB.viewFrustumPlanes[i]) < 0.f) {
 //            return false;
 //        }
 //    }

@@ -30,8 +30,8 @@ m_pGBuffer(pGBuffer)
         );
     }
 
-    m_pSceneCb = std::make_shared<Buffer<SceneBuffer>>(
-        m_name + L"/SceneCb",
+    m_pCameraCB = std::make_shared<Buffer<CameraBuffer>>(
+        m_name + L"/CameraCb",
         pDeviceContext,
         1,
         GPUResource::AllocationDesc{},
@@ -41,8 +41,8 @@ m_pGBuffer(pGBuffer)
         },
         EnumFlags<ResourceView>{ ResourceView::None }
     );
-    m_pSceneCb->CreateStorage<WholeBufferStorage<SceneBuffer>>();
-    m_pSceneCb->CreateUpdater<WholeBufferUpdater<SceneBuffer>>();
+    m_pCameraCB->CreateStorage<WholeBufferStorage<CameraBuffer>>();
+    m_pCameraCB->CreateUpdater<WholeBufferUpdater<CameraBuffer>>();
 
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
     m_pLightCB = CreateUploadBufferWithUpdater<LightBuffer>(
@@ -118,7 +118,7 @@ void Scene::Update(
     float deltaTime
 ) {
     UpdateCamera(deltaTime);
-    UpdateSceneBuffer(pDeviceContext, pCommandList);
+    UpdateCameraBuffer(pDeviceContext, pCommandList);
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
@@ -269,7 +269,7 @@ void Scene::RenderObjects(
 
         pD3D12CommandList->SetGraphicsRootConstantBufferView(
             0,
-            m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+            m_pCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
         );
         pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap().GetAddressOf());
         if (type & RenderSubsystemType::AlphaKill) {
@@ -279,7 +279,7 @@ void Scene::RenderObjects(
         }
         };
 
-    std::scoped_lock<std::mutex> sceneCBMutex(m_sceneBufferMutex);
+    std::scoped_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
     m_pRenderSubsystems[ToId(type)]->Render(
         pCommandList,
         commandListPrepare
@@ -316,7 +316,7 @@ void Scene::RunDeferredShading(
             auto pD3D12CommandList{ pCommandListCompute->GetD3D12CommandList() };
             pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
-                m_pSceneCb->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+                m_pCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
             );
             pD3D12CommandList->SetComputeRootConstantBufferView(
                 rootParamId++,
@@ -388,7 +388,7 @@ bool Scene::UpdateCamera(float deltaTime) {
     return true;
 }
 
-void Scene::UpdateSceneBuffer(
+void Scene::UpdateCameraBuffer(
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandList
 ) {
@@ -397,20 +397,21 @@ void Scene::UpdateSceneBuffer(
     std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
     DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
 
-    std::unique_lock<std::mutex> sceneBufferMutexLock(m_sceneBufferMutex);
+    std::unique_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
 
-    m_sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
-    m_sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, m_sceneBuffer.viewProjMatrix);
-    m_sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
+    CameraBuffer sceneBuffer{ *m_pCameraCB->GetStorageData() };
+    sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
+    sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, sceneBuffer.viewProjMatrix);
+    sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
     const Camera::Settings& cameraSettings{ pCamera->GetSettings() };
-    m_sceneBuffer.nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
+    sceneBuffer.nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
 
     camerasMutexLock.unlock();
 
-    m_pSceneCb->UpdateAll(&m_sceneBuffer, 1);
-    sceneBufferMutexLock.unlock();
+    m_pCameraCB->UpdateAll(&sceneBuffer, 1);
+    cameraBufferLock.unlock();
 
-    m_pSceneCb->PerformUpdate(pDeviceContext, pCommandList);
+    m_pCameraCB->PerformUpdate(pDeviceContext, pCommandList);
 }
 
 void Scene::UpdateLightBuffer() {

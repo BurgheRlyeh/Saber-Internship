@@ -168,7 +168,7 @@
     <ClInclude Include="ModelBuffer.h">
       <Filter>Common Files</Filter>
     </ClInclude>
-    <ClInclude Include="SceneBuffer.h">
+    <ClInclude Include="CameraBuffer.h">
       <Filter>Common Files</Filter>
     </ClInclude>
     <ClInclude Include="LightBuffer.h">

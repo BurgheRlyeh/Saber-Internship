@@ -1,7 +1,7 @@
 #include "ModelBuffer.h"
-#include "SceneBuffer.h"
+#include "CameraBuffer.h"
 
-ConstantBuffer<SceneBuffer> SceneCB : register(b0);
+ConstantBuffer<CameraBuffer> CameraCB : register(b0);
 
 cbuffer RootConstants : register(b1) {
     uint modelCbId;
@@ -36,7 +36,7 @@ VSOutput main(
     vtxOut.uv = uv;
     
     pos = float4(vtxOut.worldPos, 1.f);
-    vtxOut.position = mul(SceneCB.viewProjMatrix, pos);
+    vtxOut.position = mul(CameraCB.viewProjMatrix, pos);
     
     return vtxOut;
 }

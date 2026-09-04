@@ -1,9 +1,9 @@
 #include "Math.hlsli"
 #include "MaterialCB.h"
 #include "ModelBuffer.h"
-#include "SceneBuffer.h"
+#include "CameraBuffer.h"
 
-ConstantBuffer<SceneBuffer> SceneCB : register(b0);
+ConstantBuffer<CameraBuffer> CameraCB : register(b0);
 
 cbuffer RootConstants : register(b1)
 {

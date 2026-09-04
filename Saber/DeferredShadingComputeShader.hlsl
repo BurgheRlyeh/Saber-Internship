@@ -1,9 +1,9 @@
 #include "BlinnPhongLighting.hlsli"
 #include "Math.hlsli"
 #include "MaterialCB.h"
-#include "SceneBuffer.h"
+#include "CameraBuffer.h"
 
-ConstantBuffer<SceneBuffer> SceneCB : register(b0);
+ConstantBuffer<CameraBuffer> CameraCB : register(b0);
 ConstantBuffer<LightBuffer> LightCB : register(b1);
 
 Texture2D<float4> uvMaterialId : register(t0);
@@ -21,7 +21,7 @@ SamplerState s1 : register(s0);
 float3 WorldPositionFromDepth(float2 uv, float depth)
 {
     uv = float2(2.f, -2.f) * uv - float2(1.f, -1.f);
-    float4 worldPos = mul(SceneCB.invViewProjMatrix, float4(uv, depth, 1.f));
+    float4 worldPos = mul(CameraCB.invViewProjMatrix, float4(uv, depth, 1.f));
     return worldPos.xyz / worldPos.w;
 }
 
@@ -122,7 +122,7 @@ void main(ComputeShaderInput IN)
         Lighting lighting = GetPointLight(
             LightCB.lights[i],
             worldPos,
-            worldPos - SceneCB.cameraPosition.xyz,
+            worldPos - CameraCB.cameraPosition.xyz,
             norm,
             1.f
         );

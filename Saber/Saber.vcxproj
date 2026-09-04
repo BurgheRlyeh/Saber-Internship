@@ -219,7 +219,7 @@
     <ClInclude Include="ResourceStateTracker.h" />
     <ClInclude Include="Saber.h" />
     <ClInclude Include="Scene.h" />
-    <ClInclude Include="SceneBuffer.h" />
+    <ClInclude Include="CameraBuffer.h" />
     <ClInclude Include="SinglePassDownsampler.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TextureResource.h" />
