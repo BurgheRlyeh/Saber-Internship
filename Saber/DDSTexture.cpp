@@ -57,6 +57,6 @@ void DDSTexture::LoadFromDDS(
 		subresources.data(),
 		0, 0, subresources.size()
 	);
-	pDeviceContext->AddIntermediate(pIntermediate);
+	pCommandListDirect->KeepAlive(pIntermediate);
 	ResourceTransition(pCommandListDirect, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 }

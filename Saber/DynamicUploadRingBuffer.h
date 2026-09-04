@@ -13,7 +13,7 @@ struct MemorySegment {
 	size_t offset{};
 	size_t size{};
 };
-class FenceBasedRawRingBuffer : public FencedQueue<MemorySegment> {
+class FenceBasedRawRingBuffer : public FrameFencedQueue<MemorySegment> {
 	size_t m_capacity{};
 	size_t m_size{};
 

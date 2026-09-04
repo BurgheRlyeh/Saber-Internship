@@ -63,5 +63,17 @@ public:
 
     void ExecutionTask(FrameFenceValues& waitFenceValues);
 
+    // TODO: the batches still live one queue at a time, which is why this has
+    // to fan out. A batch does not need its queue though, only the fence it was
+    // stamped with, so all of them could sit in one pool keyed by
+    // { IncrementFence, value } owned here. That would give: one place holding
+    // every deferred resource, so a staging memory counter or a debug view is a
+    // few lines instead of a sum over queues; CommandQueue no longer storing
+    // resources at all, dropping its dependency on GPUResource; no dependency
+    // cycle, since the pool would know IncrementFence and not CommandQueue; and
+    // recording still lock free, with one lock per submission instead of one
+    // per queue. Deferred because it is a bigger change than moving this call.
+    void ReleaseCompletedResources();
+
     void Flush();
 };

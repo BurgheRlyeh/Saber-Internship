@@ -61,15 +61,12 @@ DeviceContext::DeviceContext(
 			static_cast<RingBufferType>(i)
 		);
 	}
-
-	m_pFrameDataBuffer = std::make_shared<FrameDataBuffer<std::shared_ptr<GPUResource>>>(3);
 }
 
 DeviceContext::~DeviceContext() {
 	for (auto& pRingBuffer : m_pRingBuffers) {
 		pRingBuffer.reset();
 	}
-	m_pFrameDataBuffer.reset();
 
 	m_pRootSignatureAtlas.reset();
 	m_pShaderAtlas.reset();
@@ -84,6 +81,13 @@ DeviceContext::~DeviceContext() {
 
 std::shared_ptr<CommandQueue> DeviceContext::GetCommandQueue(CommandQueueType type) const {
 	return m_pCommandListMgr->GetCommandQueue(type);
+}
+
+void DeviceContext::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
+	for (auto& pRingBuffer : m_pRingBuffers) {
+		pRingBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
+	}
+	m_pCommandListMgr->ReleaseCompletedResources();
 }
 
 void DeviceContext::SetInfoQueueFilter(Microsoft::WRL::ComPtr<D3D12Device>& pDevice) {

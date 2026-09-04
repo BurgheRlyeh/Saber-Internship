@@ -112,7 +112,7 @@ public:
 				0,
 				updSize
 			);
-			pDeviceContext->AddIntermediate(pIntermediate);
+			pCommandList->KeepAlive(pIntermediate);
 		}
 		else {
 			DynamicAllocation intermediateAllocation{
@@ -162,7 +162,7 @@ public:
 		size_t updCnt{ buffer.GetStorageDataSize() };
 
 		if (updCnt > buffer.GetCapacity()) {
-			pDeviceContext->AddIntermediate(buffer.GetResource());
+			pCommandList->KeepAlive(buffer.GetResource());
 			buffer.RecreateBufferAndViews(
 				pDeviceContext->GetDevice(),
 				updCnt,
@@ -192,7 +192,7 @@ public:
 				pIntermediate,
 				&subresData
 			);
-			pDeviceContext->AddIntermediate(pIntermediate);
+			pCommandList->KeepAlive(pIntermediate);
 		}
 		else {
 			DynamicAllocation intermediateAllocation{

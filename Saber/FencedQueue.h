@@ -6,53 +6,66 @@
 #include <limits>
 #include <queue>
 
+inline constexpr uint64_t DEFAULT_FENCE_VALUE{ std::numeric_limits<uint64_t>::max() };
+
+template <typename T>
+struct FencedData {
+	uint64_t fenceValue{ DEFAULT_FENCE_VALUE };
+	T data{};
+};
+
 template <typename T>
 class FencedQueue {
-protected:
-	static constexpr size_t DEFAULT_FENCE_VALUE{ std::numeric_limits<uint64_t>::max() };
-	struct FencedData {
-		uint64_t fenceValue{ DEFAULT_FENCE_VALUE };
-		T data{};
-	};
-	std::queue<FencedData> m_data;
+	// TODO: use vector-based deque with reserved capacity
+	//       or specify collection type as template parameter
+	std::queue<FencedData<T>> m_data{};
 
 public:
-	FencedQueue(size_t numFrames) : m_data(std::deque<FencedData>(numFrames)) {
-		// TODO: HACK: use vector-based deque with reserved capacity
-		for (size_t i{}; i < numFrames; ++i) {
-			m_data.pop();
-		}
-	}
-	virtual ~FencedQueue() = default;
+	FencedQueue() = default;
+	FencedQueue(size_t numFrames)
+		: m_data(std::deque<FencedData<T>>(numFrames))
+	{}
 
-	void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {
-		FinishCurrentFrame(fenceValue);
-		ReleaseCompletedFrames(completedFenceValue);
+	void Push(uint64_t fenceValue, T&& data) {
+		m_data.push(FencedData<T>{ fenceValue, std::move(data) });
 	}
 
-protected:
-	virtual T ProduceForPush() = 0;
-	virtual void FinishCurrentFrame(uint64_t fenceValue) {
-		m_data.push(FencedData{ fenceValue, ProduceForPush() });
-	}
-
-	virtual void BeforePop(const T& data) {}
-	virtual void ReleaseCompletedFrames(uint64_t completedFenceValue) {
+	std::vector<T> PopCompleted(uint64_t completedFenceValue) {
+		std::vector<T> popped{};
 		while (!m_data.empty() && m_data.front().fenceValue <= completedFenceValue) {
-			BeforePop(m_data.front().data);
+			popped.push_back(std::move(m_data.front().data));
 			m_data.pop();
 		}
+		return popped;
 	}
 };
 
 template <typename T>
-class FrameDataBuffer : public FencedQueue<std::vector<T>> {
+class FrameFencedQueue : public FencedQueue<T> {
+public:
+	FrameFencedQueue(size_t numFrames)
+		: FencedQueue<T>(numFrames)
+	{}
+
+	void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {
+		Push(fenceValue, ProduceForPush());
+		for (auto& data : PopCompleted(completedFenceValue)) {
+			BeforePop(data);
+		}
+	}
+protected:
+	virtual T ProduceForPush() = 0;
+	virtual void BeforePop(const T&) {}
+};
+
+template <typename T>
+class FrameDataBuffer : public FrameFencedQueue<std::vector<T>> {
 	size_t m_initCapacity{};
 	std::vector<T> m_curr{};
 
 public:
 	FrameDataBuffer(size_t numFrames, size_t initCapacity = 16) :
-		FencedQueue(numFrames),
+		FrameFencedQueue<std::vector<T>>(numFrames),
 		m_initCapacity(initCapacity)
 	{
 		Reserve();

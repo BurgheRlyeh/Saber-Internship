@@ -6,7 +6,7 @@
 #include "GPUResource.h"
 
 FenceBasedRawRingBuffer::FenceBasedRawRingBuffer(size_t numFrames, size_t capacity) :
-    FencedQueue(numFrames),
+    FrameFencedQueue<MemorySegment>(numFrames),
     m_capacity(capacity)
 {}
 

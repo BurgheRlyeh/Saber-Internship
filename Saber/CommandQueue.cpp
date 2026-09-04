@@ -6,6 +6,7 @@
 #include "CommandList.h"
 #include "CommandListPool.h"
 #include "Device.h"
+#include "GPUResource.h"
 #include "IncrementFence.h"
 #include "ResourceStateTracker.h"
 
@@ -89,6 +90,11 @@ uint64_t CommandQueue::ExecuteCommandList(std::shared_ptr<CommandList> commandLi
 
 	uint64_t fenceValue{ Signal() };
 
+	if (auto keepAlive{ commandList->TakeKeepAliveResources() }; !keepAlive.empty()) {
+		std::scoped_lock<std::mutex> lock(m_retiredResourcesMutex);
+		m_retiredResources.Push(fenceValue, std::move(keepAlive));
+	}
+
 	DiscardD3D12CommandList(pPendingD3D12CommandList, fenceValue);
 	DiscardD3D12CommandList(commandList->GetD3D12CommandList(), fenceValue);
 
@@ -151,6 +157,15 @@ Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> CommandQueue::GetD3D12CommandLi
 	std::shared_ptr<Device> pDevice
 ) {
 	return m_pListPool->Request(pDevice, m_pAllocatorPool->Request(pDevice, m_pIncFence));
+}
+
+void CommandQueue::ReleaseCompletedResources() {
+	// Free completed resources out of the lock to avoid ABBA deadlocks with ResourceStateTracker::GlobalLock
+	std::vector<KeepAliveResources> released{};
+	{
+		std::scoped_lock<std::mutex> lock(m_retiredResourcesMutex);
+		released = m_retiredResources.PopCompleted(m_pIncFence->GetValue());
+	}
 }
 
 void CommandQueue::DiscardD3D12CommandList(

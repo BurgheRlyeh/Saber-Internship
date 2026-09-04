@@ -4,15 +4,17 @@
 
 #include <functional>
 #include <mutex>
+#include <queue>
 #include <unordered_set>
 #include <vector>
 
+#include "CommandList.h"
 #include "CommandListTypes.h"
+#include "FencedQueue.h"
 #include "EnumFence.h"
 #include "LockFreeQueue.h"
 
 class CommandAllocatorPool;
-class CommandList;
 class CommandListPool;
 class Device;
 template <EnumConcept Enum>
@@ -33,6 +35,9 @@ class CommandQueue {
 	
 	std::unique_ptr<CommandAllocatorPool> m_pAllocatorPool{};
 	std::unique_ptr<CommandListPool> m_pListPool{};
+
+	FencedQueue<KeepAliveResources> m_retiredResources{};
+	std::mutex m_retiredResourcesMutex{};
 
 public:
 	CommandQueue() = delete;
@@ -92,6 +97,10 @@ public:
 	void GpuWait(uint64_t fenceValue);
 	void Flush();
 	bool IsFenceComplete(uint64_t fenceValue);
+
+	// Drop everything handed over by command lists whose fence value the GPU has
+	// already passed. Driven by CommandListManager, not by submitting.
+	void ReleaseCompletedResources();
 
 	// Get an available command list from the command queue.
 	Microsoft::WRL::ComPtr<D3D12GraphicsCommandList> GetD3D12CommandList(

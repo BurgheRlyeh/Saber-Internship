@@ -354,7 +354,7 @@ void GPUResource::InitCounterResetter(
 		pIntermediate,
 		&subresData
 	);
-	pDeviceContext->AddIntermediate(pIntermediate);
+	pCommandList->KeepAlive(pIntermediate);
 
 	pCounterResetter->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
 }

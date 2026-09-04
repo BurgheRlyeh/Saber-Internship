@@ -7,10 +7,13 @@
 
 #include <functional>
 #include <memory>
+#include <vector>
 
 class CommandListManager;
 class CommandQueue;
 class GPUResource;
+
+using KeepAliveResources = std::vector<std::shared_ptr<GPUResource>>;
 
 class CommandList : public std::enable_shared_from_this<CommandList> {
 	std::wstring m_name{};
@@ -29,6 +32,8 @@ class CommandList : public std::enable_shared_from_this<CommandList> {
 	std::vector<std::function<void()>> m_afterTasks{};
 
 	uint8_t m_pixEventsBegan{};
+
+	KeepAliveResources m_keepAliveResources{};
 
 public:
 	CommandList(
@@ -79,6 +84,13 @@ public:
 		const std::shared_ptr<GPUResource>& pResourceAfter = nullptr,
 		bool flushBarriers = true
 	);
+
+	void KeepAlive(const std::shared_ptr<GPUResource>& pResource) {
+		m_keepAliveResources.push_back(pResource);
+	}
+	KeepAliveResources TakeKeepAliveResources() {
+		return std::move(m_keepAliveResources);
+	}
 
 	void FlushResourceBarriers();
 	uint32_t FlushPendingResourceBarriers(

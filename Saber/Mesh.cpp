@@ -211,7 +211,7 @@ std::shared_ptr<GPUResource> Mesh::CreateBuffer(
 		pIntermediate,
         &subresourceData
     );
-    pDeviceContext->AddIntermediate(pIntermediate);
+    pCommandList->KeepAlive(pIntermediate);
 
     return pBuffer;
 }

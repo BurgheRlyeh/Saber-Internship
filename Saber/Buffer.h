@@ -154,7 +154,7 @@ public:
 			0,
 			oldCapacity * sizeof(T)
 		);
-		pDeviceContext->AddIntermediate(pOldResource);
+		pCommandListDirect->KeepAlive(pOldResource);
 
 		return true;
 	}

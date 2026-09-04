@@ -16,8 +16,6 @@ class CommandListManager;
 class DescriptorHeap;
 class DescriptorHeapManager;
 class Device;
-template <typename T>
-class FrameDataBuffer;
 class GPUResource;
 class MaterialManager;
 class Mesh;
@@ -45,7 +43,6 @@ class DeviceContext {
 
 	// Ring Buffers
 	std::array<std::shared_ptr<DynamicUploadHeap>, static_cast<size_t>(RingBufferType::Count)> m_pRingBuffers{};
-	std::shared_ptr<FrameDataBuffer<std::shared_ptr<GPUResource>>> m_pFrameDataBuffer{};
 
 public:
 	DeviceContext(
@@ -100,16 +97,7 @@ public:
 		return m_pRingBuffers[static_cast<size_t>(type)];
 	}
 
-	void AddIntermediate(std::shared_ptr<GPUResource> pResource) {
-		m_pFrameDataBuffer->Add(pResource);
-	}
-
-	void FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue) {
-		for (auto& pRingBuffer : m_pRingBuffers) {
-			pRingBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
-		}
-		m_pFrameDataBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
-	}
+	void FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFenceValue);
 
 private:
 	static void SetInfoQueueFilter(Microsoft::WRL::ComPtr<D3D12Device>& pDevice);

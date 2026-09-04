@@ -126,6 +126,12 @@ void CommandListManager::ExecutionTask(FrameFenceValues& waitFenceValues) {
     }
 }
 
+void CommandListManager::ReleaseCompletedResources() {
+    for (auto& pCommandQueue : m_pCommandQueues) {
+        pCommandQueue->ReleaseCompletedResources();
+    }
+}
+
 void CommandListManager::Flush() {
     for (auto pCommandQueue : m_pCommandQueues) {
         pCommandQueue->Flush();
