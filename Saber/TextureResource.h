@@ -22,4 +22,11 @@ public:
 		Microsoft::WRL::ComPtr<DXGISwapChain> pSwapChain,
 		size_t backBufferId
 	);
+
+	size_t GetWidth() const {
+		return GetResourceDesc().Width;
+	}
+	size_t GetHeight() const {
+		return GetResourceDesc().Height;
+	}
 };

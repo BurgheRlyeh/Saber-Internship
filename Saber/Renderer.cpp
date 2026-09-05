@@ -22,7 +22,6 @@
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "Scene.h"
-#include "SinglePassDownSampler.h"
 #include "Texture.h"
 #include "TextureResource.h"
 
@@ -101,16 +100,11 @@ void Renderer::Initialize(HWND hWnd) {
     m_pBackBuffers = CreateBackBuffers(m_pDeviceContext->GetDevice(), m_pSwapChain, m_pBackBuffersDescHeapRange);
 
 	m_pDepthBuffers.resize(1);
-	m_pDepthBuffers[0] = std::make_shared<DepthBuffer>(
+	m_pDepthBuffers[0] = std::make_shared<HiDepthBuffer>(
 		L"DepthBuffer",
         m_pDeviceContext,
 		m_clientWidth,
-		m_clientHeight,
-		std::make_shared<SinglePassDownsampler>(
-			m_pDeviceContext,
-			m_clientWidth,
-			m_clientHeight
-		)
+		m_clientHeight
 	);
 
     m_pGBuffers.resize(1);
@@ -409,7 +403,7 @@ void Renderer::Render() {
     std::shared_ptr<CommandListManager> pClMgr{ m_pDeviceContext->GetCommandListManager() };
 
     std::shared_ptr<GBuffer>& pGBuf{ pScene->GetGBuffer() };
-    std::shared_ptr<DepthBuffer>& pDepthBuf{ pScene->GetDepthBuffer() };
+    std::shared_ptr<HiDepthBuffer> pDepthBuf{ pScene->GetDepthBuffer() };
 
     size_t listPriority{};
 
@@ -556,7 +550,7 @@ void Renderer::Render() {
             pDepthBuf->WaitState(commandListForHZB, DepthBufferState::HierarchicalDepthBuilding);
             pDepthBuf->CreateHierarchicalDepthBuffer(
                 commandListForHZB,
-                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap()
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)
             );
             pDepthBuf->SignalState(commandListForHZB, DepthBufferState::DepthReading);
             commandListForHZB->PushForExecution();

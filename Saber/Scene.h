@@ -16,11 +16,11 @@ class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
-class DepthBuffer;
 class DescriptorHeap;
 class Device;
 class DeviceContext;
 class GBuffer;
+class HiDepthBuffer;
 class MaterialManager;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
@@ -59,7 +59,7 @@ class Scene {
     std::atomic<bool> m_isSceneReady{};
 
     std::shared_ptr<Texture> m_pTargetTexture{};
-    std::shared_ptr<DepthBuffer> m_pDepthBuffer{};
+    std::shared_ptr<HiDepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
@@ -71,7 +71,7 @@ public:
     Scene(
         const std::wstring& name,
         std::shared_ptr<DeviceContext> pDeviceContext,
-        std::shared_ptr<DepthBuffer> m_pDepthBuffer,
+        std::shared_ptr<HiDepthBuffer> m_pDepthBuffer,
         std::shared_ptr<GBuffer> m_pGBuffer
     );
 
@@ -89,8 +89,8 @@ public:
     void SetSceneReadiness(bool value);
     bool IsSceneReady();
 
-    void SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer);
-    std::shared_ptr<DepthBuffer> GetDepthBuffer();
+    void SetDepthBuffer(std::shared_ptr<HiDepthBuffer> pDepthBuffer);
+    std::shared_ptr<HiDepthBuffer> GetDepthBuffer();
 
     std::shared_ptr<GBuffer> GetGBuffer();
     void SetGBuffer(std::shared_ptr<GBuffer> pGBuffer);
@@ -165,4 +165,4 @@ private:
 public:
     void DrawCurrentCameraSettingsUI();
     void DrawSettingsUI();
-};
+};

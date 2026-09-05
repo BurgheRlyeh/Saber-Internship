@@ -18,7 +18,7 @@
 Scene::Scene(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
-    std::shared_ptr<DepthBuffer> pDepthBuffer,
+    std::shared_ptr<HiDepthBuffer> pDepthBuffer,
     std::shared_ptr<GBuffer> pGBuffer
 ) : m_name(name),
 m_pDepthBuffer(pDepthBuffer),
@@ -97,10 +97,10 @@ bool Scene::IsSceneReady() {
 }
 
 /* depth buffer */
-void Scene::SetDepthBuffer(std::shared_ptr<DepthBuffer> pDepthBuffer) {
+void Scene::SetDepthBuffer(std::shared_ptr<HiDepthBuffer> pDepthBuffer) {
     m_pDepthBuffer = pDepthBuffer;
 }
-std::shared_ptr<DepthBuffer> Scene::GetDepthBuffer() {
+std::shared_ptr<HiDepthBuffer> Scene::GetDepthBuffer() {
     return m_pDepthBuffer;
 }
 
