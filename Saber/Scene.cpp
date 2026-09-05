@@ -426,70 +426,28 @@ void Scene::UpdateLightBuffer() {
 
 #include "imgui.h"
 
-void Scene::DrawCurrentCameraSettingsUI() {
-    std::scoped_lock<std::mutex> lock(m_camerasMutex);
-    if (m_pCameras.empty()) {
-        return;
-    }
-    DrawCameraSettings(*m_pCameras.at(m_currCameraId));
-}
-
 void Scene::DrawSettingsUI() {
-    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-
-    ImGui::Begin("Lights");
-
-    bool changed{ false };
-
-    ImGui::SeparatorText("Ambient");
-    changed |= ImGui::ColorEdit3("Color##ambient", &m_lightBuffer.ambientColorAndPower.x);
-    changed |= ImGui::SliderFloat("Power##ambient", &m_lightBuffer.ambientColorAndPower.w, 0.f, 10.f);
-
-    ImGui::SeparatorText("Sources");
-
-    uint32_t& count{ m_lightBuffer.lightsCount.x };
-    ImGui::Text("Count: %u / %d", count, LIGHTS_MAX_COUNT);
-
-    if (ImGui::Button("+")) {
-        if (count < LIGHTS_MAX_COUNT) {
-            m_lightBuffer.lights[count] = Light{
-                .position{ 0.f, 0.f, 0.f, 1.f },
-                .diffuseColorAndPower{ 1.f, 1.f, 1.f, 1.f },
-                .specularColorAndPower{ 1.f, 1.f, 1.f, 1.f }
-            };
-            ++count;
-            changed = true;
+	// Camera settings
+    {
+        std::scoped_lock<std::mutex> lock(m_camerasMutex);
+        if (m_pCameras.empty()) {
+            return;
         }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("-")) {
-        if (count > 0) {
-            --count;
-            changed = true;
-        }
+        DrawSettings(*m_pCameras.at(m_currCameraId));
     }
 
-    for (uint32_t i{}; i < count; ++i) {
-        ImGui::PushID(static_cast<int>(i));
-        if (ImGui::TreeNode("source", "Light %u", i)) {
-            Light& light{ m_lightBuffer.lights[i] };
+	// Light settings
+    {
+        bool isChanged{};
+        std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
 
-            changed |= ImGui::DragFloat3("Position", &light.position.x, 0.1f, -100.f, 100.f);
-
-            changed |= ImGui::ColorEdit3("Diffuse", &light.diffuseColorAndPower.x);
-            changed |= ImGui::SliderFloat("Diffuse power", &light.diffuseColorAndPower.w, 0.f, 10.f);
-
-            changed |= ImGui::ColorEdit3("Specular", &light.specularColorAndPower.x);
-            changed |= ImGui::SliderFloat("Specular power", &light.specularColorAndPower.w, 0.f, 10.f);
-
-            ImGui::TreePop();
+        if (ImGui::Begin("Lights")) {
+            isChanged = DrawSettings(m_lightBuffer);
         }
-        ImGui::PopID();
-    }
+        ImGui::End();
 
-    ImGui::End();
-
-    if (changed) {
-        m_isUpdateLightCB.store(true);
+        if (isChanged) {
+            m_isUpdateLightCB.store(true);
+        }
     }
 }

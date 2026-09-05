@@ -247,6 +247,7 @@
     <ClCompile Include="GLTFLoader.cpp" />
     <ClCompile Include="GPUResource.cpp" />
     <ClCompile Include="IncrementFence.cpp" />
+    <ClCompile Include="LightBuffer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MaterialManager.cpp" />
     <ClCompile Include="MemoryMappedFile.cpp" />

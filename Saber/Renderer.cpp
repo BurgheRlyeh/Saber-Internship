@@ -855,6 +855,18 @@ void Renderer::Flush() {
 
 #include "imgui.h"
 
+bool DrawSettings(Renderer::Settings& settings) {
+    bool isChanged{};
+
+    if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen)) {
+        isChanged |= ImGui::Checkbox("V-Sync", &settings.vsync);
+    }
+
+    // TODO: process showUI
+
+    return isChanged;
+}
+
 void Renderer::RegisterUIPanels() {
     // Stats
     m_pUI->RegisterPanel([this]() {
@@ -869,12 +881,9 @@ void Renderer::RegisterUIPanels() {
 
     // Renderer settings
     m_pUI->RegisterPanel([this] {
-        ImGui::Begin("Renderer Settings");
-
-        if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Checkbox("V-Sync", &m_settings.vsync);
+        if (ImGui::Begin("Renderer Settings")) {
+            DrawSettings(m_settings);
         }
-
         ImGui::End();
     });
 
@@ -895,14 +904,7 @@ void Renderer::RegisterUIPanels() {
         ImGui::End();
     });
 
-    // Camera's settings
-    m_pUI->RegisterPanel([this]() {
-        if (m_pScenes.empty())
-            return;
-        m_pScenes[m_currSceneId]->DrawCurrentCameraSettingsUI();
-    });
-
-    // Light settings
+    // per-scene settings
     m_pUI->RegisterPanel([this]() {
         if (m_pScenes.empty())
             return;

@@ -153,4 +153,12 @@ private:
 	DirectX::XMFLOAT3 m_velocity{ 0.f, 0.f, 0.f };   // transient
 };
 
-void DrawCameraSettings(Camera& camera);
+// UI
+
+bool DrawSettings(Camera::Settings& settings);
+bool DrawSettings(StaticCamera::Settings& settings);
+bool DrawSettings(DynamicCamera::Settings& settings);
+bool DrawSettings(OrbitCamera::Settings& settings);
+bool DrawSettings(FlyCamera::Settings& settings);
+
+bool DrawSettings(Camera& camera);

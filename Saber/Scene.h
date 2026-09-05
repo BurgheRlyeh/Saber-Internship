@@ -163,6 +163,5 @@ private:
     void UpdateLightBuffer();
 
 public:
-    void DrawCurrentCameraSettingsUI();
     void DrawSettingsUI();
 };

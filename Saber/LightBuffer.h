@@ -61,4 +61,10 @@ struct LightBuffer {
 
 #include "HlslTypesUndef.h"
 
+#ifdef __cplusplus
+// UI
+bool DrawSettings(Light& light);
+bool DrawSettings(LightBuffer& lightBuffer);
+#endif  // __cplusplus
+
 #endif  // LIGHT_BUFFER_H

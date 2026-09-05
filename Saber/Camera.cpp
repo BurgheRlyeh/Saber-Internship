@@ -201,9 +201,9 @@ DirectX::XMFLOAT3 FlyCamera::GetPointOfInterest() const {
 DirectX::XMFLOAT3 FlyCamera::GetViewDirection() const {
 	const Settings& settings{ m_settings };
 	return {
-		std::cos(settings.pitch)* std::sin(settings.yaw),
+		std::cos(settings.pitch) * std::sin(settings.yaw),
 		std::sin(settings.pitch),
-		std::cos(settings.pitch)* std::cos(settings.yaw)
+		std::cos(settings.pitch) * std::cos(settings.yaw)
 	};
 }
 
@@ -250,89 +250,102 @@ void FlyCamera::Update(float deltaTime) {
 #include "imgui.h"
 
 namespace {
-	// Shared widgets for the base Camera::Settings. No Begin/End — composed
-	// inside each concrete camera's window below.
-	void DrawBaseFields(Camera::Settings& s) {
-		ImGui::SeparatorText("Projection");
-
-		ImGui::SliderFloat("Near", &s.nearPlane, 0.01f, 10.0f);
-		ImGui::SliderFloat("Far", &s.farPlane, 10.0f, 1000.0f);
-
-		bool perspective{ s.projectionType == ProjectionType::Perspective };
-		if (ImGui::Checkbox("Perspective", &perspective)) {
-			s.projectionType = perspective
-				? ProjectionType::Perspective
-				: ProjectionType::Orthographic;
+	template <typename Settings>
+	bool DrawSettingsInWindow(const char* title, Settings& settings) {
+		bool isChanged{};
+		if (ImGui::Begin(title)) {
+			isChanged = DrawSettings(settings);
 		}
-
-		if (s.projectionType == ProjectionType::Perspective) {
-			ImGui::SliderFloat("FOV", &s.fov, 10.0f, 120.0f);
-			ImGui::SliderFloat("Aspect ratio", &s.aspectRatio, 0.1f, 4.0f);
-		}
-		else {
-			ImGui::SliderFloat("Ortho width", &s.orthographicViewWidth, 0.01f, 20.0f);
-			ImGui::SliderFloat("Ortho height", &s.orthographicViewHeight, 0.01f, 20.0f);
-		}
-	}
-
-	// Shared widgets for the DynamicCamera::Settings extension.
-	void DrawDynamicFields(DynamicCamera::Settings& s) {
-		ImGui::SeparatorText("Movement");
-		ImGui::SliderFloat("Sensitivity", &s.sensitivity, 0.1f, 5.0f);
-		ImGui::SliderFloat("Move speed", &s.speed, 0.1f, 50.0f);
-	}
-
-	void DrawSettings(StaticCamera::Settings& s) {
-		ImGui::Begin("Static Camera");
-
-		DrawBaseFields(s);
-
-		ImGui::SeparatorText("Placement");
-		ImGui::SliderFloat3("Position", &s.pos.x, -100.f, 100.f);
-		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
-		ImGui::SliderFloat3("Up", &s.up.x, -1.f, 1.f);
-
 		ImGui::End();
-	}
-
-	void DrawSettings(OrbitCamera::Settings& s) {
-		ImGui::Begin("Orbit Camera");
-
-		DrawBaseFields(s);
-		DrawDynamicFields(s);
-
-		ImGui::SeparatorText("Orbit");
-		ImGui::SliderFloat3("Target (POI)", &s.poi.x, -100.f, 100.f);
-		ImGui::SliderAngle("Theta", &s.theta);
-		ImGui::SliderAngle("Phi", &s.phi, -89.f, 89.f);
-		ImGui::SliderFloat("Radius", &s.radius, 0.1f, 100.f);
-
-		ImGui::End();
-	}
-
-	void DrawSettings(FlyCamera::Settings& s) {
-		ImGui::Begin("Fly Camera");
-
-		DrawBaseFields(s);
-		DrawDynamicFields(s);
-
-		ImGui::SeparatorText("Fly");
-		ImGui::SliderFloat3("Position", &s.position.x, -100.f, 100.f);
-		ImGui::SliderAngle("Yaw", &s.yaw);
-		ImGui::SliderAngle("Pitch", &s.pitch, -89.f, 89.f);
-
-		ImGui::End();
+		return isChanged;
 	}
 }
 
-void DrawCameraSettings(Camera& cam) {
-	if (auto* c = dynamic_cast<StaticCamera*>(&cam)) {
-		DrawSettings(c->GetSettings()); return;
+bool DrawSettings(Camera::Settings& settings) {
+	bool isChanged{};
+
+	ImGui::SeparatorText("Projection");
+
+	isChanged |= ImGui::SliderFloat("Near", &settings.nearPlane, 0.01f, 10.0f);
+	isChanged |= ImGui::SliderFloat("Far", &settings.farPlane, 10.0f, 1000.0f);
+
+	bool isPerspective{ settings.projectionType == ProjectionType::Perspective };
+	if (ImGui::Checkbox("Perspective", &isPerspective)) {
+		settings.projectionType = isPerspective
+			? ProjectionType::Perspective
+			: ProjectionType::Orthographic;
+		isChanged = true;
 	}
-	if (auto* c = dynamic_cast<OrbitCamera*>(&cam))  {
-		DrawSettings(c->GetSettings()); return;
+
+	if (settings.projectionType == ProjectionType::Perspective) {
+		isChanged |= ImGui::SliderFloat("FOV", &settings.fov, 10.0f, 120.0f);
+		isChanged |= ImGui::SliderFloat("Aspect ratio", &settings.aspectRatio, 0.1f, 4.0f);
 	}
-	if (auto* c = dynamic_cast<FlyCamera*>(&cam))    {
-		DrawSettings(c->GetSettings()); return;
+	else {
+		isChanged |= ImGui::SliderFloat("Ortho width", &settings.orthographicViewWidth, 0.01f, 20.0f);
+		isChanged |= ImGui::SliderFloat("Ortho height", &settings.orthographicViewHeight, 0.01f, 20.0f);
 	}
+
+	return isChanged;
+}
+
+bool DrawSettings(StaticCamera::Settings& settings) {
+	bool isChanged{ DrawSettings(static_cast<Camera::Settings&>(settings)) };
+
+	ImGui::SeparatorText("Placement");
+	isChanged |= ImGui::SliderFloat3("Position", &settings.pos.x, -100.f, 100.f);
+	isChanged |= ImGui::SliderFloat3("Target (POI)", &settings.poi.x, -100.f, 100.f);
+	isChanged |= ImGui::SliderFloat3("Up", &settings.up.x, -1.f, 1.f);
+
+	return isChanged;
+}
+
+bool DrawSettings(DynamicCamera::Settings& settings) {
+	bool isChanged{ DrawSettings(static_cast<Camera::Settings&>(settings)) };
+
+	ImGui::SeparatorText("Movement");
+	isChanged |= ImGui::SliderFloat("Sensitivity", &settings.sensitivity, 0.1f, 5.0f);
+	isChanged |= ImGui::SliderFloat("Move speed", &settings.speed, 0.1f, 50.0f);
+
+	return isChanged;
+}
+
+bool DrawSettings(OrbitCamera::Settings& settings) {
+	bool isChanged{ DrawSettings(static_cast<DynamicCamera::Settings&>(settings)) };
+
+	ImGui::SeparatorText("Orbit");
+	isChanged |= ImGui::SliderFloat3("Target (POI)", &settings.poi.x, -100.f, 100.f);
+	isChanged |= ImGui::SliderAngle("Theta", &settings.theta);
+	isChanged |= ImGui::SliderAngle("Phi", &settings.phi, -89.f, 89.f);
+	isChanged |= ImGui::SliderFloat("Radius", &settings.radius, 0.1f, 100.f);
+
+	return isChanged;
+}
+
+bool DrawSettings(FlyCamera::Settings& settings) {
+	bool isChanged{ DrawSettings(static_cast<DynamicCamera::Settings&>(settings)) };
+
+	ImGui::SeparatorText("Fly");
+	isChanged |= ImGui::SliderFloat3("Position", &settings.position.x, -100.f, 100.f);
+	isChanged |= ImGui::SliderAngle("Yaw", &settings.yaw);
+	isChanged |= ImGui::SliderAngle("Pitch", &settings.pitch, -89.f, 89.f);
+
+	return isChanged;
+}
+
+bool DrawSettings(Camera& camera) {
+	// Most-derived first
+	if (auto* pCamera{ dynamic_cast<OrbitCamera*>(&camera) }) {
+		return DrawSettingsInWindow("Orbit Camera", pCamera->GetSettings());
+	}
+	if (auto* pCamera{ dynamic_cast<FlyCamera*>(&camera) }) {
+		return DrawSettingsInWindow("Fly Camera", pCamera->GetSettings());
+	}
+	if (auto* pCamera{ dynamic_cast<DynamicCamera*>(&camera) }) {
+		return DrawSettingsInWindow("Dynamic Camera", pCamera->GetSettings());
+	}
+	if (auto* pCamera{ dynamic_cast<StaticCamera*>(&camera) }) {
+		return DrawSettingsInWindow("Static Camera", pCamera->GetSettings());
+	}
+	return DrawSettingsInWindow("Camera", camera.GetSettings());
 }
