@@ -59,6 +59,10 @@ public:
             pCommandList,
             meshInitData.meshData
         );
+
+        const AABB& aabb{ m_pMesh->GetAABB() };
+        m_modelBuffer.bbmin = { aabb.min.x, aabb.min.y, aabb.min.z, 0.f };
+        m_modelBuffer.bbmax = { aabb.max.x, aabb.max.y, aabb.max.z, 0.f };
     }
 
     void SetModelBufferId(size_t id) {
@@ -146,20 +150,6 @@ public:
                 .IndexCountPerInstance{ static_cast<UINT>(m_pMesh->GetIndicesCount()) },
                 .InstanceCount{ 1 }
             },
-        };
-    }
-
-    std::function<void(void*, size_t)> VerticesPositionsBBHandler() {
-        return [&](void* data, size_t size) {
-            const DirectX::XMFLOAT3* positions{ static_cast<DirectX::XMFLOAT3*>(data) };
-            for (size_t i{}; i < size; ++i) {
-                m_modelBuffer.bbmin.x = std::min(m_modelBuffer.bbmin.x, positions[i].x);
-                m_modelBuffer.bbmin.y = std::min(m_modelBuffer.bbmin.y, positions[i].y);
-                m_modelBuffer.bbmin.z = std::min(m_modelBuffer.bbmin.z, positions[i].z);
-                m_modelBuffer.bbmax.x = std::max(m_modelBuffer.bbmax.x, positions[i].x);
-                m_modelBuffer.bbmax.y = std::max(m_modelBuffer.bbmax.y, positions[i].y);
-                m_modelBuffer.bbmax.z = std::max(m_modelBuffer.bbmax.z, positions[i].z);
-            }
         };
     }
 
@@ -280,8 +270,7 @@ public:
             .verticesData{
                 {
                     .data{ positions },
-                    .size{ sizeof(*positions) },
-                    .handler{ pObj->VerticesPositionsBBHandler() }
+                    .size{ sizeof(*positions) }
                 },
                 {.data{ normals }, .size{ sizeof(*normals) } },
                 {.data{ tangents }, .size{ sizeof(*tangents) } },
@@ -331,8 +320,7 @@ public:
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) },
-                    .handler{ pObj->VerticesPositionsBBHandler() }
+                    .size{ sizeof(DirectX::XMFLOAT3) }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },
@@ -449,8 +437,7 @@ public:
             .attributes{
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_POSITION },
-                    .size{ sizeof(DirectX::XMFLOAT3) },
-                    .handler{ pObj->VerticesPositionsBBHandler() }
+                    .size{ sizeof(DirectX::XMFLOAT3) }
                 },
                 Mesh::Attribute{
                     .name{ Microsoft::glTF::ACCESSOR_NORMAL },

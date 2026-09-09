@@ -17,14 +17,29 @@ class CommandList;
 class DeviceContext;
 class GPUResource;
 
+struct AABB {
+    DirectX::XMFLOAT3 min{
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()
+    };
+    DirectX::XMFLOAT3 max{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+    };
+};
+
 class Mesh {
     std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};
     std::vector<D3D12_VERTEX_BUFFER_VIEW> m_bufferViews{};
 
     std::shared_ptr<GPUResource> m_pIndexBuffer{};
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView{};
-    
+
     size_t m_indicesCount{};
+
+    AABB m_aabb{};
 
     struct BufferData {
         void* data{};
@@ -36,7 +51,6 @@ public:
     struct VertexData {
         void* data{};
         size_t size{};
-        std::function<void(void*, size_t)> handler{};
     };
     struct MeshDataIndicesVertices {
         // indices data
@@ -47,12 +61,12 @@ public:
         // vertices data
         size_t verticesCnt{};
         const std::initializer_list<VertexData>& verticesData{};
+        size_t positionsStreamId{}; // used to build the AABB of the mesh
     };
 
     struct Attribute {
         const std::string name{};
-        const size_t& size{};
-        std::function<void(void*, size_t)> handler{};
+        size_t size{};
     };
 
     struct MeshDataGLTF {
@@ -93,6 +107,8 @@ public:
 
     size_t GetIndicesCount() const;
 
+    const AABB& GetAABB() const;
+
 private:
     void InitFromVerticesIndices(
         const std::wstring& name,
@@ -121,6 +137,7 @@ private:
         const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData
     );
+    void AccumulatePositionsAABB(const void* pPositions, size_t count);
 
     std::shared_ptr<GPUResource> CreateBuffer(
         const std::wstring& name,
