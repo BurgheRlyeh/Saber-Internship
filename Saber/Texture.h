@@ -8,6 +8,7 @@
 #include "CommandQueue.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
+#include "DepthBuffer.h"
 #include "DescriptorHeapRange.h"
 #include "TextureResource.h"
 
