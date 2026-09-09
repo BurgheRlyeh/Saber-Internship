@@ -28,6 +28,9 @@
     <Filter Include="ImGui">
       <UniqueIdentifier>{1ff7baa2-8f3a-44d8-9b16-3a09f29dc4c0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Game">
+      <UniqueIdentifier>{0c3a5f14-9a2b-4d67-8f10-6d5b7e3a91c2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -177,6 +180,21 @@
     <ClInclude Include="Vertices.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GeometryGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Transform.h">
+      <Filter>Game</Filter>
+    </ClInclude>
+    <ClInclude Include="TransformHierarchy.h">
+      <Filter>Game</Filter>
+    </ClInclude>
+    <ClInclude Include="OrbitSystem.h">
+      <Filter>Game</Filter>
+    </ClInclude>
+    <ClInclude Include="SolarSystemScene.h">
+      <Filter>Game</Filter>
+    </ClInclude>
     <ClInclude Include="Texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -226,6 +244,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CommandListPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderSubsystemTypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -301,6 +322,18 @@
     </ClCompile>
     <ClCompile Include="TextureResource.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GeometryGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TransformHierarchy.cpp">
+      <Filter>Game</Filter>
+    </ClCompile>
+    <ClCompile Include="OrbitSystem.cpp">
+      <Filter>Game</Filter>
+    </ClCompile>
+    <ClCompile Include="SolarSystemScene.cpp">
+      <Filter>Game</Filter>
     </ClCompile>
     <ClCompile Include="DynamicUploadRingBuffer.cpp">
       <Filter>Source Files</Filter>

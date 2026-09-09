@@ -5,6 +5,7 @@
 #include "IndirectCommand.h"
 #include "IndirectCommandBuffer.h"
 #include "MeshRenderObject.h"
+#include "RenderSubsystemTypes.h"
 
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem {
@@ -35,11 +36,11 @@ public:
 			|| (m_pIndirectCommandBuffer && m_pIndirectCommandBuffer->IsUpdatePending());
 	}
 
-	bool Add(std::shared_ptr<RenderObject> pObject) {
+	size_t Add(std::shared_ptr<RenderObject> pObject) {
 		std::unique_lock<std::mutex> lock(m_objectsMutex);
 		assert(m_objects.empty() || pObject->GetPipelineState() == m_objects.front()->GetPipelineState());
 		if (m_objects.size() == m_capacity) {
-			return false;
+			return InvalidRenderObjectId;
 		}
 		m_objects.push_back(pObject);
 		size_t id{ m_objects.size() - 1 };
@@ -57,7 +58,18 @@ public:
 			ModelBuffer modelBuffer{ pMeshObject->GetModelBuffer() };
 			m_pModelBuffers->UpdateAt(id, modelBuffer);
 		}
-		return true;
+		return id;
+	}
+
+	void UpdateModelMatrix(size_t id, const DirectX::XMMATRIX& modelMatrix) {
+		if (!m_pModelBuffers || id >= m_objects.size()) {
+			assert(false);
+			return;
+		}
+
+		ModelBuffer modelBuffer{ m_pModelBuffers->GetStorageData()[id] };
+		modelBuffer.UpdateMatrices(modelMatrix);
+		m_pModelBuffers->UpdateAt(id, modelBuffer);
 	}
 
 	void Render(

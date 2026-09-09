@@ -3,13 +3,14 @@
 #include "Headers.h"
 
 #include <array>
+#include <functional>
 #include <mutex>
 
-#include "EnumHelpers.h"
 #include "DynamicUploadRingBuffer.h"
 #include "IndirectCommand.h"
 #include "LightBuffer.h"
 #include "CameraBuffer.h"
+#include "RenderSubsystemTypes.h"
 
 template <typename T>
 class Buffer;
@@ -26,14 +27,6 @@ class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
 class RenderSubsystem;
 class Texture;
-
-enum class RenderSubsystemType : size_t {
-    Default     = 0 << 0,
-    Dynamic     = 1 << 0,
-    AlphaKill   = 1 << 1,
-    Count       = 1 << 2
-};
-ENABLE_ENUM_FLAGS(RenderSubsystemType);
 
 class Scene {
     std::wstring m_name{};
@@ -65,6 +58,9 @@ class Scene {
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
     std::shared_ptr<RenderObject> m_pPostProcessing{};
+
+    std::function<void(float deltaTime, Scene& scene)> m_simulation{};
+    std::mutex m_simulationMutex{};
 
 public:
     Scene() = delete;
@@ -123,10 +119,17 @@ public:
         const float& specularPower = 1.f
     );
 
-    void AddObject(
+    RenderObjectHandle AddObject(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<RenderObject> pObject
-    ) const;
+    );
+
+    void UpdateObjectMatrix(
+        RenderObjectHandle handle,
+        const DirectX::XMMATRIX& modelMatrix
+    );
+
+    void SetSimulation(std::function<void(float deltaTime, Scene& scene)> simulation);
     void RenderObjects(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,
@@ -161,6 +164,7 @@ private:
         std::shared_ptr<CommandList> pCommandList
     );
     void UpdateLightBuffer();
+    void UpdateSimulation(float deltaTime);
 
 public:
     void DrawSettingsUI();

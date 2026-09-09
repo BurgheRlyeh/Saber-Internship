@@ -22,6 +22,7 @@
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "Scene.h"
+#include "SolarSystemScene.h"
 #include "Texture.h"
 #include "TextureResource.h"
 
@@ -127,7 +128,7 @@ void Renderer::Initialize(HWND hWnd) {
     m_isInitialized = true;
 
     {
-        constexpr size_t ScenesCount{ 4 };
+        constexpr size_t ScenesCount{ 5 };
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
@@ -205,6 +206,15 @@ void Renderer::Initialize(HWND hWnd) {
                     scale * DirectX::XMMatrixTranslation(posDist(gen), -1.f, posDist(gen))
                 ));
             }
+
+            m_pDeviceContext->GetCommandListManager()->ExecuteCommandListImmediately(pCommandList);
+        };
+        sceneObjectAdders[4] = [&](std::unique_ptr<Scene>& pScene) {
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandListManager()->GetCommandList()
+            };
+
+            BuildSolarSystemScene(*pScene, m_pDeviceContext, pCommandList, m_pGBuffers[0]);
 
             m_pDeviceContext->GetCommandListManager()->ExecuteCommandListImmediately(pCommandList);
         };

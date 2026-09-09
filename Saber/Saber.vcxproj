@@ -198,6 +198,7 @@
     <ClInclude Include="JobSystem.h" />
     <ClInclude Include="LightBuffer.h" />
     <ClInclude Include="LockFreeQueue.h" />
+    <ClInclude Include="RenderSubsystemTypes.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="MaterialCB.h" />
     <ClInclude Include="MemoryMappedFile.h" />
@@ -225,6 +226,11 @@
     <ClInclude Include="TextureResource.h" />
     <ClInclude Include="MaterialManager.h" />
     <ClInclude Include="Vertices.h" />
+    <ClInclude Include="GeometryGenerator.h" />
+    <ClInclude Include="Transform.h" />
+    <ClInclude Include="TransformHierarchy.h" />
+    <ClInclude Include="OrbitSystem.h" />
+    <ClInclude Include="SolarSystemScene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
@@ -269,6 +275,10 @@
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SinglePassDownsampler.cpp" />
     <ClCompile Include="TextureResource.cpp" />
+    <ClCompile Include="GeometryGenerator.cpp" />
+    <ClCompile Include="TransformHierarchy.cpp" />
+    <ClCompile Include="OrbitSystem.cpp" />
+    <ClCompile Include="SolarSystemScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc" />

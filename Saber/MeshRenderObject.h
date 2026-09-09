@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "Atlas.h"
+#include "GeometryGenerator.h"
 #include "Buffer.h"
 #include "IndirectCommand.h"
 #include "MaterialManager.h"
@@ -70,13 +71,6 @@ public:
     }
     ModelBuffer& GetModelBuffer() {
         return m_modelBuffer;
-    }
-    void SetModelBuffer(const ModelBuffer& modelBuffer) {
-        m_modelBuffer = modelBuffer;
-        UpdateModelBuffer();
-    }
-    void UpdateModelBuffer() {
-        m_pModelCb->Update(&m_modelBuffer);
     }
 
     void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) override {
@@ -299,6 +293,103 @@ public:
             pCommandList,
             L"Brick.dds",
             L"BrickNM.dds"
+        ));
+
+        return pObj;
+    }
+
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateBox(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoFilename,
+        const std::wstring& normalFilename,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    ) {
+        return CreateFromGeometry(
+            L"Box", pDeviceContext, pCommandList, GenerateBox(),
+            pGBuffer, albedoFilename, normalFilename, modelMatrix
+        );
+    }
+
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateSphere(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoFilename,
+        const std::wstring& normalFilename,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    ) {
+        return CreateFromGeometry(
+            L"Sphere", pDeviceContext, pCommandList, GenerateSphere(),
+            pGBuffer, albedoFilename, normalFilename, modelMatrix
+        );
+    }
+
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateFromGeometry(
+        const std::wstring& name,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        const GeometryData& geometry,
+        std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoFilename,
+        const std::wstring& normalFilename,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    ) {
+        std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
+            std::make_shared<MeshRenderObject<ModelBuffer>>(name, pDeviceContext->GetDevice())
+        };
+
+        Mesh::MeshDataIndicesVertices meshData{
+            // indices data
+            .indices{ const_cast<uint32_t*>(geometry.indices.data()) },
+            .indicesCnt{ geometry.indices.size() },
+            .indexSize{ sizeof(uint32_t) },
+            .indexFormat{ DXGI_FORMAT_R32_UINT },
+            // vertices data
+            .verticesCnt{ geometry.positions.size() },
+            .verticesData{
+                {
+                    .data{ const_cast<DirectX::XMFLOAT3*>(geometry.positions.data()) },
+                    .size{ sizeof(DirectX::XMFLOAT3) }
+                },
+                {
+                    .data{ const_cast<DirectX::XMFLOAT3*>(geometry.normals.data()) },
+                    .size{ sizeof(DirectX::XMFLOAT3) }
+                },
+                {
+                    .data{ const_cast<DirectX::XMFLOAT3*>(geometry.tangents.data()) },
+                    .size{ sizeof(DirectX::XMFLOAT3) }
+                },
+                {
+                    .data{ const_cast<DirectX::XMFLOAT2*>(geometry.uvs.data()) },
+                    .size{ sizeof(DirectX::XMFLOAT2) }
+                }
+            }
+        };
+        pObj->InitMesh(pDeviceContext, pCommandList, MeshInitData(meshData));
+        pObj->InitMaterial(
+            pDeviceContext,
+            RootSignatureData{
+                CreateRootSignatureBlob(),
+                L"GLTFRootSignature"
+            },
+            ShaderData{
+                L"SimpleVS.cso",
+                L"SimplePS.cso"
+            },
+            PipelineStateData{
+                CreatePipelineStateDesc(m_inputLayoutSoA, _countof(m_inputLayoutSoA), pGBuffer->GetRtFormatArray())
+            }
+        );
+
+        ModelBuffer& modelBuffer{ pObj->GetModelBuffer() };
+        modelBuffer.UpdateMatrices(modelMatrix);
+        modelBuffer.SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
+            pDeviceContext,
+            pCommandList,
+            albedoFilename,
+            normalFilename
         ));
 
         return pObj;

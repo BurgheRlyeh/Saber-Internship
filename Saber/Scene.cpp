@@ -119,6 +119,16 @@ void Scene::Update(
 ) {
     UpdateCamera(deltaTime);
     UpdateCameraBuffer(pDeviceContext, pCommandList);
+    UpdateSimulation(deltaTime);
+}
+
+void Scene::UpdateSimulation(float deltaTime) {
+    std::scoped_lock<std::mutex> lock(m_simulationMutex);
+    if (!m_simulation) {
+        return;
+    }
+
+    m_simulation(deltaTime, *this);
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
@@ -231,11 +241,27 @@ bool Scene::AddLightSource(
     return result;
 }
 
-void Scene::AddObject(
+RenderObjectHandle Scene::AddObject(
     const EnumFlags<RenderSubsystemType> type,
     std::shared_ptr<RenderObject> pObject
-) const {
-    m_pRenderSubsystems[ToId(type)]->Add(pObject);
+) {
+    return RenderObjectHandle{
+        type,
+        m_pRenderSubsystems[ToId(type)]->Add(pObject)
+    };
+}
+
+void Scene::UpdateObjectMatrix(
+    RenderObjectHandle handle,
+    const DirectX::XMMATRIX& modelMatrix
+) {
+    assert(handle.IsValid());
+    m_pRenderSubsystems[ToId(handle.type)]->UpdateModelMatrix(handle.id, modelMatrix);
+}
+
+void Scene::SetSimulation(std::function<void(float deltaTime, Scene& scene)> simulation) {
+    std::scoped_lock<std::mutex> lock(m_simulationMutex);
+    m_simulation = std::move(simulation);
 }
 void Scene::RenderObjects(
     const EnumFlags<RenderSubsystemType> type,
