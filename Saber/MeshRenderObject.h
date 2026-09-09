@@ -398,12 +398,17 @@ public:
     static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreateModelFromGLTF(
         std::shared_ptr<DeviceContext> pDeviceContext,
         const std::shared_ptr<CommandList>& pCommandList,
-        std::filesystem::path& filepath,
+        const std::filesystem::path& filepath,
         std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoFilename,
+        const std::wstring& normalFilename,
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
-            std::make_shared<MeshRenderObject<ModelBuffer>>(L"MeshGLTF", pDeviceContext->GetDevice())
+            std::make_shared<MeshRenderObject<ModelBuffer>>(
+                L"MeshGLTF/" + filepath.stem().wstring(),
+                pDeviceContext->GetDevice()
+            )
         };
 
         Mesh::MeshDataGLTF data{
@@ -448,8 +453,8 @@ public:
         pObj->GetModelBuffer().SetMaterial(pDeviceContext->GetMaterialManager()->GetCreateMaterial(
             pDeviceContext,
             pCommandList,
-            L"barbarian_diffuse.dds",
-            L"barb2_n.dds"
+            albedoFilename,
+            normalFilename
         ));
 
         return pObj;

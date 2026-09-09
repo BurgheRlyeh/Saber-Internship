@@ -173,6 +173,8 @@ void Renderer::Initialize(HWND hWnd) {
                 pCommandList,
                 filepath,
                 m_pGBuffers[0],
+                L"barbarian_diffuse.dds",
+                L"barb2_n.dds",
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
