@@ -25,3 +25,9 @@ GeometryData GenerateSphere(
 	uint32_t sliceCount = 32,
 	uint32_t stackCount = 16
 );
+
+GeometryData GeneratePlane(
+	float width = 1.f,
+	float depth = 1.f,
+	float uvTiling = 1.f
+);

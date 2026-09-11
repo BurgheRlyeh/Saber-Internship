@@ -105,3 +105,39 @@ GeometryData GenerateSphere(float radius, uint32_t sliceCount, uint32_t stackCou
 
 	return geometry;
 }
+
+GeometryData GeneratePlane(float width, float depth, float uvTiling) {
+	const float x{ 0.5f * width };
+	const float z{ 0.5f * depth };
+
+	return GeometryData{
+		.positions = {
+			{ -x, 0.f, -z },
+			{  x, 0.f, -z },
+			{  x, 0.f,  z },
+			{ -x, 0.f,  z }
+		},
+		.normals = {
+			{ 0.f, 1.f, 0.f },
+			{ 0.f, 1.f, 0.f },
+			{ 0.f, 1.f, 0.f },
+			{ 0.f, 1.f, 0.f }
+		},
+		.tangents = {
+			{ 1.f, 0.f, 0.f },
+			{ 1.f, 0.f, 0.f },
+			{ 1.f, 0.f, 0.f },
+			{ 1.f, 0.f, 0.f }
+		},
+		.uvs = {
+			{ 0.f, 0.f },
+			{ uvTiling, 0.f },
+			{ uvTiling, uvTiling },
+			{ 0.f, uvTiling }
+		},
+		.indices = {
+			0, 2, 1,
+			0, 3, 2
+		}
+	};
+}
