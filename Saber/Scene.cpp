@@ -123,7 +123,7 @@ void Scene::Update(
 }
 
 void Scene::UpdateSimulation(float deltaTime) {
-    std::scoped_lock<std::mutex> lock(m_simulationMutex);
+    std::scoped_lock<std::mutex> lock(m_gameHooksMutex);
     if (!m_simulation) {
         return;
     }
@@ -152,7 +152,15 @@ void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
     }
 }
 
-bool Scene::MoveCamera(float forwardCoef, float rightCoef) {
+bool Scene::Move(float forwardCoef, float rightCoef) {
+    if (std::unique_lock<std::mutex> hooksLock(m_gameHooksMutex); m_movementHandler) {
+        std::function<void(float, float)> handler{ m_movementHandler };
+        hooksLock.unlock();
+
+        handler(forwardCoef, rightCoef);
+        return true;
+    }
+
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     DynamicCamera* pDynamicCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
     if (!pDynamicCamera) {
@@ -260,8 +268,23 @@ void Scene::UpdateObjectMatrix(
 }
 
 void Scene::SetSimulation(std::function<void(float deltaTime, Scene& scene)> simulation) {
-    std::scoped_lock<std::mutex> lock(m_simulationMutex);
+    std::scoped_lock<std::mutex> lock(m_gameHooksMutex);
     m_simulation = std::move(simulation);
+}
+
+void Scene::SetMovementHandler(std::function<void(float forwardCoef, float rightCoef)> handler) {
+    std::scoped_lock<std::mutex> lock(m_gameHooksMutex);
+    m_movementHandler = std::move(handler);
+}
+
+void Scene::SetSettingsUI(std::function<void()> settingsUI) {
+    std::scoped_lock<std::mutex> lock(m_gameHooksMutex);
+    m_settingsUI = std::move(settingsUI);
+}
+
+std::shared_ptr<Camera> Scene::GetCurrentCamera() {
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    return m_pCameras.empty() ? nullptr : m_pCameras.at(m_currCameraId);
 }
 void Scene::RenderObjects(
     const EnumFlags<RenderSubsystemType> type,
@@ -453,6 +476,17 @@ void Scene::UpdateLightBuffer() {
 #include "imgui.h"
 
 void Scene::DrawSettingsUI() {
+    // First: the camera block below returns early when there are no cameras
+    {
+        std::unique_lock<std::mutex> hooksLock(m_gameHooksMutex);
+        if (m_settingsUI) {
+            std::function<void()> settingsUI{ m_settingsUI };
+            hooksLock.unlock();
+
+            settingsUI();
+        }
+    }
+
 	// Camera settings
     {
         std::scoped_lock<std::mutex> lock(m_camerasMutex);

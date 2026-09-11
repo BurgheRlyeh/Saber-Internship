@@ -231,6 +231,7 @@
     <ClInclude Include="TransformHierarchy.h" />
     <ClInclude Include="OrbitSystem.h" />
     <ClInclude Include="SolarSystemScene.h" />
+    <ClInclude Include="KatamariScene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
@@ -279,6 +280,7 @@
     <ClCompile Include="TransformHierarchy.cpp" />
     <ClCompile Include="OrbitSystem.cpp" />
     <ClCompile Include="SolarSystemScene.cpp" />
+    <ClCompile Include="KatamariScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Saber.rc" />

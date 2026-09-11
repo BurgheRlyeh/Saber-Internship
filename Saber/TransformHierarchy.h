@@ -29,9 +29,13 @@ public:
 	const Transform& GetLocalTransform(size_t node) const;
 
 	void SetParent(size_t node, size_t parent);
+
+	void SetParentKeepingWorld(size_t node, size_t parent);
 	size_t GetParent(size_t node) const;
 
 	DirectX::XMMATRIX GetWorldMatrix(size_t node) const;
+
+	void UpdateNode(size_t node);
 
 	void Update();
 };

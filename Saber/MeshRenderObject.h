@@ -66,6 +66,16 @@ public:
         m_modelBuffer.bbmax = { aabb.max.x, aabb.max.y, aabb.max.z, 0.f };
     }
 
+    const AABB& GetAABB() const {
+        assert(m_pMesh);
+        return m_pMesh->GetAABB();
+    }
+
+    const BoundingSphere& GetBoundingSphere() const {
+        assert(m_pMesh);
+        return m_pMesh->GetBoundingSphere();
+    }
+
     void SetModelBufferId(size_t id) {
         m_modelBufferId = id;
     }
@@ -322,6 +332,22 @@ public:
     ) {
         return CreateFromGeometry(
             L"Sphere", pDeviceContext, pCommandList, GenerateSphere(),
+            pGBuffer, albedoFilename, normalFilename, modelMatrix
+        );
+    }
+
+    static std::shared_ptr<MeshRenderObject<ModelBuffer>> CreatePlane(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        const std::shared_ptr<CommandList>& pCommandList,
+        std::shared_ptr<Texture> pGBuffer,
+        const std::wstring& albedoFilename,
+        const std::wstring& normalFilename,
+        float uvTiling = 1.f,
+        const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
+    ) {
+        return CreateFromGeometry(
+            L"Plane/" + std::to_wstring(uvTiling),
+            pDeviceContext, pCommandList, GeneratePlane(1.f, 1.f, uvTiling),
             pGBuffer, albedoFilename, normalFilename, modelMatrix
         );
     }

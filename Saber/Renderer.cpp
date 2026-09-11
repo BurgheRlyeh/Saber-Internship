@@ -22,6 +22,7 @@
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "Scene.h"
+#include "KatamariScene.h"
 #include "SolarSystemScene.h"
 #include "Texture.h"
 #include "TextureResource.h"
@@ -128,7 +129,7 @@ void Renderer::Initialize(HWND hWnd) {
     m_isInitialized = true;
 
     {
-        constexpr size_t ScenesCount{ 5 };
+        constexpr size_t ScenesCount{ 6 };
         m_pScenes.resize(ScenesCount);
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
@@ -217,6 +218,15 @@ void Renderer::Initialize(HWND hWnd) {
             };
 
             BuildSolarSystemScene(*pScene, m_pDeviceContext, pCommandList, m_pGBuffers[0]);
+
+            m_pDeviceContext->GetCommandListManager()->ExecuteCommandListImmediately(pCommandList);
+        };
+        sceneObjectAdders[5] = [&](std::unique_ptr<Scene>& pScene) {
+            std::shared_ptr<CommandList> pCommandList{
+                m_pDeviceContext->GetCommandListManager()->GetCommandList()
+            };
+
+            BuildKatamariScene(*pScene, m_pDeviceContext, pCommandList, m_pGBuffers[0]);
 
             m_pDeviceContext->GetCommandListManager()->ExecuteCommandListImmediately(pCommandList);
         };
@@ -645,8 +655,8 @@ void Renderer::Render() {
     m_pDeviceContext->FinishFrame(fenceValue, lastCompletedFenceValue);
 }
 
-void Renderer::MoveCamera(float forwardCoef, float rightCoef) {
-    m_pScenes.at(m_currSceneId)->MoveCamera(forwardCoef, rightCoef);
+void Renderer::Move(float forwardCoef, float rightCoef) {
+    m_pScenes.at(m_currSceneId)->Move(forwardCoef, rightCoef);
 }
 
 void Renderer::RotateCamera(float deltaX, float deltaY) {

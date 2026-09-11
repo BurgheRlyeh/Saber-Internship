@@ -60,7 +60,9 @@ class Scene {
     std::shared_ptr<RenderObject> m_pPostProcessing{};
 
     std::function<void(float deltaTime, Scene& scene)> m_simulation{};
-    std::mutex m_simulationMutex{};
+    std::function<void(float forwardCoef, float rightCoef)> m_movementHandler{};
+    std::function<void()> m_settingsUI{};
+    std::mutex m_gameHooksMutex{};
 
 public:
     Scene() = delete;
@@ -100,7 +102,12 @@ public:
 
     void AddCamera(const std::shared_ptr<Camera>&& pCamera);
     void UpdateCamerasAspectRatio(float aspectRatio);
-    bool MoveCamera(float forwardCoef, float rightCoef);
+    bool Move(float forwardCoef, float rightCoef);
+    void SetMovementHandler(
+        std::function<void(float forwardCoef, float rightCoef)> handler
+    );
+
+    std::shared_ptr<Camera> GetCurrentCamera();
     bool RotateCamera(float deltaTheta, float deltaPhi);
     bool ZoomCamera(float delta);
     bool SetCurrentCamera(size_t cameraId);
@@ -130,6 +137,9 @@ public:
     );
 
     void SetSimulation(std::function<void(float deltaTime, Scene& scene)> simulation);
+
+    // Extra ImGui drawn with the scene panels; optional, contents are the game's
+    void SetSettingsUI(std::function<void()> settingsUI);
     void RenderObjects(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,

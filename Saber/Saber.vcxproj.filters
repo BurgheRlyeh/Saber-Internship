@@ -195,6 +195,9 @@
     <ClInclude Include="SolarSystemScene.h">
       <Filter>Game</Filter>
     </ClInclude>
+    <ClInclude Include="KatamariScene.h">
+      <Filter>Game</Filter>
+    </ClInclude>
     <ClInclude Include="Texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -333,6 +336,9 @@
       <Filter>Game</Filter>
     </ClCompile>
     <ClCompile Include="SolarSystemScene.cpp">
+      <Filter>Game</Filter>
+    </ClCompile>
+    <ClCompile Include="KatamariScene.cpp">
       <Filter>Game</Filter>
     </ClCompile>
     <ClCompile Include="DynamicUploadRingBuffer.cpp">

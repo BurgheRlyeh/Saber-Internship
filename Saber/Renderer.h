@@ -124,7 +124,7 @@ public:
     void Update();
     void Render();
 
-    void MoveCamera(float forwardCoef, float rightCoef);
+    void Move(float forwardCoef, float rightCoef);
     void RotateCamera(float deltaX, float deltaY);
     void ZoomCamera(float delta);
 

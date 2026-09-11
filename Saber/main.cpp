@@ -72,6 +72,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case '2':
         case '3':
         case '4':
+        case '5':
             g_pRenderer->SetSceneId(wParam - '0');
             break;
         case 'C':
@@ -107,14 +108,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case 'W':
         case 'w':
             if (!g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(-g_speed, 0.f);
+                g_pRenderer->Move(-g_speed, 0.f);
                 g_pressedKeys[wParam] = true;
             }
             break;
         case 'S':
         case 's':
             if (!g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(g_speed, 0.f);
+                g_pRenderer->Move(g_speed, 0.f);
                 g_pressedKeys[wParam] = true;
             }
             break;
@@ -122,14 +123,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case 'A':
         case 'a':
             if (!g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(0.f, -g_speed);
+                g_pRenderer->Move(0.f, -g_speed);
                 g_pressedKeys[wParam] = true;
             }
             break;
         case 'D':
         case 'd':
             if (!g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(0.f, g_speed);
+                g_pRenderer->Move(0.f, g_speed);
                 g_pressedKeys[wParam] = true;
             }
             break;
@@ -149,14 +150,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case 'W':
         case 'w':
             if (g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(g_speed, 0.f);
+                g_pRenderer->Move(g_speed, 0.f);
             }
             g_pressedKeys[wParam] = false;
             break;
         case 'S':
         case 's':
             if (g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(-g_speed, 0.f);
+                g_pRenderer->Move(-g_speed, 0.f);
             }
             g_pressedKeys[wParam] = false;
             break;
@@ -164,14 +165,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case 'A':
         case 'a':
             if (g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(0.f, g_speed);
+                g_pRenderer->Move(0.f, g_speed);
             }
             g_pressedKeys[wParam] = false;
             break;
         case 'D':
         case 'd':
             if (g_pressedKeys[wParam]) {
-                g_pRenderer->MoveCamera(0.f, -g_speed);
+                g_pRenderer->Move(0.f, -g_speed);
             }
             g_pressedKeys[wParam] = false;
             break;
