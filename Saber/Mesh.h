@@ -30,6 +30,11 @@ struct AABB {
     };
 };
 
+struct BoundingSphere {
+    DirectX::XMFLOAT3 center{};
+    float radius{};
+};
+
 class Mesh {
     std::vector<std::shared_ptr<GPUResource>> m_pBuffers{};
     std::vector<D3D12_VERTEX_BUFFER_VIEW> m_bufferViews{};
@@ -40,6 +45,7 @@ class Mesh {
     size_t m_indicesCount{};
 
     AABB m_aabb{};
+    BoundingSphere m_boundingSphere{};
 
     struct BufferData {
         void* data{};
@@ -108,6 +114,7 @@ public:
     size_t GetIndicesCount() const;
 
     const AABB& GetAABB() const;
+    const BoundingSphere& GetBoundingSphere() const;
 
 private:
     void InitFromVerticesIndices(
@@ -137,7 +144,7 @@ private:
         const std::shared_ptr<CommandList>& pCommandList,
         const BufferData& bufferData
     );
-    void AccumulatePositionsAABB(const void* pPositions, size_t count);
+    void ComputePositionsBounds(const void* pPositions, size_t count);
 
     std::shared_ptr<GPUResource> CreateBuffer(
         const std::wstring& name,
