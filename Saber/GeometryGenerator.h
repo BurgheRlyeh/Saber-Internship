@@ -8,7 +8,8 @@
 struct GeometryData {
 	std::vector<DirectX::XMFLOAT3> positions{};
 	std::vector<DirectX::XMFLOAT3> normals{};
-	std::vector<DirectX::XMFLOAT3> tangents{};
+	// xyz - tangent, w - bitangent sign, as glTF stores it
+	std::vector<DirectX::XMFLOAT4> tangents{};
 	std::vector<DirectX::XMFLOAT2> uvs{};
 
 	std::vector<uint32_t> indices{};

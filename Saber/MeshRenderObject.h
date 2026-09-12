@@ -234,13 +234,15 @@ public:
             {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
             {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }
         };
-        DirectX::XMFLOAT3 tangents[24]{
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-            {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
-            {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f },
-            { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f },
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }
+        // w is the bitangent sign, and the stream has to be 16 bytes wide either
+        // way: the input layout declares TANGENT as R32G32B32A32_FLOAT
+        DirectX::XMFLOAT4 tangents[24]{
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+            {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f },
+            {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f },
+            { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f },
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }
         };
         DirectX::XMFLOAT2 uvs[24]{
             { 0.f, 1.f }, { 1.f, 1.f }, { 1.f, 0.f }, { 0.f, 0.f },

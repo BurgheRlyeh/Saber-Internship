@@ -25,13 +25,14 @@ GeometryData GenerateBox(float width, float height, float depth) {
 			{  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
 			{  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }
 		},
+		// w = +1: cross(normal, tangent) already points along +v for every face
 		.tangents = {
-			{  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-			{  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-			{  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
-			{  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f },
-			{ -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f },
-			{  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }
+			{  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+			{  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+			{  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f },
+			{  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f },
+			{ -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f },
+			{  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }
 		},
 		.uvs = {
 			{ 0.f, 1.f }, { 1.f, 1.f }, { 1.f, 0.f }, { 0.f, 0.f },
@@ -83,7 +84,8 @@ GeometryData GenerateSphere(float radius, uint32_t sliceCount, uint32_t stackCou
 
 			geometry.positions.push_back({ radius * unit.x, radius * unit.y, radius * unit.z });
 			geometry.normals.push_back(unit);
-			geometry.tangents.push_back({ -sinTheta, 0.f, cosTheta });
+			// w = +1: cross(normal, tangent) works out to dP/dphi, which is +v
+			geometry.tangents.push_back({ -sinTheta, 0.f, cosTheta, 1.f });
 			geometry.uvs.push_back({ u, v });
 		}
 	}
@@ -123,11 +125,14 @@ GeometryData GeneratePlane(float width, float depth, float uvTiling) {
 			{ 0.f, 1.f, 0.f },
 			{ 0.f, 1.f, 0.f }
 		},
+		// TODO: cross(normal, tangent) is -Z here while +v runs along +Z, so this
+		// should be -1. Kept at +1 for now: it is what the plane rendered with
+		// before, and flipping it is a separate visual change
 		.tangents = {
-			{ 1.f, 0.f, 0.f },
-			{ 1.f, 0.f, 0.f },
-			{ 1.f, 0.f, 0.f },
-			{ 1.f, 0.f, 0.f }
+			{ 1.f, 0.f, 0.f, 1.f },
+			{ 1.f, 0.f, 0.f, 1.f },
+			{ 1.f, 0.f, 0.f, 1.f },
+			{ 1.f, 0.f, 0.f, 1.f }
 		},
 		.uvs = {
 			{ 0.f, 0.f },
