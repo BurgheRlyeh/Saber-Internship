@@ -33,7 +33,7 @@ struct PSOutput
 PSOutput main(PSInput input)
 {
     uint materialId = ModelCBs[modelCbId].materialId.x;
-    if (MaterialsTextures[Materials.materials[materialId].x].Sample(s1, input.uv).w == 0.f)
+    if (MaterialsTextures[Materials.materials[materialId].textureIds.x].Sample(s1, input.uv).w == 0.f)
     {
         discard;
     }

@@ -21,6 +21,7 @@
 #include "MeshRenderObject.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
+#include "PointLight.h"
 #include "Scene.h"
 #include "KatamariScene.h"
 #include "SolarSystemScene.h"
@@ -176,6 +177,7 @@ void Renderer::Initialize(HWND hWnd) {
                 m_pGBuffers[0],
                 L"barbarian_diffuse.dds",
                 L"barb2_n.dds",
+                PhongParams{},
                 DirectX::XMMatrixScaling(2.f, 2.f, 2.f) * DirectX::XMMatrixTranslation(0.f, -2.f, 0.f)
             ));
             std::filesystem::path filepathGrass{ L"../../Resources/StaticModels/grass.glb" };
@@ -249,23 +251,15 @@ void Renderer::Initialize(HWND hWnd) {
                 ));
 
                 // standard light
-                pScene->AddLightSource(
-                    { -1.5f, 0.f, 1.5f, 1.f },
-                    { 1.f, 1.f, 0.f },
-                    { 1.f, 1.f, 0.f }
-                );
-
-                // random lights
-                for (size_t i{}; i < 0; ++i) {
-                    std::random_device rd;
-                    std::mt19937 gen(rd());
-                    std::uniform_real_distribution<float> posDist(-2.5f, 2.5f);
-                    std::uniform_real_distribution<float> colorDist(0.f, 1.f);
-                    pScene->AddLightSource(
-                        { posDist(gen), posDist(gen), posDist(gen), colorDist(gen) },
-                        { colorDist(gen), colorDist(gen), colorDist(gen) },
-                        { colorDist(gen), colorDist(gen), colorDist(gen) }
-                    );
+                {
+                    auto pLight{ std::make_shared<PointLight>(
+                        DirectX::XMFLOAT3{ -1.5f, 0.f, 1.5f }
+                    ) };
+                    pLight->GetSettings() = {
+                        DirectX::XMFLOAT3{ 1.f, 1.f, 0.f }, 1.f,
+                        DirectX::XMFLOAT3{ 1.f, 1.f, 0.f }, 1.f
+                    };
+                    pScene->AddLight(pLight);
                 }
 
                 addObjects(pScene);

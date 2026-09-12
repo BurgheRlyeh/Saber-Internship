@@ -316,11 +316,12 @@ public:
         std::shared_ptr<Texture> pGBuffer,
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         return CreateFromGeometry(
             L"Box", pDeviceContext, pCommandList, GenerateBox(),
-            pGBuffer, albedoFilename, normalFilename, modelMatrix
+            pGBuffer, albedoFilename, normalFilename, phong, modelMatrix
         );
     }
 
@@ -330,11 +331,12 @@ public:
         std::shared_ptr<Texture> pGBuffer,
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         return CreateFromGeometry(
             L"Sphere", pDeviceContext, pCommandList, GenerateSphere(),
-            pGBuffer, albedoFilename, normalFilename, modelMatrix
+            pGBuffer, albedoFilename, normalFilename, phong, modelMatrix
         );
     }
 
@@ -345,12 +347,13 @@ public:
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
         float uvTiling = 1.f,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         return CreateFromGeometry(
             L"Plane/" + std::to_wstring(uvTiling),
             pDeviceContext, pCommandList, GeneratePlane(1.f, 1.f, uvTiling),
-            pGBuffer, albedoFilename, normalFilename, modelMatrix
+            pGBuffer, albedoFilename, normalFilename, phong, modelMatrix
         );
     }
 
@@ -362,6 +365,7 @@ public:
         std::shared_ptr<Texture> pGBuffer,
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -386,8 +390,8 @@ public:
                     .size{ sizeof(DirectX::XMFLOAT3) }
                 },
                 {
-                    .data{ const_cast<DirectX::XMFLOAT3*>(geometry.tangents.data()) },
-                    .size{ sizeof(DirectX::XMFLOAT3) }
+                    .data{ const_cast<DirectX::XMFLOAT4*>(geometry.tangents.data()) },
+                    .size{ sizeof(DirectX::XMFLOAT4) }
                 },
                 {
                     .data{ const_cast<DirectX::XMFLOAT2*>(geometry.uvs.data()) },
@@ -417,7 +421,8 @@ public:
             pDeviceContext,
             pCommandList,
             albedoFilename,
-            normalFilename
+            normalFilename,
+            phong
         ));
 
         return pObj;
@@ -430,6 +435,7 @@ public:
         std::shared_ptr<Texture> pGBuffer,
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -482,7 +488,8 @@ public:
             pDeviceContext,
             pCommandList,
             albedoFilename,
-            normalFilename
+            normalFilename,
+            phong
         ));
 
         return pObj;

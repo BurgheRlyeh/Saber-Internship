@@ -91,7 +91,12 @@ void main(ComputeShaderInput IN)
         return;
     }
     
-    uint4 material = Materials.materials[materialId];
+    Material material = Materials.materials[materialId];
+    float ambientK = material.phong.x;
+    float diffuseK = material.phong.y;
+    float specularK = material.phong.z;
+    float shininess = material.phong.w;
+
     float depth = depthBuffer.Load(pixel);
     
 #if DDX_DDY_PIXEL_CHECK_CNT == 2
@@ -105,8 +110,11 @@ void main(ComputeShaderInput IN)
     float2 uvDdx = BestUVDerivative(pixel, uvmi, depth, pixelDeltasX);
     float2 uvDdy = BestUVDerivative(pixel, uvmi, depth, pixelDeltasY);
     
+    // albedo
+    float3 albedo = MaterialsTextures[NonUniformResourceIndex(material.textureIds.x)].SampleGrad(s1, uv, uvDdx, uvDdy);
+
     // normal
-    float3 nmValue = MaterialsTextures[NonUniformResourceIndex(material.y)].SampleGrad(s1, uv, uvDdx, uvDdy).xyz;
+    float3 nmValue = MaterialsTextures[NonUniformResourceIndex(material.textureIds.y)].SampleGrad(s1, uv, uvDdx, uvDdy).xyz;
     float3 localNorm = normalize(2.f * nmValue - 1.f); // normalize to avoid unnormalized texture
     float4 tbnQuat = tbn.Load(pixel);
     matrix tbnMatrix = quaternion_to_matrix(tbnQuat);
@@ -116,24 +124,20 @@ void main(ComputeShaderInput IN)
     float2 uvGlobal = float2(pixel.xy) / float2(w, h);
     float3 worldPos = WorldPositionFromDepth(uvGlobal, depth);
     
-    float3 lightColor = LightCB.ambientColorAndPower.xyz * LightCB.ambientColorAndPower.w;
+    float3 finalColor = ambientK * LightCB.ambientColorAndPower.w * LightCB.ambientColorAndPower.xyz * albedo;
     for (uint i = 0; i < LightCB.lightsCount.x; ++i)
     {
-        Lighting lighting = GetPointLight(
+        Lighting lighting = GetLight(
             LightCB.lights[i],
             worldPos,
-            worldPos - CameraCB.cameraPosition.xyz,
+            CameraCB.cameraPosition.xyz,
             norm,
-            1.f
+            shininess
         );
-        
-        lightColor += lighting.diffuse;
-        lightColor += lighting.specular;
+
+        finalColor += diffuseK * lighting.diffuse * albedo;
+        finalColor += specularK * lighting.specular;
     }
-    
-    float3 albedo = MaterialsTextures[NonUniformResourceIndex(material.x)].SampleGrad(s1, uv, uvDdx, uvDdy);
-    
-    float3 finalColor = albedo * lightColor;
     
     output[pixel.xy] = float4(finalColor, 1.f);
 }

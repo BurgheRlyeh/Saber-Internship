@@ -5,11 +5,26 @@
 
 #define LIGHTS_MAX_COUNT 10
 
+enum class LightType : uint {
+    Point,
+    Directional,
+    Spot,
+
+    Count
+};
+
 struct Light {
-    float4 position;
+    float4 position;    // point, spot
+    float4 direction;   // directional, spot
+
     float4 diffuseColorAndPower;
     float4 specularColorAndPower;
+
+    float4 cone;        // x - range, y - cos(inner angle), z - cos(outer angle)
+
+    uint4 type;         // x - LightType
 };
+
 struct LightBuffer {
     float4 ambientColorAndPower;
     uint4 lightsCount;
@@ -24,37 +39,8 @@ struct LightBuffer {
 	        color.x,
 	        color.y,
 	        color.z,
-	        power
+            power
         };
-    }
-
-    bool Add(
-        const DirectX::XMFLOAT4& position,
-        const DirectX::XMFLOAT3& diffuseColor,
-        const float& diffusePower,
-        const DirectX::XMFLOAT3& specularColor,
-        const float& specularPower
-    ) {
-        if (lightsCount.x == LIGHTS_MAX_COUNT) {
-            return false;
-        }
-
-        lights[lightsCount.x++] = {
-            position,
-            {
-                diffuseColor.x,
-                diffuseColor.y,
-                diffuseColor.z,
-                diffusePower
-            },
-            {
-                specularColor.x,
-                specularColor.y,
-                specularColor.z,
-                specularPower
-            }
-        };
-        return true;
     }
 #endif
 };
@@ -62,8 +48,9 @@ struct LightBuffer {
 #include "HlslTypesUndef.h"
 
 #ifdef __cplusplus
+const char* LightTypeName(LightType type);
+
 // UI
-bool DrawSettings(Light& light);
 bool DrawSettings(LightBuffer& lightBuffer);
 #endif  // __cplusplus
 

@@ -18,9 +18,18 @@ namespace {
 		Shape shape{ Shape::Sphere };
 		std::wstring albedo{};
 		std::wstring normal{};
+		PhongParams phong{};
 	};
 
 	const std::filesystem::path PlanetMesh{ L"../../Resources/StaticModels/sphere.glb" };
+
+	// The star is lit by ambient alone, so it reads as the source rather than as
+	// another lit ball. Proper emissive material is out of scope here
+	const PhongParams StarPhong{ .ambient{ 8.f }, .diffuse{ 0.f }, .specular{ 0.f } };
+	const PhongParams RockPhong{ .ambient{ 0.6f }, .specular{ 0.1f }, .shininess{ 12.f } };
+	const PhongParams IcyPhong{ .ambient{ 0.6f }, .specular{ 0.7f }, .shininess{ 96.f } };
+
+	constexpr float AmbientPower{ 0.1f };
 }
 
 void BuildSolarSystemScene(
@@ -42,17 +51,17 @@ void BuildSolarSystemScene(
 		switch (visual.shape) {
 		case BodyVisual::Shape::Sphere:
 			pObject = TestTextureRenderObject::CreateSphere(
-				pDeviceContext, pCommandList, pGBuffer, visual.albedo, visual.normal
+				pDeviceContext, pCommandList, pGBuffer, visual.albedo, visual.normal, visual.phong
 			);
 			break;
 		case BodyVisual::Shape::Box:
 			pObject = TestTextureRenderObject::CreateBox(
-				pDeviceContext, pCommandList, pGBuffer, visual.albedo, visual.normal
+				pDeviceContext, pCommandList, pGBuffer, visual.albedo, visual.normal, visual.phong
 			);
 			break;
 		case BodyVisual::Shape::Model:
 			pObject = TestTextureRenderObject::CreateModelFromGLTF(
-				pDeviceContext, pCommandList, PlanetMesh, pGBuffer, visual.albedo, visual.normal
+				pDeviceContext, pCommandList, PlanetMesh, pGBuffer, visual.albedo, visual.normal, visual.phong
 			);
 			break;
 		}
@@ -65,7 +74,7 @@ void BuildSolarSystemScene(
 
 	const size_t sun{ addBody(
 		{ .spinSpeed{ 0.15f }, .scale{ 3.f } },
-		{ BodyVisual::Shape::Sphere, L"Kitty.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Sphere, L"Kitty.dds", L"defaultNM.dds", StarPhong }
 	) };
 
 	addBody(
@@ -74,7 +83,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 8.f }, .orbitSpeed{ 0.55f },
 			.spinSpeed{ 1.6f }, .scale{ 0.6f }
 		},
-		{ BodyVisual::Shape::Model, L"p1.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p1.dds", L"defaultNM.dds", RockPhong }
 	);
 
 	const size_t planetWithTwoMoons{ addBody(
@@ -83,7 +92,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 14.f }, .orbitSpeed{ 0.38f }, .orbitAngle{ XM_PIDIV2 },
 			.spinSpeed{ 1.1f }, .scale{ 0.9f }
 		},
-		{ BodyVisual::Shape::Model, L"p2.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p2.dds", L"defaultNM.dds", IcyPhong }
 	) };
 	addBody(
 		{
@@ -91,7 +100,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 2.f }, .orbitSpeed{ 1.3f },
 			.spinSpeed{ 0.6f }, .scale{ 0.25f }
 		},
-		{ BodyVisual::Shape::Model, L"p2m1.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p2m1.dds", L"defaultNM.dds", RockPhong }
 	);
 	addBody(
 		{
@@ -99,7 +108,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 3.2f }, .orbitSpeed{ 0.85f }, .orbitAngle{ XM_PI },
 			.spinSpeed{ 1.4f }, .scale{ 0.18f }
 		},
-		{ BodyVisual::Shape::Model, L"p2m2.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p2m2.dds", L"defaultNM.dds", RockPhong }
 	);
 
 	const size_t planetWithRockyMoon{ addBody(
@@ -108,7 +117,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 20.f }, .orbitSpeed{ 0.26f }, .orbitAngle{ XM_PI },
 			.spinSpeed{ 0.75f }, .scale{ 1.1f }
 		},
-		{ BodyVisual::Shape::Model, L"p3.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p3.dds", L"defaultNM.dds", RockPhong }
 	) };
 	// A bare rock rather than a world of its own: no planet texture for it.
 	addBody(
@@ -117,7 +126,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 2.6f }, .orbitSpeed{ 1.05f },
 			.spinSpeed{ 0.5f }, .scale{ 0.3f }
 		},
-		{ BodyVisual::Shape::Box, L"nugget1k.dds", L"BrickNM.dds" }
+		{ BodyVisual::Shape::Box, L"nugget1k.dds", L"BrickNM.dds", IcyPhong }
 	);
 
 	const size_t outerPlanet{ addBody(
@@ -126,7 +135,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 27.f }, .orbitSpeed{ 0.17f }, .orbitAngle{ XM_PI * 1.5f },
 			.spinSpeed{ 1.25f }, .scale{ 0.8f }
 		},
-		{ BodyVisual::Shape::Model, L"p4.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p4.dds", L"defaultNM.dds", IcyPhong }
 	) };
 	addBody(
 		{
@@ -134,7 +143,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 2.2f }, .orbitSpeed{ 1.5f },
 			.spinSpeed{ 0.4f }, .scale{ 0.22f }
 		},
-		{ BodyVisual::Shape::Model, L"p4m1.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Model, L"p4m1.dds", L"defaultNM.dds", RockPhong }
 	);
 
 	// The outermost world, and the only cube-shaped one.
@@ -144,7 +153,7 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 34.f }, .orbitSpeed{ 0.11f },
 			.spinSpeed{ 0.45f }, .scale{ 1.f }
 		},
-		{ BodyVisual::Shape::Box, L"cube.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Box, L"cube.dds", L"defaultNM.dds", RockPhong }
 	);
 
 	addBody(
@@ -152,7 +161,7 @@ void BuildSolarSystemScene(
 			.parent{ sun }, .orbitRadius{ 30.f }, .orbitSpeed{ 0.09f },
 			.orbitAngle{ 0.8f }, .spinSpeed{ 2.2f }, .scale{ 0.3f }
 		},
-		{ BodyVisual::Shape::Box, L"nugget1k.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Box, L"nugget1k.dds", L"defaultNM.dds", IcyPhong }
 	);
 	addBody(
 		{
@@ -160,8 +169,11 @@ void BuildSolarSystemScene(
 			.orbitRadius{ 31.5f }, .orbitSpeed{ 0.08f }, .orbitAngle{ XM_PI },
 			.spinSpeed{ 2.6f }, .scale{ 0.25f }
 		},
-		{ BodyVisual::Shape::Box, L"cube.dds", L"defaultNM.dds" }
+		{ BodyVisual::Shape::Box, L"cube.dds", L"defaultNM.dds", RockPhong }
 	);
+
+	// The star's material leans on ambient, so the scene has to have some
+	scene.SetAmbientLight({ 1.f, 1.f, 1.f }, AmbientPower);
 
 	scene.SetSimulation([pOrbits, pHandles](float deltaTime, Scene& simulatedScene) {
 		pOrbits->Update(deltaTime);

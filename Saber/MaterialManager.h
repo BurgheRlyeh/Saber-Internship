@@ -53,15 +53,22 @@ class MaterialManager {
     struct MaterialKey {
         std::wstring albedo;
         std::wstring normal;
+        PhongParams phong;
 
-        bool operator==(const MaterialKey& other) const {
-            return albedo == other.albedo && normal == other.normal;
-        }
+        bool operator==(const MaterialKey& other) const = default;
 
         struct Hasher {
             size_t operator()(const MaterialKey& k) const {
-                return (std::hash<std::wstring>()(k.albedo)) ^
-                    (std::hash<std::wstring>()(k.normal) << 1);
+                size_t hash{ std::hash<std::wstring>()(k.albedo) };
+                hash ^= std::hash<std::wstring>()(k.normal) << 1;
+
+                for (const float& value : {
+                    k.phong.ambient, k.phong.diffuse, k.phong.specular, k.phong.shininess
+                }) {
+                    hash ^= std::hash<float>()(value) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+                }
+
+                return hash;
             }
         };
     };
@@ -87,6 +94,7 @@ public:
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList,
         const std::wstring& albedoFilepath,
-        const std::wstring& normalFilepath
+        const std::wstring& normalFilepath,
+        const PhongParams& phong = {}
     );
 };

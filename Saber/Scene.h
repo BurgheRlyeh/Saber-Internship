@@ -22,6 +22,7 @@ class Device;
 class DeviceContext;
 class GBuffer;
 class HiDepthBuffer;
+class LightSource;
 class MaterialManager;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
@@ -34,10 +35,11 @@ class Scene {
     std::shared_ptr<Buffer<CameraBuffer>> m_pCameraCB{};
     std::mutex m_cameraBufferMutex{};
 
+    std::vector<std::shared_ptr<LightSource>> m_pLights{};
+
     LightBuffer m_lightBuffer{};
     std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
     std::mutex m_lightBufferMutex{};
-    std::atomic<bool> m_isUpdateLightCB{};
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
@@ -118,13 +120,10 @@ public:
         const DirectX::XMFLOAT3& color,
         const float& power = 1.f
     );
-    bool AddLightSource(
-        const DirectX::XMFLOAT4& position,
-        const DirectX::XMFLOAT3& diffuseColor,
-        const DirectX::XMFLOAT3& specularColor,
-        const float& diffusePower = 1.f,
-        const float& specularPower = 1.f
-    );
+    bool AddLight(const std::shared_ptr<LightSource>& pLight);
+
+    size_t GetLightCount();
+    std::shared_ptr<LightSource> GetLight(size_t lightId);
 
     RenderObjectHandle AddObject(
         const EnumFlags<RenderSubsystemType> type,
@@ -178,4 +177,4 @@ private:
 
 public:
     void DrawSettingsUI();
-};
+};

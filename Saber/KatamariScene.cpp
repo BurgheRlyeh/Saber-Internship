@@ -7,8 +7,11 @@
 #include <vector>
 
 #include "Camera.h"
+#include "DirectionalLight.h"
 #include "MeshRenderObject.h"
+#include "PointLight.h"
 #include "Scene.h"
+#include "SpotLight.h"
 
 #include "imgui.h"
 
@@ -21,30 +24,63 @@ namespace {
 		std::filesystem::path model{};
 		std::wstring albedo{};
 		std::wstring normal{};
+		PhongParams phong{};
 		float minScale{};
 		float maxScale{};
 	};
 
 	const std::wstring DefaultNormalMap{ L"defaultNM.dds" };
 
+	// Specular weight and exponent are what tell the kinds apart on screen:
+	// painted wood barely glints, polished metal has a tight bright highlight
 	const std::vector<ItemKind> ItemKinds{
-		{ L"../../Resources/StaticModels/cube.glb",     L"cube.dds",     DefaultNormalMap, 0.35f, 0.9f },
-		{ L"../../Resources/StaticModels/cube.glb",		L"nugget1k.dds", DefaultNormalMap, 0.4f,  1.1f },
-		{ L"../../Resources/StaticModels/sphere.glb",	L"nugget4k.dds", DefaultNormalMap, 0.8f,  1.8f },
-		{ L"../../Resources/StaticModels/sphere.glb",   L"p2.dds",       DefaultNormalMap, 0.5f,  1.4f }
+		{
+			L"../../Resources/StaticModels/cube.glb", L"cube.dds", DefaultNormalMap,
+			{ .specular{ 0.15f }, .shininess{ 16.f } }, 0.35f, 0.9f
+		},
+		{
+			L"../../Resources/StaticModels/cube.glb", L"nugget1k.dds", DefaultNormalMap,
+			{ .specular{ 0.8f }, .shininess{ 96.f } }, 0.4f, 1.1f
+		},
+		{
+			L"../../Resources/StaticModels/sphere.glb", L"nugget4k.dds", DefaultNormalMap,
+			{ .specular{ 0.9f }, .shininess{ 128.f } }, 0.8f, 1.8f
+		},
+		{
+			L"../../Resources/StaticModels/sphere.glb", L"p2.dds", DefaultNormalMap,
+			{ .specular{ 0.08f }, .shininess{ 8.f } }, 0.5f, 1.4f
+		}
 	};
+
+	// Rough brick: almost no highlight
+	const PhongParams GroundPhong{ .specular{ 0.06f }, .shininess{ 8.f } };
+	const PhongParams BallPhong{ .specular{ 0.5f }, .shininess{ 48.f } };
 
 	constexpr size_t ItemCount{ 60 };
 	constexpr float GroundHalfSize{ 40.f };
 
-	// One slot of LIGHTS_MAX_COUNT is taken by the light Renderer adds to every scene
-	constexpr size_t LightCount{ 8 };
+	// Of LIGHTS_MAX_COUNT, one slot goes to the light Renderer adds to every scene,
+	// one to the directional sun and one to the spot following the ball
+	constexpr size_t LightCount{ 6 };
 	constexpr float LightMinHeight{ 2.5f };
 	constexpr float LightMaxHeight{ 9.f };
+	constexpr float LightRange{ 30.f };
 
 	// Attenuation is 1/d^2, so reaching a few units costs power in the tens
 	constexpr float LightMinPower{ 30.f };
 	constexpr float LightMaxPower{ 90.f };
+
+	// Low evening sun: lights the whole field so nothing is lit by ambient alone
+	const DirectX::XMFLOAT3 SunDirection{ 0.45f, -1.f, 0.3f };
+	const DirectX::XMFLOAT3 SunColor{ 1.f, 0.93f, 0.78f };
+	constexpr float SunPower{ 1.1f };
+
+	// Spotlight riding above the ball
+	const DirectX::XMFLOAT3 SpotColor{ 0.85f, 0.95f, 1.f };
+	constexpr float SpotHeight{ 14.f };
+	constexpr float SpotPower{ 120.f };
+	constexpr float SpotInnerAngle{ 12.f };
+	constexpr float SpotOuterAngle{ 22.f };
 
 	// Dimmed from the default so the point lights are actually visible
 	constexpr float AmbientPower{ 0.12f };
@@ -294,6 +330,7 @@ void BuildKatamariScene(
 			pDeviceContext, pCommandList, pGBuffer,
 			L"Brick.dds", L"BrickNM.dds",
 			GroundHalfSize,
+			GroundPhong,
 			XMMatrixScaling(2.f * GroundHalfSize, 1.f, 2.f * GroundHalfSize)
 		)
 	);
@@ -302,7 +339,7 @@ void BuildKatamariScene(
 	const RenderObjectHandle ballHandle{ scene.AddObject(
 		RenderSubsystemType::Dynamic,
 		TestTextureRenderObject::CreateSphere(
-			pDeviceContext, pCommandList, pGBuffer, L"Kitty.dds", DefaultNormalMap
+			pDeviceContext, pCommandList, pGBuffer, L"Kitty.dds", DefaultNormalMap, BallPhong
 		)
 	) };
 
@@ -318,7 +355,7 @@ void BuildKatamariScene(
 
 		std::shared_ptr<MeshRenderObject<ModelBuffer>> pObject{
 			TestTextureRenderObject::CreateModelFromGLTF(
-				pDeviceContext, pCommandList, kind.model, pGBuffer, kind.albedo, kind.normal
+				pDeviceContext, pCommandList, kind.model, pGBuffer, kind.albedo, kind.normal, kind.phong
 			)
 		};
 
@@ -354,14 +391,39 @@ void BuildKatamariScene(
 		const DirectX::XMFLOAT3 color{ channelDist(random), channelDist(random), channelDist(random) };
 		const float power{ powerDist(random) };
 
-		scene.AddLightSource(
-			{ positionDist(random), heightDist(random), positionDist(random), 1.f },
-			color,
-			color,
-			power,
-			0.25f * power
-		);
+		auto pLight{ std::make_shared<PointLight>(
+			DirectX::XMFLOAT3{ positionDist(random), heightDist(random), positionDist(random) },
+			LightRange
+		) };
+		pLight->GetSettings() = {
+			color, power,
+			color, 0.25f * power
+		};
+		scene.AddLight(pLight);
 	}
+
+	// No falloff on a directional light, so its power is on a different scale
+	// than the point lights above
+	auto pSun{ std::make_shared<DirectionalLight>() };
+	pSun->SetDirection(SunDirection);
+	pSun->GetSettings() = {
+		SunColor, SunPower,
+		SunColor, 0.5f * SunPower
+	};
+	scene.AddLight(pSun);
+
+	// Follows the ball from above, so the spot cone is visible while driving
+	auto pBallSpot{ std::make_shared<SpotLight>(
+		DirectX::XMFLOAT3{ 0.f, SpotHeight, 0.f },
+		DirectX::XMFLOAT3{ 0.f, -1.f, 0.f },
+		SpotHeight + 10.f
+	) };
+	pBallSpot->SetCone(SpotInnerAngle, SpotOuterAngle);
+	pBallSpot->GetSettings() = {
+		SpotColor, SpotPower,
+		SpotColor, SpotPower
+	};
+	scene.AddLight(pBallSpot);
 
 	// WASD rolls the ball. The key handler emits negative forward for W, which
 	// suits an orbit camera pulling in -- the ball wants the opposite sign
@@ -379,7 +441,7 @@ void BuildKatamariScene(
 		ImGui::End();
 	});
 
-	scene.SetSimulation([pWorld, pItemHandles, ballHandle](float deltaTime, Scene& simulatedScene) {
+	scene.SetSimulation([pWorld, pItemHandles, ballHandle, pBallSpot](float deltaTime, Scene& simulatedScene) {
 		const std::shared_ptr<Camera> pCamera{ simulatedScene.GetCurrentCamera() };
 
 		// Before the step, so this frame already moves along the current view
@@ -388,6 +450,11 @@ void BuildKatamariScene(
 		}
 
 		pWorld->Update(deltaTime);
+
+		// The light buffer is repacked from the sources every frame, so moving
+		// the light is all it takes
+		const XMFLOAT3 ballPosition{ pWorld->GetBallPosition() };
+		pBallSpot->SetPosition({ ballPosition.x, SpotHeight, ballPosition.z });
 
 		simulatedScene.UpdateObjectMatrix(ballHandle, pWorld->GetBallMatrix());
 		for (size_t item{}; item < pItemHandles->size(); ++item) {
