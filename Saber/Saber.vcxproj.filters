@@ -483,5 +483,8 @@
     <None Include="BlinnPhongLighting.hlsli">
       <Filter>Shaders\Includes</Filter>
     </None>
+    <None Include="ShadowMapping.hlsli">
+      <Filter>Shaders\Includes</Filter>
+    </None>
   </ItemGroup>
 </Project>

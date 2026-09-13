@@ -1,6 +1,8 @@
 #include "Scene.h"
 
+#include <algorithm>
 #include <functional>
+#include <limits>
 
 #include "Buffer.h"
 #include "Camera.h"
@@ -8,6 +10,7 @@
 #include "CommandList.h"
 #include "ComputeObject.h"
 #include "DepthBuffer.h"
+#include "DescriptorHeapRange.h"
 #include "DescriptorHeapManager.h"
 #include "Device.h"
 #include "DeviceContext.h"
@@ -54,6 +57,19 @@ m_pGBuffer(pGBuffer)
         pDeviceContext
     );
     m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+
+    m_pDebugCamera = std::make_shared<FlyCamera>();
+    m_pDebugCamera->GetSettings().speed = 20.f;
+
+    m_pShadowMap = std::make_shared<DepthBuffer>(
+        m_name + L"/ShadowMap",
+        pDeviceContext,
+        ShadowMapResolution, ShadowMapResolution
+    );
+    m_pShadowCameraCB = CreateUploadBufferWithUpdater<CameraBuffer>(
+        m_name + L"/ShadowCameraCB",
+        pDeviceContext
+    );
 
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
@@ -124,6 +140,21 @@ void Scene::Update(
     UpdateCamera(deltaTime);
     UpdateCameraBuffer(pDeviceContext, pCommandList);
     UpdateSimulation(deltaTime);
+
+    UpdateShadowCameraBuffer();
+
+    UpdateRenderSubsystems(pDeviceContext, pCommandList);
+}
+
+void Scene::UpdateRenderSubsystems(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+    for (const auto& pRenderSubsystem : m_pRenderSubsystems) {
+        if (pRenderSubsystem && pRenderSubsystem->IsUpdatePending()) {
+            pRenderSubsystem->PerformUpdate(pDeviceContext, pCommandList);
+        }
+    }
 }
 
 void Scene::UpdateSimulation(float deltaTime) {
@@ -137,6 +168,7 @@ void Scene::UpdateSimulation(float deltaTime) {
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
     m_pDepthBuffer->Clear(pCommandList);
+    m_pShadowMap->Clear(pCommandList);
     if (m_pGBuffer) {
         m_pGBuffer->ChangeState(pCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
         m_pGBuffer->Clear(pCommandList);
@@ -154,9 +186,55 @@ void Scene::UpdateCamerasAspectRatio(float aspectRatio) {
     for (auto& camera : m_pCameras) {
         camera->SetAspectRatio(aspectRatio);
     }
+    m_pDebugCamera->SetAspectRatio(aspectRatio);
+}
+
+void Scene::SwitchDebugCamera() {
+    const bool isActive{ !m_isDebugCameraActive.load() };
+    m_isDebugCameraActive.store(isActive);
+
+    if (!isActive) {
+        return;
+    }
+
+    // Starts where the gameplay camera stands, so switching does not teleport the
+    // view somewhere unrelated and leave one hunting for the scene
+    std::shared_ptr<Camera> pCurrent{ GetCurrentCamera() };
+    if (!pCurrent) {
+        return;
+    }
+
+    const DirectX::XMFLOAT3 position{ pCurrent->GetPosition() };
+    const DirectX::XMFLOAT3 direction{ pCurrent->GetViewDirection() };
+
+    std::scoped_lock<std::mutex> lock(m_camerasMutex);
+    FlyCamera::Settings& settings{ m_pDebugCamera->GetSettings() };
+
+    settings.position = position;
+    settings.yaw = std::atan2f(direction.x, direction.z);
+    settings.pitch = std::asinf(std::clamp(direction.y, -1.f, 1.f));
+}
+
+bool Scene::IsDebugCameraActive() const {
+    return m_isDebugCameraActive.load();
+}
+
+std::shared_ptr<Camera> Scene::GetRenderCamera() {
+    if (m_isDebugCameraActive.load()) {
+        return m_pDebugCamera;
+    }
+    return GetCurrentCamera();
 }
 
 bool Scene::Move(float forwardCoef, float rightCoef) {
+    // Ahead of the game hook: while flying, the keys steer the camera and must not
+    // also roll the ball
+    if (m_isDebugCameraActive.load()) {
+        std::scoped_lock<std::mutex> lock(m_camerasMutex);
+        m_pDebugCamera->Move(forwardCoef, rightCoef, 0.f);
+        return true;
+    }
+
     if (std::unique_lock<std::mutex> hooksLock(m_gameHooksMutex); m_movementHandler) {
         std::function<void(float, float)> handler{ m_movementHandler };
         hooksLock.unlock();
@@ -178,6 +256,12 @@ bool Scene::Move(float forwardCoef, float rightCoef) {
 }
 
 bool Scene::RotateCamera(float deltaTheta, float deltaPhi) {
+    if (m_isDebugCameraActive.load()) {
+        std::scoped_lock<std::mutex> lock(m_camerasMutex);
+        m_pDebugCamera->Rotate(deltaTheta, deltaPhi);
+        return true;
+    }
+
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     DynamicCamera* pDynamicCamera{ dynamic_cast<DynamicCamera*>(m_pCameras.at(m_currCameraId).get()) };
     if (!pDynamicCamera) {
@@ -190,6 +274,12 @@ bool Scene::RotateCamera(float deltaTheta, float deltaPhi) {
 }
 
 bool Scene::ZoomCamera(float delta) {
+    // A fly camera has nothing to zoom: the wheel would only change its speed,
+    // which is on a slider anyway
+    if (m_isDebugCameraActive.load()) {
+        return false;
+    }
+
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     OrbitCamera* pOrbitCamera{ dynamic_cast<OrbitCamera*>(m_pCameras.at(m_currCameraId).get()) };
     if (!pOrbitCamera) {
@@ -301,10 +391,6 @@ void Scene::RenderObjects(
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
 
-    if (m_pRenderSubsystems[ToId(type)]->IsUpdatePending()) {
-        m_pRenderSubsystems[ToId(type)]->PerformUpdate(pDeviceContext, pCommandList);
-    }
-
     auto commandListPrepare = [&] {
         auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
         pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -340,6 +426,65 @@ void Scene::RenderObjects(
     );
 }
 
+void Scene::RenderObjectsDepth(
+    const EnumFlags<RenderSubsystemType> type,
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    if (m_shadowLightId == SHADOW_NO_LIGHT) {
+        return;
+    }
+
+    auto commandListPrepare = [&] {
+        auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+        pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // Both come from the map, not from the window: a window-sized scissor would
+        // clip away whatever falls outside it
+        const CD3DX12_VIEWPORT viewport{
+            0.f, 0.f,
+            static_cast<float>(ShadowMapResolution),
+            static_cast<float>(ShadowMapResolution)
+        };
+        const CD3DX12_RECT scissorRect{
+            0, 0,
+            static_cast<LONG>(ShadowMapResolution),
+            static_cast<LONG>(ShadowMapResolution)
+        };
+        pD3D12CommandList->RSSetViewports(1, &viewport);
+        pD3D12CommandList->RSSetScissorRects(1, &scissorRect);
+
+        // Depth only. The pipeline state still declares the G-buffer targets and
+        // still runs its pixel shader; writes to unbound targets are dropped
+        pD3D12CommandList->OMSetRenderTargets(
+            0,
+            nullptr,
+            FALSE,
+            &m_pShadowMap->GetDsvCpuDescHandle()
+        );
+
+        pD3D12CommandList->SetGraphicsRootConstantBufferView(
+            0,
+            m_pShadowCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+        );
+        pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap().GetAddressOf());
+        if (type & RenderSubsystemType::AlphaKill) {
+            const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
+            pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
+            pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
+        }
+        };
+
+    std::scoped_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
+    m_pRenderSubsystems[ToId(type)]->Render(
+        pCommandList,
+        commandListPrepare
+    );
+}
+
 void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO) {
     m_pDeferredShadingComputeObject = pDeferredShadingCO;
 }
@@ -357,6 +502,11 @@ void Scene::RunDeferredShading(
 
     m_pGBuffer->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    m_pShadowMap->GetTexture()->ResourceTransition(
+        pCommandListCompute,
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    );
 
     UpdateLightBuffer();
 
@@ -382,6 +532,7 @@ void Scene::RunDeferredShading(
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pDepthBuffer->GetSrvGpuDescHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
             pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
+            pD3D12CommandList->SetComputeRootDescriptorTable(rootParamId++, m_pShadowMap->GetSrvGpuDescHandle());
         }
     );
 }
@@ -429,6 +580,14 @@ void Scene::RenderPostProcessing(
 
 bool Scene::UpdateCamera(float deltaTime) {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
+
+    // Every frame, not only after an input: a fly camera coasts to a stop and needs
+    // ticking to do it
+    if (m_isDebugCameraActive.load()) {
+        m_pDebugCamera->Update(deltaTime);
+        return true;
+    }
+
     if (!m_isUpdateCamera.load()) {
         return false;
     }
@@ -448,7 +607,13 @@ void Scene::UpdateCameraBuffer(
 ) {
     std::unique_lock<std::mutex> camerasMutexLock(m_camerasMutex);
 
-    std::shared_ptr<Camera> pCamera{ m_pCameras.at(m_currCameraId) };
+    // The one place that follows the debug camera. Shadows and the game keep to the
+    // gameplay camera, which is the point of having a separate one
+    std::shared_ptr<Camera> pCamera{
+        m_isDebugCameraActive.load()
+            ? std::static_pointer_cast<Camera>(m_pDebugCamera)
+            : m_pCameras.at(m_currCameraId)
+    };
     DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
 
     std::unique_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
@@ -466,6 +631,11 @@ void Scene::UpdateCameraBuffer(
     cameraBufferLock.unlock();
 
     m_pCameraCB->PerformUpdate(pDeviceContext, pCommandList);
+
+    m_pCameraCB->GetResource()->ResourceTransition(
+        pCommandList,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
 }
 
 void Scene::UpdateLightBuffer() {
@@ -476,7 +646,60 @@ void Scene::UpdateLightBuffer() {
         m_lightBuffer.lights[lightId] = m_pLights[lightId]->GetLight();
     }
 
+    // The very matrix the map was drawn with, not a freshly queried one
+    m_lightBuffer.shadowViewProj = m_shadowViewProj;
+    m_lightBuffer.shadowParams = m_shadowParams;
+    m_lightBuffer.shadowLightId = { m_shadowLightId, 0, 0, 0 };
+
     m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+}
+
+void Scene::UpdateShadowCameraBuffer() {
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+
+    // The first directional light in the list owns the only map there is
+    m_shadowLightId = SHADOW_NO_LIGHT;
+    for (size_t lightId{}; lightId < m_pLights.size(); ++lightId) {
+        if (m_pLights[lightId]->GetType() == LightType::Directional) {
+            m_shadowLightId = static_cast<uint32_t>(lightId);
+            break;
+        }
+    }
+
+    if (m_shadowLightId == SHADOW_NO_LIGHT) {
+        return;
+    }
+
+    const LightSource& light{ *m_pLights[m_shadowLightId] };
+    const Camera& shadowCamera{ light.GetShadowCamera() };
+
+    m_shadowViewProj = light.GetViewProjectionMatrix();
+
+    const DirectX::XMFLOAT3 position{ shadowCamera.GetPosition() };
+    const Camera::Settings& cameraSettings{ shadowCamera.GetSettings() };
+
+    // Both settings are authored in world terms and converted here, where the map's
+    // extent is known. An orthographic shadow camera has linear depth, so a world
+    // offset scales into clip space by a plain division
+    const float depthRange{ cameraSettings.farPlane - cameraSettings.nearPlane };
+    const float worldTexelSize{ cameraSettings.orthographicViewWidth / ShadowMapResolution };
+
+    m_shadowParams = {
+        1.f / ShadowMapResolution,
+        m_shadowSettings.depthBias / depthRange,
+        m_shadowSettings.normalOffset * worldTexelSize,
+        static_cast<float>(m_shadowSettings.pcfRadius)
+    };
+
+    const CameraBuffer shadowCameraBuffer{
+        .viewProjMatrix{ m_shadowViewProj },
+        .invViewProjMatrix{ DirectX::XMMatrixInverse(nullptr, m_shadowViewProj) },
+        .cameraPosition{ position.x, position.y, position.z, 0.f },
+        .nearFar{ cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f },
+        .viewFrustumPlanes{}
+    };
+
+    m_pShadowCameraCB->UpdateAll(&shadowCameraBuffer, 1);
 }
 
 // UI
@@ -493,6 +716,29 @@ void Scene::DrawSettingsUI() {
 
             settingsUI();
         }
+    }
+
+	// Debug camera
+    {
+        if (ImGui::Begin("Debug Camera")) {
+            bool isActive{ m_isDebugCameraActive.load() };
+            if (ImGui::Checkbox("Fly around (F)", &isActive)) {
+                SwitchDebugCamera();
+            }
+
+            if (m_isDebugCameraActive.load()) {
+                ImGui::TextUnformatted("Shadows and culling still follow the game camera");
+                if (ImGui::Button("Snap to game camera")) {
+                    // Already what switching on does, but handy after flying off
+                    m_isDebugCameraActive.store(false);
+                    SwitchDebugCamera();
+                }
+
+                std::scoped_lock<std::mutex> lock(m_camerasMutex);
+                DrawSettings(*m_pDebugCamera);
+            }
+        }
+        ImGui::End();
     }
 
 	// Camera settings
@@ -548,4 +794,49 @@ void Scene::DrawSettingsUI() {
         }
         ImGui::End();
     }
+
+    // Shadow map
+    {
+        if (ImGui::Begin("Shadow Map")) {
+            std::unique_lock<std::mutex> lock(m_lightBufferMutex);
+            const uint32_t shadowLightId{ m_shadowLightId };
+            lock.unlock();
+
+            if (shadowLightId == SHADOW_NO_LIGHT) {
+                ImGui::TextUnformatted("No directional light in the scene");
+            }
+            else {
+                ImGui::Text("Light %u, %u x %u",
+                    shadowLightId, ShadowMapResolution, ShadowMapResolution);
+
+                DrawSettings(m_shadowSettings);
+
+                // The handle is passed by its raw value, as the D3D12 backend
+                // expects. Single channel reversed depth, so it reads as red and is
+                // brightest closest to the light
+                constexpr float PreviewSize{ ShadowMapResolution / 8.f };
+                ImGui::Image(
+                    static_cast<ImTextureID>(m_pShadowMap->GetSrvGpuDescHandle().ptr),
+                    ImVec2{ PreviewSize, PreviewSize }
+                );
+            }
+        }
+        ImGui::End();
+    }
+}
+
+bool DrawSettings(Scene::ShadowSettings& settings) {
+    bool isChanged{};
+
+    // Divided by the map's depth range before it reaches the shader
+    isChanged |= ImGui::SliderFloat("Depth bias, units", &settings.depthBias, 0.f, .5f, "%.3f");
+
+    // Multiplied by the map's own texel size, so the value keeps its meaning when
+    // the light's ortho box is resized
+    isChanged |= ImGui::SliderFloat("Normal offset, texels", &settings.normalOffset, 0.f, 4.f, "%.2f");
+
+    // Each step costs (2r + 1)^2 comparisons, and the sampler filters 2x2 per tap
+    isChanged |= ImGui::SliderInt("PCF radius", &settings.pcfRadius, 0, 4);
+
+    return isChanged;
 }

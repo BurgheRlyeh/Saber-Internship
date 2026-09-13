@@ -86,8 +86,8 @@ void Renderer::Initialize(HWND hWnd) {
             {},
             // RTV
             { m_numFrames + GBUFFER_SIZE },
-            // DSV
-            { 1 }
+            // DSV: the shared depth buffer plus one shadow map per scene
+            { 10 }
         })
     );
     m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
@@ -312,6 +312,10 @@ void Renderer::SwitchCameraProjection() {
     m_isSwitchCameraProjection.store(true);
 }
 
+void Renderer::SwitchDebugCamera() {
+    m_isSwitchDebugCamera.store(true);
+}
+
 inline void Renderer::RenderLoop() {
     while (!m_isInitialized) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -331,6 +335,10 @@ inline void Renderer::RenderLoop() {
         if (m_isSwitchCameraProjection.load()) {
             m_pScenes[m_currSceneId]->SwitchCameraProjection();
             m_isSwitchCameraProjection.store(false);
+        }
+        if (m_isSwitchDebugCamera.load()) {
+            m_pScenes[m_currSceneId]->SwitchDebugCamera();
+            m_isSwitchDebugCamera.store(false);
         }
 
         Update();
@@ -458,6 +466,41 @@ void Renderer::Render() {
 
         commandListBeforeFrame->PushForExecution();
     }
+
+    // Ahead of the G-buffer lists: same geometry, its own target, and the lighting
+    // pass further down needs the map finished
+    const auto shadowMapPriority{ ++listPriority };
+    std::shared_ptr<CommandList> commandListForShadowMap{
+        pClMgr->GetDeferredCommandList(
+            L"ShadowMap",
+            CommandListType::Direct,
+            shadowMapPriority
+        )
+    };
+    m_pJobSystem->AddJob([&]() {
+        commandListForShadowMap->PixBeginEvent(L"Shadow map rendering");
+        pScene->RenderObjectsDepth(
+            RenderSubsystemType::Default,
+            m_pDeviceContext,
+            commandListForShadowMap
+        );
+        pScene->RenderObjectsDepth(
+            RenderSubsystemType::AlphaKill,
+            m_pDeviceContext,
+            commandListForShadowMap
+        );
+        pScene->RenderObjectsDepth(
+            RenderSubsystemType::Dynamic,
+            m_pDeviceContext,
+            commandListForShadowMap
+        );
+        pScene->RenderObjectsDepth(
+            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
+            m_pDeviceContext,
+            commandListForShadowMap
+        );
+        commandListForShadowMap->PushForExecution();
+    });
 
     // two command lists: static (1), dynamic (2)
     const auto staticObjectsPriority{ ++listPriority };

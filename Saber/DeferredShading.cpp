@@ -22,7 +22,7 @@ std::shared_ptr<ComputeObject> DeferredShading::CreateDefferedShadingComputeObje
 
 Microsoft::WRL::ComPtr<D3DBlob> DeferredShading::CreateRootSignatureBlob() {
     size_t rpId{};
-    CD3DX12_ROOT_PARAMETER1 rootParameters[7]{};
+    CD3DX12_ROOT_PARAMETER1 rootParameters[8]{};
     rootParameters[rpId++].InitAsConstantBufferView(0);
     rootParameters[rpId++].InitAsConstantBufferView(1);
 
@@ -46,6 +46,10 @@ Microsoft::WRL::ComPtr<D3DBlob> DeferredShading::CreateRootSignatureBlob() {
     rangeSrvsMaterial[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
     rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvsMaterial), rangeSrvsMaterial);
 
+    CD3DX12_DESCRIPTOR_RANGE1 rangeSrvShadowMap[1]{};
+    rangeSrvShadowMap[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 1);
+    rootParameters[rpId++].InitAsDescriptorTable(_countof(rangeSrvShadowMap), rangeSrvShadowMap);
+
     D3D12_STATIC_SAMPLER_DESC sampler{
         .Filter{ D3D12_FILTER_ANISOTROPIC },
         .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_WRAP },
@@ -62,8 +66,26 @@ Microsoft::WRL::ComPtr<D3DBlob> DeferredShading::CreateRootSignatureBlob() {
         .ShaderVisibility{ D3D12_SHADER_VISIBILITY_ALL }
     };
 
+    D3D12_STATIC_SAMPLER_DESC shadowSampler{
+        .Filter{ D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT },
+        .AddressU{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+        .AddressV{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+        .AddressW{ D3D12_TEXTURE_ADDRESS_MODE_BORDER },
+        .MipLODBias{},
+        .MaxAnisotropy{},
+        .ComparisonFunc{ D3D12_COMPARISON_FUNC_GREATER_EQUAL },
+        .BorderColor{ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK },
+        .MinLOD{},
+        .MaxLOD{ D3D12_FLOAT32_MAX },
+        .ShaderRegister{ 1 },
+        .RegisterSpace{},
+        .ShaderVisibility{ D3D12_SHADER_VISIBILITY_ALL }
+    };
+
+    const D3D12_STATIC_SAMPLER_DESC samplers[]{ sampler, shadowSampler };
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler);
+    rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers);
 
     // Serialize the root signature.
     Microsoft::WRL::ComPtr<D3DBlob> rootSignatureBlob, errorBlob;

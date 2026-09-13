@@ -25,9 +25,17 @@ struct Light {
     uint4 type;         // x - LightType
 };
 
+// No light casts a shadow this frame
+#define SHADOW_NO_LIGHT 0xffffffff
+
 struct LightBuffer {
     float4 ambientColorAndPower;
     uint4 lightsCount;
+
+    matrix shadowViewProj;
+    float4 shadowParams;    // x - texel size in uv, y - depth bias in ndc, z - normal offset in world units, w - PCF radius
+    uint4 shadowLightId;    // x - index into lights, or SHADOW_NO_LIGHT
+
     Light lights[LIGHTS_MAX_COUNT];
 
 #ifdef __cplusplus

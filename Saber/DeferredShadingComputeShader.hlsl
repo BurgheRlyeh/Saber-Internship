@@ -1,5 +1,6 @@
 #include "BlinnPhongLighting.hlsli"
 #include "Math.hlsli"
+#include "ShadowMapping.hlsli"
 #include "MaterialCB.h"
 #include "CameraBuffer.h"
 
@@ -16,7 +17,11 @@ RWTexture2D<float4> output : register(u0);
 ConstantBuffer<MaterialCB> Materials : register(b2);
 Texture2D<float4> MaterialsTextures[] : register(t3);
 
+// Own space: the material array above is unbounded and swallows t3 upwards
+Texture2D<float> shadowMap : register(t0, space1);
+
 SamplerState s1 : register(s0);
+SamplerComparisonState shadowSampler : register(s1);
 
 float3 WorldPositionFromDepth(float2 uv, float depth)
 {
@@ -124,6 +129,53 @@ void main(ComputeShaderInput IN)
     float2 uvGlobal = float2(pixel.xy) / float2(w, h);
     float3 worldPos = WorldPositionFromDepth(uvGlobal, depth);
     
+    const float shadowTexelSize = LightCB.shadowParams.x;
+    const float shadowDepthBias = LightCB.shadowParams.y;
+    const float shadowNormalOffset = LightCB.shadowParams.z;
+    const int pcfRadius = (int) LightCB.shadowParams.w;
+
+    // Offsetting is a geometric operation, so it follows the real surface and not
+    // the normal map. A perturbed normal drags the sample sideways by up to a texel
+    // and frays the shadow boundary into a ragged edge
+    float3 flatNorm = normalize(mul(tbnMatrix, float4(0.f, 0.f, 1.f, 0.f)).xyz);
+
+    // Across one texel the recorded depth changes by the texel size times the
+    // tangent of the angle to the light, so that is what both offsets scale with.
+    // Capped because the tangent runs away at the terminator
+    float shadowNdotL = 1.f;
+    if (LightCB.shadowLightId.x != SHADOW_NO_LIGHT)
+    {
+        shadowNdotL = saturate(dot(
+            flatNorm,
+            normalize(-LightCB.lights[LightCB.shadowLightId.x].direction.xyz)
+        ));
+    }
+    float shadowSinAngle = sqrt(saturate(1.f - shadowNdotL * shadowNdotL));
+    float shadowSlope = 1.f + min(shadowSinAngle / max(shadowNdotL, .05f), 4.f);
+
+    float shadow = 1.f;
+    if (LightCB.shadowLightId.x != SHADOW_NO_LIGHT)
+    {
+        float3 shadowUvz;
+        if (ProjectIntoShadowMap(
+            LightCB.shadowViewProj,
+            shadowNormalOffset * shadowSlope,
+            worldPos,
+            flatNorm,
+            shadowUvz
+        ))
+        {
+            shadow = SampleShadowPCF(
+                shadowMap,
+                shadowSampler,
+                shadowUvz,
+                shadowDepthBias * shadowSlope,
+                shadowTexelSize,
+                pcfRadius
+            );
+        }
+    }
+
     float3 finalColor = ambientK * LightCB.ambientColorAndPower.w * LightCB.ambientColorAndPower.xyz * albedo;
     for (uint i = 0; i < LightCB.lightsCount.x; ++i)
     {
@@ -135,9 +187,11 @@ void main(ComputeShaderInput IN)
             shininess
         );
 
-        finalColor += diffuseK * lighting.diffuse * albedo;
-        finalColor += specularK * lighting.specular;
+        float lightShadow = i == LightCB.shadowLightId.x ? shadow : 1.f;
+
+        finalColor += lightShadow * diffuseK * lighting.diffuse * albedo;
+        finalColor += lightShadow * specularK * lighting.specular;
     }
-    
+
     output[pixel.xy] = float4(finalColor, 1.f);
 }

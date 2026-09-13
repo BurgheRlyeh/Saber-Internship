@@ -83,6 +83,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case 'p':
             g_pRenderer->SwitchCameraProjection();
             break;
+        case 'F':
+        case 'f':
+            g_pRenderer->SwitchDebugCamera();
+            break;
         case 'V':
         case 'v':
             g_pRenderer->SwitchVSync();

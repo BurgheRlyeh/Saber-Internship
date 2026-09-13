@@ -84,6 +84,7 @@ private:
     std::atomic<size_t> m_nextSceneId{ m_currSceneId };
     std::atomic<bool> m_isSwitchToNextCamera{};
     std::atomic<bool> m_isSwitchCameraProjection{};
+    std::atomic<bool> m_isSwitchDebugCamera{};
 
     std::vector<std::shared_ptr<GBuffer>> m_pGBuffers{};
 
@@ -117,6 +118,7 @@ public:
 
     void SwitchToNextCamera();
     void SwitchCameraProjection();
+    void SwitchDebugCamera();
 
     void Resize(uint32_t width, uint32_t height);
 

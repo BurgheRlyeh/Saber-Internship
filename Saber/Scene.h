@@ -17,9 +17,11 @@ class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
+class DepthBuffer;
 class DescriptorHeap;
 class Device;
 class DeviceContext;
+class FlyCamera;
 class GBuffer;
 class HiDepthBuffer;
 class LightSource;
@@ -30,6 +32,14 @@ class RenderSubsystem;
 class Texture;
 
 class Scene {
+public:
+    struct ShadowSettings {
+        float depthBias{ .05f };
+        float normalOffset{ 1.5f };
+        int pcfRadius{ 1 };
+    };
+
+private:
     std::wstring m_name{};
 
     std::shared_ptr<Buffer<CameraBuffer>> m_pCameraCB{};
@@ -51,11 +61,24 @@ class Scene {
     std::atomic<bool> m_isUpdateCamera{};
     size_t m_currCameraId{};
 
+    std::shared_ptr<FlyCamera> m_pDebugCamera{};
+    std::atomic<bool> m_isDebugCameraActive{};
+
     std::atomic<bool> m_isSceneReady{};
 
     std::shared_ptr<Texture> m_pTargetTexture{};
     std::shared_ptr<HiDepthBuffer> m_pDepthBuffer{};
     std::shared_ptr<GBuffer> m_pGBuffer{};
+
+    static constexpr UINT ShadowMapResolution{ 2048 };
+    std::shared_ptr<DepthBuffer> m_pShadowMap{};
+    std::shared_ptr<Buffer<CameraBuffer>> m_pShadowCameraCB{};
+
+    DirectX::XMMATRIX m_shadowViewProj{ DirectX::XMMatrixIdentity() };
+    DirectX::XMFLOAT4 m_shadowParams{};
+    uint32_t m_shadowLightId{ SHADOW_NO_LIGHT };
+
+    ShadowSettings m_shadowSettings{};
 
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
@@ -109,7 +132,15 @@ public:
         std::function<void(float forwardCoef, float rightCoef)> handler
     );
 
+    // What the frame is built for: shadows, culling and the game read this one
     std::shared_ptr<Camera> GetCurrentCamera();
+
+    // What the frame is drawn through, which is the debug camera while it is on
+    std::shared_ptr<Camera> GetRenderCamera();
+
+    void SwitchDebugCamera();
+    bool IsDebugCameraActive() const;
+
     bool RotateCamera(float deltaTheta, float deltaPhi);
     bool ZoomCamera(float delta);
     bool SetCurrentCamera(size_t cameraId);
@@ -147,6 +178,14 @@ public:
         D3D12_RECT scissorRect
     );
 
+    // Same geometry from the shadow camera, depth only. Call once per subsystem
+    // before the lighting pass
+    void RenderObjectsDepth(
+        const EnumFlags<RenderSubsystemType> type,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandListDirect
+    );
+
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
         std::shared_ptr<CommandList> pCommandListCompute,
@@ -173,8 +212,16 @@ private:
         std::shared_ptr<CommandList> pCommandList
     );
     void UpdateLightBuffer();
+    void UpdateShadowCameraBuffer();
+    void UpdateRenderSubsystems(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList
+    );
     void UpdateSimulation(float deltaTime);
 
 public:
     void DrawSettingsUI();
 };
+
+// UI
+bool DrawSettings(Scene::ShadowSettings& settings);
