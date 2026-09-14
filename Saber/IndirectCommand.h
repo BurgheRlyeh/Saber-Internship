@@ -2,6 +2,7 @@
 #define INDIRECT_COMMAND
 
 #include "CppHlslTypesRedefine.h"
+#include "HlslTypesDef.h"
 
 #ifdef __cplusplus
 #include <type_traits>
@@ -75,7 +76,7 @@ DEFINE_INDIRECT_COMMAND(CbMesh4IndirectCommand) {
 
 DEFINE_INDIRECT_COMMAND(CbConstMesh4IndirectCommand) {
     D3D12_GPU_VIRTUAL_ADDRESS constantBufferView;
-    DirectX::XMUINT4 rootConstant;
+    uint4 rootConstant;
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView1;
@@ -97,7 +98,7 @@ DEFINE_INDIRECT_COMMAND(CbConstMesh4IndirectCommand) {
 };
 
 DEFINE_INDIRECT_COMMAND(ConstMesh4IndirectCommand) {
-    DirectX::XMUINT4 rootConstant;
+    uint4 rootConstant;
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView1;
@@ -120,5 +121,7 @@ DEFINE_INDIRECT_COMMAND(ConstMesh4IndirectCommand) {
 #ifdef __cplusplus
 #pragma pack(pop)
 #endif
+
+#include "HlslTypesUndef.h"
 
 #endif  // INDIRECT_COMMAND
