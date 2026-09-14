@@ -19,6 +19,7 @@
 #include "IndirectUpdater.h"
 #include "MaterialManager.h"
 #include "MeshRenderObject.h"
+#include "OcclusionCulling.h"
 #include "PostProcessing.h"
 #include "PSOLibrary.h"
 #include "PointLight.h"
@@ -141,6 +142,7 @@ void Renderer::Initialize(HWND hWnd) {
 
         auto copyPostProcess{ std::make_shared<CopyPostProcessing>(m_pDeviceContext) };
         auto deferredShading{ DeferredShading::CreateDefferedShadingComputeObject(m_pDeviceContext) };
+        auto occlusionCulling{ OcclusionCulling::CreateConstMesh4Culling(m_pDeviceContext) };
         for (size_t i{}; i < ScenesCount; ++i) {
             std::unique_ptr<Scene>& pScene{ m_pScenes[i] };
             pScene = std::make_unique<Scene>(
@@ -151,6 +153,7 @@ void Renderer::Initialize(HWND hWnd) {
             );
             pScene->SetPostProcessing(copyPostProcess);
             pScene->SetDeferredShadingComputeObject(deferredShading);
+            pScene->SetOcclusionCullingComputeObject(occlusionCulling);
         }
         
         std::vector<std::function<void(std::unique_ptr<Scene>&)>> sceneObjectAdders;
@@ -508,84 +511,117 @@ void Renderer::Render() {
         commandListForShadowMap->PushForExecution();
     });
 
-    // two command lists: static (1), dynamic (2)
-    const auto staticObjectsPriority{ ++listPriority };
-    std::shared_ptr<CommandList> commandListForStaticObjects{
-        pClMgr->GetDeferredCommandList(
-            L"StaticObjects",
-            CommandListType::Direct,
-            staticObjectsPriority
-        )
-    };
-    m_pJobSystem->AddJob([&]() {
-        pGBuf->WaitState(commandListForStaticObjects, GBufferState::Write);
-        pDepthBuf->WaitState(commandListForStaticObjects, DepthBufferState::DepthWriting);
-
-        commandListForStaticObjects->PixBeginEvent(L"Static Objects rendering");
-        pScene->RenderObjects(
-            RenderSubsystemType::Default,
-            m_pDeviceContext,
-            commandListForStaticObjects,
-            m_viewport,
-            m_scissorRect
-        );
-        commandListForStaticObjects->PushForExecution();
-        });
-
-    const auto alphaObjectsPriority{ ++listPriority };
-    std::shared_ptr<CommandList> commandListForAlphaObjects{
-        pClMgr->GetDeferredCommandList(
-            L"StaticAlphakillObjects",
-            CommandListType::Direct,
-            alphaObjectsPriority
-        )
-    };
-    m_pJobSystem->AddJob([&]() {
-        commandListForAlphaObjects->PixBeginEvent(L"Alphakill Objects rendering");
-        pScene->RenderObjects(
-            RenderSubsystemType::AlphaKill,
-            m_pDeviceContext,
-            commandListForAlphaObjects,
-            m_viewport,
-            m_scissorRect
-        );
-        commandListForAlphaObjects->PushForExecution();
-    });
-
-    const auto dynamicObjectsPriority{ ++listPriority };
-    std::shared_ptr<CommandList> commandListForDynamicObjects{
-        pClMgr->GetDeferredCommandList(
-            L"DynamicObjects",
-            CommandListType::Direct,
-            dynamicObjectsPriority
-        )
-    };
-    m_pJobSystem->AddJob([&]() {
-        commandListForDynamicObjects->PixBeginEvent(L"Dynamic Objects rendering");
-        pScene->RenderObjects(
-            RenderSubsystemType::Dynamic,
-            m_pDeviceContext,
-            commandListForDynamicObjects,
-            m_viewport,
-            m_scissorRect
-        );
-        pScene->RenderObjects(
-            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic,
-            m_pDeviceContext,
-            commandListForDynamicObjects,
-            m_viewport,
-            m_scissorRect
-        );
-
-        pGBuf->SignalState(commandListForDynamicObjects, GBufferState::Read);
-        pDepthBuf->SignalState(commandListForDynamicObjects, DepthBufferState::HierarchicalDepthBuilding);
-
-        commandListForDynamicObjects->PushForExecution();
-    });
-
+    // Two passes over the same geometry. The first one redraws what the previous
+    // frame ended up seeing, the depth pyramid is built from it, and the second one
+    // adds whatever the pyramid lets through
+    const auto firstCullPriority{ ++listPriority };
+    const auto firstPassStaticPriority{ ++listPriority };
+    const auto firstPassAlphaPriority{ ++listPriority };
+    const auto firstPassDynamicPriority{ ++listPriority };
     const auto hzbPriority{ ++listPriority };
+    const auto secondCullPriority{ ++listPriority };
+    const auto secondPassStaticPriority{ ++listPriority };
+    const auto secondPassAlphaPriority{ ++listPriority };
+    const auto secondPassDynamicPriority{ ++listPriority };
     const auto deferredShadingPriority{ ++listPriority };
     const auto afterFramePriority{ ++listPriority };
+
+    const EnumFlags<RenderSubsystemType> subsystemTypes[]{
+        RenderSubsystemType::Default,
+        RenderSubsystemType::AlphaKill,
+        RenderSubsystemType::Dynamic,
+        RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic
+    };
+
+    // Every subsystem culls into its own buffers, so one list per pass is enough.
+    // The passes are what has to stay ordered
+    auto recordCullList = [&](const std::wstring& name, size_t priority, bool secondPass) {
+        std::shared_ptr<CommandList> pCommandList{
+            pClMgr->GetDeferredCommandList(name, CommandListType::Direct, priority)
+        };
+        m_pJobSystem->AddJob([&, pCommandList, name, secondPass]() {
+            pCommandList->PixBeginEvent(name);
+            for (const auto& type : subsystemTypes) {
+                pScene->CullObjects(type, m_pDeviceContext, pCommandList, secondPass);
+            }
+
+            // Both passes have counted by now
+            if (secondPass) {
+                pScene->CopyCullingStatsForReadback(pCommandList);
+            }
+            pCommandList->PushForExecution();
+        });
+    };
+
+    auto recordObjectsList = [&](
+        const std::wstring& name,
+        size_t priority,
+        std::vector<EnumFlags<RenderSubsystemType>> types,
+        bool secondPass,
+        std::function<void(const std::shared_ptr<CommandList>&)> beforeJob,
+        std::function<void(const std::shared_ptr<CommandList>&)> afterJob
+    ) {
+        std::shared_ptr<CommandList> pCommandList{
+            pClMgr->GetDeferredCommandList(name, CommandListType::Direct, priority)
+        };
+        m_pJobSystem->AddJob([&, pCommandList, name, types, secondPass, beforeJob, afterJob]() {
+            if (beforeJob) {
+                beforeJob(pCommandList);
+            }
+
+            pCommandList->PixBeginEvent(name);
+            for (const auto& type : types) {
+                pScene->RenderObjects(
+                    type,
+                    m_pDeviceContext,
+                    pCommandList,
+                    m_viewport,
+                    m_scissorRect,
+                    secondPass
+                );
+            }
+
+            if (afterJob) {
+                afterJob(pCommandList);
+            }
+            pCommandList->PushForExecution();
+        });
+    };
+
+    recordCullList(L"FirstPassCulling", firstCullPriority, false);
+
+    recordObjectsList(
+        L"FirstPassStaticObjects",
+        firstPassStaticPriority,
+        { RenderSubsystemType::Default },
+        false,
+        [&](const std::shared_ptr<CommandList>& pCommandList) {
+            pGBuf->WaitState(pCommandList, GBufferState::Write);
+            pDepthBuf->WaitState(pCommandList, DepthBufferState::DepthWriting);
+        },
+        nullptr
+    );
+    recordObjectsList(
+        L"FirstPassAlphakillObjects",
+        firstPassAlphaPriority,
+        { RenderSubsystemType::AlphaKill },
+        false,
+        nullptr,
+        nullptr
+    );
+    recordObjectsList(
+        L"FirstPassDynamicObjects",
+        firstPassDynamicPriority,
+        {
+            RenderSubsystemType::Dynamic,
+            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic
+        },
+        false,
+        nullptr,
+        [&](const std::shared_ptr<CommandList>& pCommandList) {
+            pDepthBuf->SignalState(pCommandList, DepthBufferState::HierarchicalDepthBuilding);
+        }
+    );
 
     std::shared_ptr<CommandList> commandListForHZB{
         pClMgr->GetDeferredCommandList(
@@ -594,6 +630,60 @@ void Renderer::Render() {
             hzbPriority
         )
     };
+    m_pJobSystem->AddJob([&]() {
+        commandListForHZB->PixBeginEvent(L"Building HZB");
+        pDepthBuf->WaitState(commandListForHZB, DepthBufferState::HierarchicalDepthBuilding);
+
+        // While the debug camera is flying, the depth buffer holds its view, and
+        // culling keeps to the game camera. A pyramid rebuilt from this view would
+        // be tested against a projection it has nothing to do with, so it stays as
+        // the game camera last left it
+        if (!pScene->IsDebugCameraActive()) {
+            pDepthBuf->CreateHierarchicalDepthBuffer(
+                commandListForHZB,
+                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)
+            );
+        }
+
+        // The second pass draws into the same depth buffer
+        pDepthBuf->SignalState(commandListForHZB, DepthBufferState::DepthWriting);
+        commandListForHZB->PushForExecution();
+    });
+
+    recordCullList(L"SecondPassCulling", secondCullPriority, true);
+
+    recordObjectsList(
+        L"SecondPassStaticObjects",
+        secondPassStaticPriority,
+        { RenderSubsystemType::Default },
+        true,
+        [&](const std::shared_ptr<CommandList>& pCommandList) {
+            pDepthBuf->WaitState(pCommandList, DepthBufferState::DepthWriting);
+        },
+        nullptr
+    );
+    recordObjectsList(
+        L"SecondPassAlphakillObjects",
+        secondPassAlphaPriority,
+        { RenderSubsystemType::AlphaKill },
+        true,
+        nullptr,
+        nullptr
+    );
+    recordObjectsList(
+        L"SecondPassDynamicObjects",
+        secondPassDynamicPriority,
+        {
+            RenderSubsystemType::Dynamic,
+            RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic
+        },
+        true,
+        nullptr,
+        [&](const std::shared_ptr<CommandList>& pCommandList) {
+            pGBuf->SignalState(pCommandList, GBufferState::Read);
+            pDepthBuf->SignalState(pCommandList, DepthBufferState::DepthReading);
+        }
+    );
 
     std::shared_ptr<CommandList> commandListForDeferredShading{
         pClMgr->GetDeferredCommandList(
@@ -602,6 +692,22 @@ void Renderer::Render() {
             deferredShadingPriority
         )
     };
+    m_pJobSystem->AddJob([&]() {
+        commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
+        pGBuf->WaitState(commandListForDeferredShading, GBufferState::Read);
+        pDepthBuf->WaitState(commandListForDeferredShading, DepthBufferState::DepthReading);
+        pScene->RunDeferredShading(
+            commandListForDeferredShading,
+            m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
+            m_pDeviceContext->GetMaterialManager(),
+            m_clientWidth,
+            m_clientHeight
+        );
+        pGBuf->SignalState(commandListForDeferredShading, GBufferState::Write);
+        pDepthBuf->SignalState(commandListForDeferredShading, DepthBufferState::DepthWriting);
+        commandListForDeferredShading->PushForExecution();
+    });
+
     std::shared_ptr<CommandList> commandListAfterFrame{
         pClMgr->GetDeferredCommandList(
             L"AfterFrameJob",
@@ -610,68 +716,39 @@ void Renderer::Render() {
         )
     };
     m_pJobSystem->AddJob([&]() {
-        {
-            commandListForHZB->PixBeginEvent(L"Building HZB");
-            pDepthBuf->WaitState(commandListForHZB, DepthBufferState::HierarchicalDepthBuilding);
-            pDepthBuf->CreateHierarchicalDepthBuffer(
-                commandListForHZB,
-                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)
-            );
-            pDepthBuf->SignalState(commandListForHZB, DepthBufferState::DepthReading);
-            commandListForHZB->PushForExecution();
-        }
+        commandListAfterFrame->PixBeginEvent(L"Post Processing");
 
-        {
-            commandListForDeferredShading->PixBeginEvent(L"Deferred shading");
-            pGBuf->WaitState(commandListForDeferredShading, GBufferState::Read);
-            pDepthBuf->WaitState(commandListForDeferredShading, DepthBufferState::DepthReading);
-            pScene->RunDeferredShading(
-                commandListForDeferredShading,
-                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
-                m_pDeviceContext->GetMaterialManager(),
-                m_clientWidth,
-                m_clientHeight
-            );
-            pGBuf->SignalState(commandListForDeferredShading, GBufferState::Write);
-            pDepthBuf->SignalState(commandListForDeferredShading, DepthBufferState::DepthWriting);
-            commandListForDeferredShading->PushForExecution();
-        }
+        // Declared even though the previous lists already left the back buffer
+        // in this state: the first transition of a resource within a command
+        // list is resolved at submit time and lands before everything else in
+        // it, so a list has to transition what it uses before using it.
+        // A redundant transition is dropped by the state tracker.
+        backBuffer->ResourceTransition(
+            commandListAfterFrame,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
 
-        {
-            commandListAfterFrame->PixBeginEvent(L"Post Processing");
+        pScene->RenderPostProcessing(
+            commandListAfterFrame,
+            m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
+            m_viewport,
+            m_scissorRect,
+            rtv
+        );
 
-            // Declared even though the previous lists already left the back buffer
-            // in this state: the first transition of a resource within a command
-            // list is resolved at submit time and lands before everything else in
-            // it, so a list has to transition what it uses before using it.
-            // A redundant transition is dropped by the state tracker.
-            backBuffer->ResourceTransition(
-                commandListAfterFrame,
-                D3D12_RESOURCE_STATE_RENDER_TARGET
-            );
+        m_pUI->Render(commandListAfterFrame, m_pDeviceContext);
 
-            pScene->RenderPostProcessing(
-                commandListAfterFrame,
-                m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
-                m_viewport,
-                m_scissorRect,
-                rtv
-            );
+        backBuffer->ResourceTransition(
+            commandListAfterFrame,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
+        commandListAfterFrame->TransitionBarrier(
+            backBuffer,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
 
-            m_pUI->Render(commandListAfterFrame, m_pDeviceContext);
-
-            backBuffer->ResourceTransition(
-                commandListAfterFrame,
-                D3D12_RESOURCE_STATE_PRESENT
-            );
-            commandListAfterFrame->TransitionBarrier(
-                backBuffer,
-                D3D12_RESOURCE_STATE_PRESENT
-            );
-
-            commandListAfterFrame->PushForExecution();
-        }
-        });
+        commandListAfterFrame->PushForExecution();
+    });
 
     uint64_t lastCompletedFenceValue{ m_frameFenceValues[m_currBackBufferId][ToId(CommandQueueType::Direct)]};
     pClMgr->ExecutionTask(m_frameFenceValues[m_currBackBufferId]);
@@ -696,6 +773,7 @@ void Renderer::Render() {
     }
 
     m_pDeviceContext->FinishFrame(fenceValue, lastCompletedFenceValue);
+    pScene->FinishFrame(fenceValue, lastCompletedFenceValue);
 }
 
 void Renderer::Move(float forwardCoef, float rightCoef) {

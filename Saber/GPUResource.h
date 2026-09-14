@@ -205,6 +205,8 @@ public:
 	);
 
 	// CounterResetter related methods
+	// Holds a block of zeroes, so it resets more than a single counter
+	static constexpr uint64_t CounterResetterSize{ 256 };
 	static void InitCounterResetter(
 		std::shared_ptr<DeviceContext> pDevice,
 		std::shared_ptr<CommandList> pCommandList
@@ -213,6 +215,11 @@ public:
 	void ResetCounter(
 		std::shared_ptr<CommandList> pCommandList,
 		uint64_t counterOffset
+	) const;
+	void ResetRange(
+		std::shared_ptr<CommandList> pCommandList,
+		uint64_t offset,
+		uint64_t size
 	) const;
 };
 

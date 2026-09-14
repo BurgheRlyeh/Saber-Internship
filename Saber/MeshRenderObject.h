@@ -64,6 +64,11 @@ public:
         const AABB& aabb{ m_pMesh->GetAABB() };
         m_modelBuffer.bbmin = { aabb.min.x, aabb.min.y, aabb.min.z, 0.f };
         m_modelBuffer.bbmax = { aabb.max.x, aabb.max.y, aabb.max.z, 0.f };
+
+        const BoundingSphere& sphere{ m_pMesh->GetBoundingSphere() };
+        m_modelBuffer.boundingSphere = {
+            sphere.center.x, sphere.center.y, sphere.center.z, sphere.radius
+        };
     }
 
     const AABB& GetAABB() const {

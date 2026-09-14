@@ -45,6 +45,15 @@
     <ClInclude Include="Saber.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ReadbackBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CullingParams.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="OcclusionCulling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="HiZTopMip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -465,7 +474,7 @@
     <FxCompile Include="IndirectUpdaterCbMesh4.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="OcclusionCullingFirstPass.hlsl">
+    <FxCompile Include="OcclusionCullingConstMesh4.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="IndirectUpdaterConstMesh4.hlsl">
@@ -480,6 +489,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="OcclusionCulling.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
     <None Include="IndirectCommandUpdater.hlsli">
       <Filter>Shaders\Includes</Filter>
     </None>

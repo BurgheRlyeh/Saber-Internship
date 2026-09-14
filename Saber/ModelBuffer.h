@@ -13,6 +13,7 @@ struct ModelBuffer
     matrix normalMatrix;
     float4 bbmin;
     float4 bbmax;
+    float4 boundingSphere;  // xyz - center, w - radius, object space as bbmin/bbmax
     uint4 materialId;
 
 #ifdef __cplusplus
@@ -31,6 +32,7 @@ struct ModelBuffer
             std::numeric_limits<float>::lowest(),
             0.f
         };
+        boundingSphere = { 0.f, 0.f, 0.f, 0.f };
         materialId = { 0, 0, 0, 0 };
     }
     ModelBuffer(const DirectX::XMMATRIX& modelMatrix, size_t materialId = 0) {

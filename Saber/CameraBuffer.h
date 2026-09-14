@@ -10,13 +10,17 @@
 struct CameraBuffer {
     matrix viewProjMatrix;
     matrix invViewProjMatrix;
+    matrix viewMatrix;
+    matrix projMatrix;
     float4 cameraPosition;
     float4 nearFar; // x - near, y - far
     float4 viewFrustumPlanes[6];
 
 #ifdef __cplusplus
     void Update(const std::shared_ptr<Camera>& pCamera) {
-        viewProjMatrix = pCamera->GetViewProjectionMatrix();
+        viewMatrix = pCamera->GetViewMatrix();
+        projMatrix = pCamera->GetProjectionMatrix();
+        viewProjMatrix = DirectX::XMMatrixMultiply(viewMatrix, projMatrix);
         invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, viewProjMatrix);
 
         DirectX::XMFLOAT3 pos{ pCamera->GetPosition() };

@@ -71,6 +71,29 @@ m_pGBuffer(pGBuffer)
         pDeviceContext
     );
 
+    m_pCullingCameraCB = CreateUploadBufferWithUpdater<CameraBuffer>(
+        m_name + L"/CullingCameraCB",
+        pDeviceContext
+    );
+
+    m_pCullingStats = std::make_shared<GPUResource>(
+        m_name + L"/CullingStats",
+        pDeviceContext->GetDevice(),
+        GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
+        GPUResource::ResourceDesc{
+            .resDesc{ CD3DX12_RESOURCE_DESC::Buffer(
+                sizeof(SceneCullingStats),
+                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+            ) },
+            .resInitState{ D3D12_RESOURCE_STATE_UNORDERED_ACCESS }
+        }
+    );
+    m_pCullingStatsReadback = std::make_unique<ReadbackBuffer<SceneCullingStats>>(
+        m_name + L"/CullingStatsReadback",
+        pDeviceContext->GetDevice(),
+        CullingStatsSlots
+    );
+
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
         pDeviceContext,
@@ -167,6 +190,8 @@ void Scene::UpdateSimulation(float deltaTime) {
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
+    ResetCullingStats(pCommandList);
+
     m_pDepthBuffer->Clear(pCommandList);
     m_pShadowMap->Clear(pCommandList);
     if (m_pGBuffer) {
@@ -381,15 +406,105 @@ std::shared_ptr<Camera> Scene::GetCurrentCamera() {
     std::scoped_lock<std::mutex> lock(m_camerasMutex);
     return m_pCameras.empty() ? nullptr : m_pCameras.at(m_currCameraId);
 }
+void Scene::SetOcclusionCullingComputeObject(std::shared_ptr<ComputeObject> pOcclusionCulling) {
+    m_pOcclusionCulling = pOcclusionCulling;
+}
+
+void Scene::ResetCullingStats(std::shared_ptr<CommandList> pCommandList) {
+    if (!m_pCullingStats) {
+        return;
+    }
+
+    m_pCullingStats->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
+    m_pCullingStats->ResetRange(pCommandList, 0, sizeof(SceneCullingStats));
+    m_pCullingStats->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+}
+
+void Scene::CopyCullingStatsForReadback(std::shared_ptr<CommandList> pCommandList) {
+    if (!m_pCullingStats) {
+        return;
+    }
+
+    // Copied even with culling off: the block is zeroed every frame, so the slot
+    // holds zeroes instead of whatever an unwritten readback resource happens to
+    // contain
+    m_pCullingStatsReadback->Copy(pCommandList, m_pCullingStats);
+}
+
+void Scene::FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {
+    if (m_pCullingStatsReadback) {
+        m_pCullingStatsReadback->FinishFrame(fenceValue, completedFenceValue);
+    }
+}
+
+void Scene::CullObjects(
+    const EnumFlags<RenderSubsystemType> type,
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList,
+    bool secondPass
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    if (!m_pOcclusionCulling || !m_cullingSettings.twoPassCulling) {
+        return;
+    }
+
+    // Only the second pass reads the pyramid, but the descriptor table holding it
+    // is bound either way, and every resource a bound table names has to be in the
+    // state the table declares
+    m_pDepthBuffer->TransitionHiZForReading(pCommandList);
+
+    // Declared before the dispatch, not only before the copy that ends the second
+    // pass: the first transition of a resource inside a list is resolved at submit
+    // time and lands ahead of everything else in it, so leaving it to the copy puts
+    // the buffer into copy source before the dispatch that has to write it
+    m_pCullingStats->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    uint32_t flags{ secondPass ? CULLING_FLAG_SECOND_PASS : 0u };
+    if (m_cullingSettings.frustumCulling) {
+        flags |= CULLING_FLAG_FRUSTUM;
+    }
+    if (m_cullingSettings.occlusionCulling) {
+        flags |= CULLING_FLAG_OCCLUSION;
+    }
+
+    const CullingParams params{
+        .objectCount{},     // the subsystem knows how many objects it holds
+        .flags{ flags },
+        .boundingVolume{ static_cast<uint32_t>(m_cullingSettings.boundingVolume) },
+        .hzbSize{ m_pDepthBuffer->GetHzbSize() }
+    };
+
+    std::scoped_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
+    m_pRenderSubsystems[ToId(type)]->Cull(
+        pCommandList,
+        m_pOcclusionCulling,
+        pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap(),
+        m_pDepthBuffer->GetSrvGpuDescHandleWithMips(),
+        m_pCullingCameraCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress(),
+        m_pCullingStats->GetD3D12Resource()->GetGPUVirtualAddress()
+            + ToId(type) * sizeof(CullingStats),
+        params
+    );
+}
+
 void Scene::RenderObjects(
     const EnumFlags<RenderSubsystemType> type,
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandList,
     D3D12_VIEWPORT viewport,
-    D3D12_RECT scissorRect
+    D3D12_RECT scissorRect,
+    bool secondPass
 ) {
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
+
+    // With one pass there is nothing left for a second one to draw
+    const bool drawCulledCommands{ m_cullingSettings.twoPassCulling };
+    if (secondPass && !drawCulledCommands) {
+        return;
+    }
 
     auto commandListPrepare = [&] {
         auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
@@ -422,7 +537,8 @@ void Scene::RenderObjects(
     std::scoped_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
     m_pRenderSubsystems[ToId(type)]->Render(
         pCommandList,
-        commandListPrepare
+        commandListPrepare,
+        drawCulledCommands
     );
 }
 
@@ -614,20 +730,22 @@ void Scene::UpdateCameraBuffer(
             ? std::static_pointer_cast<Camera>(m_pDebugCamera)
             : m_pCameras.at(m_currCameraId)
     };
-    DirectX::XMFLOAT3 cameraPosition{ pCamera->GetPosition() };
+    // Culling keeps to the gameplay camera, so flying the debug camera out shows
+    // what was cut instead of re-culling for the new point of view
+    std::shared_ptr<Camera> pCullingCamera{ m_pCameras.at(m_currCameraId) };
 
     std::unique_lock<std::mutex> cameraBufferLock(m_cameraBufferMutex);
 
     CameraBuffer sceneBuffer{ *m_pCameraCB->GetStorageData() };
-    sceneBuffer.viewProjMatrix = pCamera->GetViewProjectionMatrix();
-    sceneBuffer.invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, sceneBuffer.viewProjMatrix);
-    sceneBuffer.cameraPosition = { cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.f };
-    const Camera::Settings& cameraSettings{ pCamera->GetSettings() };
-    sceneBuffer.nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
+    sceneBuffer.Update(pCamera);
+
+    CameraBuffer cullingCameraBuffer{};
+    cullingCameraBuffer.Update(pCullingCamera);
 
     camerasMutexLock.unlock();
 
     m_pCameraCB->UpdateAll(&sceneBuffer, 1);
+    m_pCullingCameraCB->UpdateAll(&cullingCameraBuffer, 1);
     cameraBufferLock.unlock();
 
     m_pCameraCB->PerformUpdate(pDeviceContext, pCommandList);
@@ -728,6 +846,8 @@ void Scene::DrawSettingsUI() {
 
             if (m_isDebugCameraActive.load()) {
                 ImGui::TextUnformatted("Shadows and culling still follow the game camera");
+                ImGui::TextUnformatted("The depth pyramid is frozen with them, so what");
+                ImGui::TextUnformatted("is drawn here is what the game camera sees");
                 if (ImGui::Button("Snap to game camera")) {
                     // Already what switching on does, but handy after flying off
                     m_isDebugCameraActive.store(false);
@@ -823,6 +943,107 @@ void Scene::DrawSettingsUI() {
         }
         ImGui::End();
     }
+
+    // Culling
+    {
+        if (ImGui::Begin("Culling")) {
+            DrawSettings(m_cullingSettings);
+            DrawCullingStatsUI();
+        }
+        ImGui::End();
+    }
+}
+
+void Scene::DrawCullingStatsUI() {
+    // The order follows the flags: Default, Dynamic, AlphaKill, AlphaKill | Dynamic
+    static constexpr const char* SubsystemNames[]{
+        "Static", "Dynamic", "Static alpha", "Dynamic alpha"
+    };
+    constexpr size_t SubsystemCount{ static_cast<size_t>(RenderSubsystemType::Count) };
+    static_assert(_countof(SubsystemNames) == SubsystemCount);
+
+    ImGui::SeparatorText("Counts");
+
+    if (!m_cullingSettings.twoPassCulling) {
+        ImGui::TextUnformatted("Two pass culling is off, nothing is counted");
+        return;
+    }
+
+    // Read back without stalling the gpu, so these describe a frame that has
+    // already been presented
+    const SceneCullingStats stats{ m_pCullingStatsReadback->GetLatest() };
+
+    CullingStats total{};
+    size_t totalObjects{};
+
+    constexpr ImGuiTableFlags TableFlags{
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit
+    };
+    if (ImGui::BeginTable("CullingStats", 8, TableFlags)) {
+        ImGui::TableSetupColumn("Subsystem");
+        ImGui::TableSetupColumn("Objects");
+        ImGui::TableSetupColumn("Drawn 1");
+        ImGui::TableSetupColumn("Frustum 1");
+        ImGui::TableSetupColumn("Drawn 2");
+        ImGui::TableSetupColumn("Frustum 2");
+        ImGui::TableSetupColumn("Occluded");
+        ImGui::TableSetupColumn("Visible");
+        ImGui::TableHeadersRow();
+
+        auto drawRow = [](const char* name, size_t objects, const CullingStats& row) {
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(name);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%zu", objects);
+
+            const uint32_t values[]{
+                row.drawnFirstPass,
+                row.frustumCulledFirstPass,
+                row.drawnSecondPass,
+                row.frustumCulledSecondPass,
+                row.occlusionCulledSecondPass,
+                row.visible
+            };
+            for (const uint32_t value : values) {
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", value);
+            }
+            };
+
+        for (size_t i{}; i < SubsystemCount; ++i) {
+            const CullingStats& row{ stats.perSubsystem[i] };
+            const size_t objects{
+                m_pRenderSubsystems[i] ? m_pRenderSubsystems[i]->GetObjectsCount() : 0
+            };
+
+            drawRow(SubsystemNames[i], objects, row);
+
+            totalObjects += objects;
+            total.drawnFirstPass += row.drawnFirstPass;
+            total.frustumCulledFirstPass += row.frustumCulledFirstPass;
+            total.drawnSecondPass += row.drawnSecondPass;
+            total.frustumCulledSecondPass += row.frustumCulledSecondPass;
+            total.occlusionCulledSecondPass += row.occlusionCulledSecondPass;
+            total.visible += row.visible;
+        }
+
+        drawRow("Total", totalObjects, total);
+
+        ImGui::EndTable();
+    }
+
+    // Everything the first pass redrew and the second pass then found hidden was
+    // work spent on nothing, which is what the algorithm is judged by
+    const uint32_t drawn{ total.drawnFirstPass + total.drawnSecondPass };
+    ImGui::Text("Drawn %u, of them wasted %u", drawn, drawn - std::min(drawn, total.visible));
+
+    // The second pass tests every object, so its numbers describe the whole frame:
+    // the first pass only redraws what the previous frame left visible
+    ImGui::TextUnformatted("Drawn 1 is what the previous frame saw, drawn 2 what appeared");
+    ImGui::Text("Depth pyramid: %u x %u", m_pDepthBuffer->GetHzbSize(), m_pDepthBuffer->GetHzbSize());
 }
 
 bool DrawSettings(Scene::ShadowSettings& settings) {
@@ -837,6 +1058,27 @@ bool DrawSettings(Scene::ShadowSettings& settings) {
 
     // Each step costs (2r + 1)^2 comparisons, and the sampler filters 2x2 per tap
     isChanged |= ImGui::SliderInt("PCF radius", &settings.pcfRadius, 0, 4);
+
+    return isChanged;
+}
+
+bool DrawSettings(Scene::CullingSettings& settings) {
+    bool isChanged{};
+
+    // Off is the reference picture: everything drawn in a single pass
+    isChanged |= ImGui::Checkbox("Two pass culling", &settings.twoPassCulling);
+
+    ImGui::BeginDisabled(!settings.twoPassCulling);
+    isChanged |= ImGui::Checkbox("Frustum culling", &settings.frustumCulling);
+    isChanged |= ImGui::Checkbox("Occlusion culling", &settings.occlusionCulling);
+
+    // The sphere is what the article tests, the box survives non-uniform scale
+    int volume{ static_cast<int>(settings.boundingVolume) };
+    if (ImGui::Combo("Bounding volume", &volume, "AABB\0Sphere\0")) {
+        settings.boundingVolume = static_cast<Scene::BoundingVolumeType>(volume);
+        isChanged = true;
+    }
+    ImGui::EndDisabled();
 
     return isChanged;
 }

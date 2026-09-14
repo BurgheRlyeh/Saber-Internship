@@ -170,6 +170,7 @@
     <ClInclude Include="CommandListManager.h" />
     <ClInclude Include="CommandListPool.h" />
     <ClInclude Include="CommandQueue.h" />
+    <ClInclude Include="CullingParams.h" />
     <ClInclude Include="ComputeObject.h" />
     <ClInclude Include="CppHlslTypesRedefine.h" />
     <ClInclude Include="D3D12MemAlloc.h" />
@@ -212,6 +213,7 @@
     <ClInclude Include="ModelBuffer.h" />
     <ClInclude Include="PostProcessing.h" />
     <ClInclude Include="PSOLibrary.h" />
+    <ClInclude Include="ReadbackBuffer.h" />
     <ClInclude Include="RenderObject.h" />
     <ClInclude Include="OutputContext.h" />
     <ClInclude Include="Renderer.h" />
@@ -234,6 +236,7 @@
     <ClInclude Include="GeometryGenerator.h" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="TransformHierarchy.h" />
+    <ClInclude Include="OcclusionCulling.h" />
     <ClInclude Include="OrbitSystem.h" />
     <ClInclude Include="SolarSystemScene.h" />
     <ClInclude Include="KatamariScene.h" />
@@ -388,14 +391,16 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="OcclusionCullingConstMesh4.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="SimplePS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -452,6 +457,7 @@
     <None Include="BlinnPhongLighting.hlsli" />
     <None Include="IndirectCommandUpdater.hlsli" />
     <None Include="Math.hlsli" />
+    <None Include="OcclusionCulling.hlsli" />
     <None Include="ShadowMapping.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>

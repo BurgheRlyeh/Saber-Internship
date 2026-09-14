@@ -10,6 +10,8 @@
 #include "IndirectCommand.h"
 #include "LightBuffer.h"
 #include "CameraBuffer.h"
+#include "CullingParams.h"
+#include "ReadbackBuffer.h"
 #include "RenderSubsystemTypes.h"
 
 template <typename T>
@@ -37,6 +39,28 @@ public:
         float depthBias{ .05f };
         float normalOffset{ 1.5f };
         int pcfRadius{ 1 };
+    };
+
+    // Both volumes live in ModelBuffer, the shaders pick one by this
+    enum class BoundingVolumeType : uint32_t {
+        AABB = 0,
+        Sphere,
+
+        Count
+    };
+
+    struct CullingSettings {
+        // Off draws everything in one pass, which is the picture the two passes
+        // have to match
+        bool twoPassCulling{ true };
+        bool frustumCulling{ true };
+        bool occlusionCulling{ true };
+        BoundingVolumeType boundingVolume{ BoundingVolumeType::AABB };
+    };
+
+    // What both culling passes counted, one block per subsystem
+    struct SceneCullingStats {
+        CullingStats perSubsystem[static_cast<size_t>(RenderSubsystemType::Count)]{};
     };
 
 private:
@@ -74,12 +98,23 @@ private:
     std::shared_ptr<DepthBuffer> m_pShadowMap{};
     std::shared_ptr<Buffer<CameraBuffer>> m_pShadowCameraCB{};
 
+    // Always the gameplay camera, never the debug one
+    std::shared_ptr<Buffer<CameraBuffer>> m_pCullingCameraCB{};
+
     DirectX::XMMATRIX m_shadowViewProj{ DirectX::XMMatrixIdentity() };
     DirectX::XMFLOAT4 m_shadowParams{};
     uint32_t m_shadowLightId{ SHADOW_NO_LIGHT };
 
     ShadowSettings m_shadowSettings{};
+    CullingSettings m_cullingSettings{};
 
+    // Written by the culling passes, copied out once per frame and read back a few
+    // frames later, so more slots than there are frames in flight
+    static constexpr size_t CullingStatsSlots{ 8 };
+    std::shared_ptr<GPUResource> m_pCullingStats{};
+    std::unique_ptr<ReadbackBuffer<SceneCullingStats>> m_pCullingStatsReadback{};
+
+    std::shared_ptr<ComputeObject> m_pOcclusionCulling{};
     std::shared_ptr<ComputeObject> m_pDeferredShadingComputeObject{};
 
     std::shared_ptr<RenderObject> m_pPostProcessing{};
@@ -170,12 +205,29 @@ public:
 
     // Extra ImGui drawn with the scene panels; optional, contents are the game's
     void SetSettingsUI(std::function<void()> settingsUI);
+    void SetOcclusionCullingComputeObject(std::shared_ptr<ComputeObject> pOcclusionCulling);
+
+    // Zeroed before the first pass, copied out after the second
+    void ResetCullingStats(std::shared_ptr<CommandList> pCommandList);
+    void CopyCullingStatsForReadback(std::shared_ptr<CommandList> pCommandList);
+    void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue);
+
+    // Picks the commands one of the two passes draws. The second pass is the one
+    // that tests against the depth pyramid and leaves the visibility behind
+    void CullObjects(
+        const EnumFlags<RenderSubsystemType> type,
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList,
+        bool secondPass
+    );
+
     void RenderObjects(
         const EnumFlags<RenderSubsystemType> type,
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandListDirect,
         D3D12_VIEWPORT viewport,
-        D3D12_RECT scissorRect
+        D3D12_RECT scissorRect,
+        bool secondPass = false
     );
 
     // Same geometry from the shadow camera, depth only. Call once per subsystem
@@ -221,7 +273,11 @@ private:
 
 public:
     void DrawSettingsUI();
+
+private:
+    void DrawCullingStatsUI();
 };
 
 // UI
 bool DrawSettings(Scene::ShadowSettings& settings);
+bool DrawSettings(Scene::CullingSettings& settings);

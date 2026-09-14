@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <cassert>
+#include <vector>
 
 #include "CommandList.h"
 #include "Device.h"
@@ -332,13 +333,13 @@ void GPUResource::InitCounterResetter(
 		L"GPUResource/CounterResetter",
 		pDeviceContext->GetDevice(),
 		AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
-		ResourceDesc{ CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT)) }
+		ResourceDesc{ CD3DX12_RESOURCE_DESC::Buffer(CounterResetterSize) }
 	);
 
-	UINT zero{};
+	const std::vector<uint8_t> zeroes(CounterResetterSize, 0);
 	D3D12_SUBRESOURCE_DATA subresData{
-		.pData{ &zero },
-		.RowPitch{ sizeof(UINT) },
+		.pData{ zeroes.data() },
+		.RowPitch{ CounterResetterSize },
 		.SlicePitch{ subresData.RowPitch }
 	};
 
@@ -369,14 +370,23 @@ void GPUResource::ResetCounter(
 	std::shared_ptr<CommandList> pCommandList,
 	uint64_t counterOffset
 ) const {
+	ResetRange(pCommandList, counterOffset, sizeof(UINT));
+}
+
+void GPUResource::ResetRange(
+	std::shared_ptr<CommandList> pCommandList,
+	uint64_t offset,
+	uint64_t size
+) const {
 	assert(pCounterResetter);
+	assert(size <= CounterResetterSize);
 
 	pCommandList->GetD3D12CommandList()->CopyBufferRegion(
 		GetD3D12Resource().Get(),
-		counterOffset,
+		offset,
 		pCounterResetter->GetD3D12Resource().Get(),
 		0,
-		sizeof(UINT)
+		size
 	);
 }
 
