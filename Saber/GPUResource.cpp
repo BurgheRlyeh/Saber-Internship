@@ -25,12 +25,14 @@ GPUResource::~GPUResource() {
 
 void GPUResource::ResourceTransition(
 	std::shared_ptr<CommandList> pCommandList,
-	const D3D12_RESOURCE_STATES& toState
+	const D3D12_RESOURCE_STATES& toState,
+	UINT subresource,
+	bool flushBarriers
 ) {
 	// The state the resource is currently in is resolved by the tracker: this
 	// command list may well be recorded in parallel with the ones that run before
 	// it, so it cannot be known here
-	pCommandList->TransitionBarrier(*this, toState);
+	pCommandList->TransitionBarrier(*this, toState, subresource, flushBarriers);
 }
 
 Microsoft::WRL::ComPtr<D3D12Resource> GPUResource::GetD3D12Resource() const {

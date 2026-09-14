@@ -83,7 +83,9 @@ public:
 
 	void ResourceTransition(
 		std::shared_ptr<CommandList> pCommandList,
-		const D3D12_RESOURCE_STATES& toState
+		const D3D12_RESOURCE_STATES& toState,
+		UINT subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+		bool flushBarriers = true
 	);
 
 	void CreateResource(

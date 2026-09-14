@@ -61,6 +61,21 @@ namespace {
 		return !(state & ~GetSupportedStates(listType));
 	}
 
+	UINT GetSubresourceCount(D3D12Resource* pResource) {
+		const D3D12_RESOURCE_DESC desc{ pResource->GetDesc() };
+		if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+			return 1;
+		}
+
+		Microsoft::WRL::ComPtr<D3D12Device> pDevice{};
+		ThrowIfFailed(pResource->GetDevice(IID_PPV_ARGS(&pDevice)));
+
+		const UINT arraySize{
+			desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1u : desc.DepthOrArraySize
+		};
+		return desc.MipLevels * arraySize * D3D12GetFormatPlaneCount(pDevice.Get(), desc.Format);
+	}
+
 	constexpr bool IsCompatibleBeforeState(CommandListType listType, D3D12_RESOURCE_STATES state) {
 		return listType == CommandListType::Copy
 			? state == D3D12_RESOURCE_STATE_COMMON
@@ -107,24 +122,36 @@ void ResourceStateTracker::ResourceBarrier(const D3D12_RESOURCE_BARRIER& barrier
 	}
 	else {
 		// The resource has already been used by this command list, so the state it
-		// is in at this point is known and StateBefore can be filled in right away
+		// is in at this point is known and StateBefore can be filled in right away.
+		// Subresources this list has not touched are the exception: for them the
+		// state is only known at submit, exactly as for a first use
 		const ResourceState& resourceState{ it->second };
+
+		auto pushBarrier = [&](UINT subresource) {
+			D3D12_RESOURCE_BARRIER newBarrier{ barrier };
+			newBarrier.Transition.Subresource = subresource;
+
+			const D3D12_RESOURCE_STATES stateBefore{
+				resourceState.GetSubresourceState(subresource)
+			};
+			if (stateBefore == UnknownState) {
+				m_pendingResourceBarriers.push_back(newBarrier);
+			}
+			else if (stateBefore != transition.StateAfter) {
+				newBarrier.Transition.StateBefore = stateBefore;
+				m_resourceBarriers.push_back(newBarrier);
+			}
+		};
 
 		if (transition.Subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES && resourceState.HasDifferentSubresourceState()) {
 			// The subresources are in different states, transition them one by one
-			for (const auto& [subresource, subresourceState] : resourceState.subresourceStates) {
-				if (subresourceState != transition.StateAfter) {
-					D3D12_RESOURCE_BARRIER subBarrier{ barrier };
-					subBarrier.Transition.Subresource = subresource;
-					subBarrier.Transition.StateBefore = subresourceState;
-					m_resourceBarriers.push_back(subBarrier);
-				}
+			const UINT subresourceCount{ GetSubresourceCount(transition.pResource) };
+			for (UINT subresource{}; subresource < subresourceCount; ++subresource) {
+				pushBarrier(subresource);
 			}
 		}
-		else if (auto finalState = resourceState.GetSubresourceState(transition.Subresource); transition.StateAfter != finalState) {
-			D3D12_RESOURCE_BARRIER newBarrier{ barrier };
-			newBarrier.Transition.StateBefore = finalState;
-			m_resourceBarriers.push_back(newBarrier);
+		else {
+			pushBarrier(transition.Subresource);
 		}
 	}
 
@@ -226,13 +253,16 @@ uint32_t ResourceStateTracker::FlushPendingResourceBarriers(
 		// TODO: maybe don't transitions on COPY at all, as this is allowed by docs:
 		// "The COMMON state can be used for all usages on a Copy queue using the implicit state transitions"
 		//if (m_listType == CommandListType::Copy) {
-		//	continue;	
+		//	continue;
 		//}
 
 		if (transition.Subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES && resourceState.HasDifferentSubresourceState()) {
 			// The subresources are in different states, transition them one by one
-			for (const auto& [subresource, subresourceState] : resourceState.subresourceStates) {
-				if (transition.StateAfter != subresourceState) {
+			const UINT subresourceCount{ GetSubresourceCount(transition.pResource) };
+			for (UINT subresource{}; subresource < subresourceCount; ++subresource) {
+				const D3D12_RESOURCE_STATES subresourceState{ resourceState.GetSubresourceState(subresource) };
+				assert(subresourceState != UnknownState);	// the global state knows every subresource
+				if (subresourceState != transition.StateAfter) {
 					D3D12_RESOURCE_BARRIER newBarrier{ pendingBarrier };
 					newBarrier.Transition.Subresource = subresource;
 					newBarrier.Transition.StateBefore = subresourceState;
@@ -268,10 +298,21 @@ void ResourceStateTracker::CommitFinalResourceStates() {
 
 		// TODO: add support for points 2-4?
 		bool decayToCommon{ m_listType == CommandListType::Copy };
+		if (decayToCommon) {
+			s_globalResourceState[pResource] = ResourceState{ D3D12_RESOURCE_STATE_COMMON };
+			continue;
+		}
 
-		s_globalResourceState[pResource] = decayToCommon
-			? ResourceState{ D3D12_RESOURCE_STATE_COMMON }
-			: resourceState;
+		if (resourceState.state != UnknownState) {
+			s_globalResourceState[pResource] = resourceState;
+			continue;
+		}
+
+		// The list only ever touched some of the subresources, so it has nothing to
+		// say about the rest and must not overwrite what is known about them
+		for (const auto& [subresource, subresourceState] : resourceState.subresourceStates) {
+			s_globalResourceState[pResource].SetSubresourceState(subresource, subresourceState);
+		}
 	}
 
 	m_finalResourceState.clear();

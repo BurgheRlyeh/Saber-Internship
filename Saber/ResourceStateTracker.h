@@ -20,15 +20,18 @@ class GPUResource;
 // https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12#split-barriers
 
 class ResourceStateTracker {
+	static constexpr D3D12_RESOURCE_STATES UnknownState{
+		static_cast<D3D12_RESOURCE_STATES>(-1)
+	};
+
 	// State of a resource and subresources that differ from it
 	struct ResourceState {
-		// Describes every subresource while subresourceStates is empty
-		D3D12_RESOURCE_STATES state{ D3D12_RESOURCE_STATE_COMMON };
+		// Describes every subresource missing from subresourceStates
+		D3D12_RESOURCE_STATES state{ UnknownState };
 		std::map<UINT, D3D12_RESOURCE_STATES> subresourceStates{};
 
-		explicit ResourceState(
-			D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_COMMON
-		) : state(initState) {}
+		ResourceState() = default;
+		explicit ResourceState(D3D12_RESOURCE_STATES initState) : state(initState) {}
 
 		bool HasDifferentSubresourceState() const {
 			return !subresourceStates.empty();
@@ -38,6 +41,9 @@ class ResourceStateTracker {
 			if (subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) {
 				state = newState;
 				subresourceStates.clear();
+			}
+			else if (newState == state) {
+				subresourceStates.erase(subresource);
 			}
 			else {
 				subresourceStates[subresource] = newState;
