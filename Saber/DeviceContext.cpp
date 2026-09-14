@@ -26,14 +26,6 @@ DeviceContext::DeviceContext(
 
 	m_pCommandListMgr = std::make_shared<CommandListManager>(m_pDevice);
 
-	// todo: make CounterResetter part of DeviceContext
-	//GPUResource::InitCounterResetter(
-	//	m_pDevice,
-	//	m_pAllocator,
-	//	m_pCommandQueueCopy,
-	//	m_pCommandQueueDirect
-	//);
-
 	m_pDescHeapManager = std::make_shared<DescriptorHeapManager>(
 		m_name + L"/DescriptorHeapManager",
 		m_pDevice,

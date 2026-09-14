@@ -96,6 +96,12 @@ void Renderer::Initialize(HWND hWnd) {
         1024
     ));
 
+    std::shared_ptr<CommandList> pCommandList{
+        m_pDeviceContext->GetCommandListManager()->GetCommandList()
+    };
+    GPUResource::InitCounterResetter(m_pDeviceContext, pCommandList);
+    m_pDeviceContext->GetCommandListManager()->ExecuteCommandListImmediately(pCommandList);
+
     m_pSwapChain = CreateSwapChain(hWnd, m_pDeviceContext->GetCommandQueue()->GetD3D12CommandQueue(), m_clientWidth, m_clientHeight, m_numFrames);
     m_currBackBufferId = m_pSwapChain->GetCurrentBackBufferIndex();
 
