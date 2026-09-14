@@ -302,13 +302,13 @@ std::shared_ptr<EnumFence<DepthBufferState>> HiDepthBuffer::GetFence() const {
 	return m_pDepthBufferFence;
 }
 
-void HiDepthBuffer::SignalState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
-	pCommandList->AddAfterTask([&, state] {
-		pCommandList->GetQueue()->Signal(m_pDepthBufferFence, state);
+void HiDepthBuffer::SignalState(const std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
+	pCommandList->AddAfterTask([state, pQueue = pCommandList->GetQueue(), pFence = m_pDepthBufferFence] {
+		pQueue->Signal(pFence, state);
 	});
 }
 
-void HiDepthBuffer::WaitState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
+void HiDepthBuffer::WaitState(const std::shared_ptr<CommandList>& pCommandList, DepthBufferState state) {
 	pCommandList->AddBeforeTask([state, pQueue = pCommandList->GetQueue(), pFence = m_pDepthBufferFence] {
 		pQueue->GpuWait(pFence, state);
 	});

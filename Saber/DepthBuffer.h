@@ -105,8 +105,8 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandleWithMips() const;
 
 	std::shared_ptr<EnumFence<DepthBufferState>> GetFence() const;
-	void SignalState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
-	void WaitState(std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
+	void SignalState(const std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
+	void WaitState(const std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
 
 protected:
 	void Recreate(
