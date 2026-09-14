@@ -16,9 +16,7 @@
 const std::wstring SinglePassDownsampler::BASE_NAME = L"SinglePassDownsampler";
 
 SinglePassDownsampler::SinglePassDownsampler(
-    std::shared_ptr<DeviceContext> pDeviceContext,
-    UINT64 width,
-    UINT height
+    std::shared_ptr<DeviceContext> pDeviceContext
 ) {
     InitMaterial(
         pDeviceContext,
@@ -51,18 +49,15 @@ SinglePassDownsampler::SinglePassDownsampler(
 		pDeviceContext,
 		ResourceView::Cbv
     );
-
-    Resize(pDeviceContext->GetDevice(), width, height);
 }
 
 void SinglePassDownsampler::Resize(
     std::shared_ptr<Device> pDevice,
-    UINT64 width,
-    UINT height
+    UINT targetSize
 ) {
     // spd constant buffer
     FfxUInt32x2 dispatchThreadGroupCountXY, workGroupOffset, numWorkGroupsAndMips;
-    FfxUInt32x4 rectInfo{ 0, 0, width, height };
+    FfxUInt32x4 rectInfo{ 0, 0, targetSize, targetSize };
     ffxSpdSetup(
         dispatchThreadGroupCountXY,
         workGroupOffset,

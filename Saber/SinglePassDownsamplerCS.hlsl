@@ -71,7 +71,7 @@ void SpdResetAtomicCounter(uint slice)
 // Common reduction functions are min, max or the average.
 float4 SpdReduce4(float4 v0, float4 v1, float4 v2, float4 v3)
 {
-    return max(max(v0, v1), max(v2, v3));
+    return min(min(v0, v1), min(v2, v3));
 }
 
 // Loads from the group shared buffer.

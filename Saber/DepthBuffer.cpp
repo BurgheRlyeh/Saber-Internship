@@ -1,11 +1,14 @@
 #include "DepthBuffer.h"
 
+#include <bit>
+
 #include "CommandList.h"
 #include "CommandQueue.h"
 #include "Device.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
 #include "DescriptorHeapRange.h"
+#include "HiZTopMip.h"
 #include "SinglePassDownsampler.h"
 #include "TextureResource.h"
 
@@ -170,14 +173,11 @@ HiDepthBuffer::HiDepthBuffer(
 ) : DepthBuffer(name, pDeviceContext, width, height, format, flags) {
 	assert(IsSrvDesc(GetDesc()));	// depth read as srv during HZB pass
 
-	m_pHzbSrvsRange = pDeviceContext->AllocateDescRange(m_name + L"/HZB", DescRangeType::Srv, 1);
+	m_pHzbSrvsRange = pDeviceContext->AllocateDescRange(m_name + L"/HZB", DescRangeType::Srv, 2);
 	m_pHzbUavsRange = pDeviceContext->AllocateDescRange(m_name + L"/HZB", DescRangeType::Uav, HzbMaxMipCount);
 
-	m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(
-		pDeviceContext,
-		width,
-		height
-	);
+	m_pHiZTopMip = HiZTopMip::Create(pDeviceContext);
+	m_pSinglePassDownsampler = std::make_shared<SinglePassDownsampler>(pDeviceContext);
 
 	RecreateHiDepthBuffer(pDeviceContext->GetDevice(), GetDesc());
 
@@ -211,10 +211,16 @@ void HiDepthBuffer::RecreateHiDepthBuffer(
 		throw std::runtime_error("HiDepthBuffer does not support resolution larger than 4096");
 	}
 
+	// Square and power of two, so every mip is exactly half of the one above and a
+	// single sample of the right mip still covers the whole footprint
+	m_hzbSize = static_cast<UINT>(std::max<size_t>(HzbMinResolution, std::bit_ceil(resMax)));
+
 	const DXGI_FORMAT hzbFormat{ FormatToDepthSrv(desc.Format) };
-	const UINT mipLevels{ 1u + static_cast<UINT>(std::log2f(static_cast<float>(resMax))) };
+	const UINT mipLevels{ 1u + static_cast<UINT>(std::log2f(static_cast<float>(m_hzbSize))) };
 
 	D3D12_RESOURCE_DESC hzbDesc{ desc };
+	hzbDesc.Width = m_hzbSize;
+	hzbDesc.Height = m_hzbSize;
 	hzbDesc.Format = hzbFormat;
 	hzbDesc.MipLevels = static_cast<UINT16>(mipLevels);
 	hzbDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -241,6 +247,16 @@ void HiDepthBuffer::RecreateHiDepthBuffer(
 		&srvDesc
 	);
 
+	// The downsampler reads mip 0 alone, which lets it stay a separate subresource
+	// while the mips below are written
+	D3D12_SHADER_RESOURCE_VIEW_DESC topMipSrvDesc{ srvDesc };
+	topMipSrvDesc.Texture2D.MipLevels = 1;
+	m_pHZBuffer->CreateShaderResourceView(
+		pDevice,
+		m_pHzbSrvsRange->AllocateGetCpuHandle(),
+		&topMipSrvDesc
+	);
+
 	for (size_t i{}; i < mipLevels; ++i) {
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
 			.Format{ hzbFormat },
@@ -250,40 +266,75 @@ void HiDepthBuffer::RecreateHiDepthBuffer(
 		m_pHZBuffer->CreateUnorderedAccessView(pDevice, m_pHzbUavsRange->AllocateGetCpuHandle(), &uavDesc);
 	}
 
-	m_pSinglePassDownsampler->Resize(pDevice, desc.Width, desc.Height);
+	m_pSinglePassDownsampler->Resize(pDevice, m_hzbSize);
 }
 
 void HiDepthBuffer::CreateHierarchicalDepthBuffer(
 	std::shared_ptr<CommandList> pCommandList,
 	const std::shared_ptr<DescriptorHeap>& pResDescHeap
 ) {
-	// copy original depth-buffer as mip 0
-	// TODO: make copy part of the spd shader
-	size_t width{ m_pDepthBuffer->GetWidth() };
-	size_t height{ m_pDepthBuffer->GetHeight() };
-	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
-	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	pCommandList->GetD3D12CommandList()->CopyTextureRegion(
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pHZBuffer->GetD3D12Resource().Get(), 0),
-		0, 0, 0,
-		&CD3DX12_TEXTURE_COPY_LOCATION(m_pDepthBuffer->GetD3D12Resource().Get(), 0),
-		&CD3DX12_BOX(0, 0, 0, static_cast<LONG>(width), static_cast<LONG>(height), 1)
+	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	// mip 0 is the depth buffer resampled onto the square pyramid
+	const UINT topMipGroups{ (m_hzbSize + HiZTopMip::GroupSize - 1) / HiZTopMip::GroupSize };
+	m_pHiZTopMip->Dispatch(
+		pCommandList,
+		{ topMipGroups, topMipGroups, 1 },
+		[&](std::shared_ptr<CommandList> pDispatchList, UINT& rootParamId) {
+			auto pD3D12CommandList{ pDispatchList->GetD3D12CommandList() };
+			pD3D12CommandList->SetDescriptorHeaps(1, pResDescHeap->GetD3D12DescriptorHeap().GetAddressOf());
+
+			const UINT sizes[]{
+				static_cast<UINT>(m_pDepthBuffer->GetWidth()),
+				static_cast<UINT>(m_pDepthBuffer->GetHeight()),
+				m_hzbSize,
+				0
+			};
+			pD3D12CommandList->SetComputeRoot32BitConstants(0, _countof(sizes), sizes, 0);
+			pD3D12CommandList->SetComputeRootDescriptorTable(1, GetSrvGpuDescHandle());
+			pD3D12CommandList->SetComputeRootDescriptorTable(2, GetUavGpuDescHandle());
+		}
 	);
 
-	// run single pass downsampler
-	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	// TODO: avoid waiting?
+	m_pHZBuffer->ResourceTransition(
+		pCommandList,
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		HzbTopMipSubresource
+	);
+
 	m_pSinglePassDownsampler->Dispatch(
 		pCommandList,
 		pResDescHeap->GetD3D12DescriptorHeap(),
-		GetSrvGpuDescHandle(),
+		GetSrvGpuDescHandleForTopMip(),
 		GetUavGpuDescHandleForMidMip(),
 		GetUavGpuDescHandleForMips()
 	);
+
+	// Back in line with the rest of the pyramid, so that whoever transitions the
+	// whole texture next pays for one barrier instead of one per mip
+	m_pHZBuffer->ResourceTransition(
+		pCommandList,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		HzbTopMipSubresource
+	);
+}
+
+void HiDepthBuffer::TransitionHiZForReading(std::shared_ptr<CommandList> pCommandList) {
+	m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE HiDepthBuffer::GetSrvGpuDescHandleWithMips() const {
 	return m_pHzbSrvsRange->GetGpuHandle();
+}
+
+UINT HiDepthBuffer::GetHzbSize() const {
+	return m_hzbSize;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE HiDepthBuffer::GetSrvGpuDescHandleForTopMip() const {
+	return m_pHzbSrvsRange->GetGpuHandle(1);
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE HiDepthBuffer::GetUavGpuDescHandle() const {
@@ -323,8 +374,8 @@ void HiDepthBuffer::WaitState(const std::shared_ptr<CommandList>& pCommandList, 
 		break;
 
 	case DepthBufferState::HierarchicalDepthBuilding:
-		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_COPY_DEST);
+		m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		m_pHZBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		break;
 
 	case DepthBufferState::DepthReading:

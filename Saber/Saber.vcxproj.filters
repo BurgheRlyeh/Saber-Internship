@@ -45,6 +45,9 @@
     <ClInclude Include="Saber.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="HiZTopMip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Headers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -451,6 +454,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="AlphaKillPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="HiZTopMipCS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="SinglePassDownsamplerCS.hlsl">

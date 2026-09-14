@@ -33,16 +33,11 @@ class SinglePassDownsampler : public ComputeObject {
     uint32_t m_dispatchY{};
 
 public:
-    SinglePassDownsampler(
-        std::shared_ptr<DeviceContext> pDeviceContext,
-        UINT64 width,
-        UINT height
-    );
+    SinglePassDownsampler(std::shared_ptr<DeviceContext> pDeviceContext);
 
     void Resize(
         std::shared_ptr<Device> pDevice,
-        UINT64 width,
-        UINT height
+        UINT targetSize
     );
 
     void Dispatch(

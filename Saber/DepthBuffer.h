@@ -4,6 +4,7 @@
 #include "EnumFence.h"
 
 class CommandList;
+class ComputeObject;
 class DescRange;
 class DescriptorHeap;
 class Device;
@@ -74,15 +75,21 @@ enum class DepthBufferState : uint8_t {
 
 class HiDepthBuffer : public DepthBuffer {
 	static constexpr size_t HzbMaxResolution{ 4096 };
+	// The downsampler binds mip 6 separately, so the pyramid has to reach it
+	static constexpr size_t HzbMinResolution{ 128 };
 
 	static constexpr size_t HzbMaxMipCount{ 13 };
 	static constexpr size_t HzbMidMipUavId{ 6 };
+	// Mip 0, array slice 0, plane 0: the one the downsampler reads while writing the rest
+	static constexpr UINT HzbTopMipSubresource{};
 
 	std::shared_ptr<TextureResource> m_pHZBuffer{};
+	UINT m_hzbSize{};
 
 	std::shared_ptr<DescRange> m_pHzbSrvsRange{};
 	std::shared_ptr<DescRange> m_pHzbUavsRange{};
 
+	std::shared_ptr<ComputeObject> m_pHiZTopMip{};
 	std::shared_ptr<SinglePassDownsampler> m_pSinglePassDownsampler{};
 
 	std::shared_ptr<EnumFence<DepthBufferState>> m_pDepthBufferFence{};
@@ -102,7 +109,11 @@ public:
 		const std::shared_ptr<DescriptorHeap>& pResDescHeap
 	);
 
+	// The pyramid is left in unordered access by the build, the culling pass reads it
+	void TransitionHiZForReading(std::shared_ptr<CommandList> pCommandList);
+
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandleWithMips() const;
+	UINT GetHzbSize() const;
 
 	std::shared_ptr<EnumFence<DepthBufferState>> GetFence() const;
 	void SignalState(const std::shared_ptr<CommandList>& pCommandList, DepthBufferState state);
@@ -120,6 +131,7 @@ private:
 		const D3D12_RESOURCE_DESC& desc
 	);
 
+	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandleForTopMip() const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandle() const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMips() const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetUavGpuDescHandleForMidMip() const;
