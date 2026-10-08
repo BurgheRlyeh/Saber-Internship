@@ -209,10 +209,10 @@ protected:
 class TestRenderObject : protected MeshRenderObject<ModelBuffer> {
 protected:
     static inline D3D12_INPUT_ELEMENT_DESC m_inputLayoutSoA[4]{
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        {   "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        {  "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0,    DXGI_FORMAT_R32G32_FLOAT, 3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,   0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {   "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,   1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {  "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,2, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,      3, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 };
 
@@ -240,13 +240,14 @@ public:
             {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
             {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }
         };
-        DirectX::XMFLOAT3 tangents[24]{
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f },
-            {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f }, {  0.f,  0.f,  1.f },
-            {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f }, {  0.f,  0.f, -1.f },
-            { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f }, { -1.f,  0.f,  0.f },
-            {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }, {  1.f,  0.f,  0.f }
+        // w is the bitangent sign
+        DirectX::XMFLOAT4 tangents[24]{
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f },
+            {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f }, {  0.f,  0.f,  1.f, 1.f },
+            {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f }, {  0.f,  0.f, -1.f, 1.f },
+            { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f }, { -1.f,  0.f,  0.f, 1.f },
+            {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }, {  1.f,  0.f,  0.f, 1.f }
         };
         DirectX::XMFLOAT2 uvs[24]{
             { 0.f, 1.f }, { 1.f, 1.f }, { 1.f, 0.f }, { 0.f, 0.f },
