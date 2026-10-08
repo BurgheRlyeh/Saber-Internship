@@ -63,7 +63,11 @@ MaterialManager::MaterialManager(
         pDeviceContext,
         ResourceView::Cbv
     );
-    m_materialBuffer.materials[0] = { 0, 0, 0, 0 };
+    // Id 0 means "no material": the lighting pass bails out before reading it
+    m_materialBuffer.materials[0] = Material{
+        .textureIds{ 0, 0, 0, 0 },
+        .phong{ 1.f, 1.f, 0.f, 1.f }
+    };
     m_pMaterialBuffer->UpdateAll(&m_materialBuffer, 1);
 }
 
@@ -79,9 +83,10 @@ size_t MaterialManager::GetCreateMaterial(
     std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandList,
     const std::wstring& albedoFilepath,
-    const std::wstring& normalFilepath
+    const std::wstring& normalFilepath,
+    const PhongParams& phong
 ) {
-    MaterialKey key{ albedoFilepath, normalFilepath };
+    MaterialKey key{ albedoFilepath, normalFilepath, phong };
 
     std::unique_lock matMapLock(m_materialIdMapMutex);
     if (auto it = m_materialIdMap.find(key); it != m_materialIdMap.end())
@@ -94,11 +99,14 @@ size_t MaterialManager::GetCreateMaterial(
     m_materialIdMap[key] = materialId;
     matMapLock.unlock();
 
-    m_materialBuffer.materials[materialId] = {
-        static_cast<UINT>(m_pTexManager->GetCreateTextureId(albedoFilepath, pDeviceContext, pCommandList)),
-        static_cast<UINT>(m_pTexManager->GetCreateTextureId(normalFilepath, pDeviceContext, pCommandList)),
-        0,
-        0
+    m_materialBuffer.materials[materialId] = Material{
+        .textureIds{
+            static_cast<UINT>(m_pTexManager->GetCreateTextureId(albedoFilepath, pDeviceContext, pCommandList)),
+            static_cast<UINT>(m_pTexManager->GetCreateTextureId(normalFilepath, pDeviceContext, pCommandList)),
+            0,
+            0
+        },
+        .phong{ phong.ambient, phong.diffuse, phong.specular, phong.shininess }
     };
     m_pMaterialBuffer->UpdateAll(&m_materialBuffer, 1);
 

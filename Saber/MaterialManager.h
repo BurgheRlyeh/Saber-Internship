@@ -17,6 +17,14 @@ class Device;
 class DeviceContext;
 class TextureResource;
 
+// boost::hash_combine over any number of std::hash-able values
+template <typename... Ts>
+size_t HashCombine(const Ts&... values) {
+    size_t seed{};
+    ((seed ^= std::hash<Ts>{}(values)+0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2)), ...);
+    return seed;
+}
+
 class TextureManager {
 	std::wstring m_name{};
 
@@ -53,15 +61,16 @@ class MaterialManager {
     struct MaterialKey {
         std::wstring albedo;
         std::wstring normal;
+        PhongParams phong;
 
-        bool operator==(const MaterialKey& other) const {
-            return albedo == other.albedo && normal == other.normal;
-        }
+        bool operator==(const MaterialKey& other) const = default;
 
         struct Hasher {
             size_t operator()(const MaterialKey& k) const {
-                return (std::hash<std::wstring>()(k.albedo)) ^
-                    (std::hash<std::wstring>()(k.normal) << 1);
+                return HashCombine(
+                    k.albedo, k.normal,
+                    k.phong.ambient, k.phong.diffuse, k.phong.specular, k.phong.shininess
+                );
             }
         };
     };
@@ -87,6 +96,7 @@ public:
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList,
         const std::wstring& albedoFilepath,
-        const std::wstring& normalFilepath
+        const std::wstring& normalFilepath,
+        const PhongParams& phong = {}
     );
 };

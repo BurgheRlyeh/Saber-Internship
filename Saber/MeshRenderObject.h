@@ -313,6 +313,7 @@ public:
         std::shared_ptr<Texture> pGBuffer,
         const std::wstring& albedoFilename,
         const std::wstring& normalFilename,
+        const PhongParams& phong = {},
         const DirectX::XMMATRIX& modelMatrix = DirectX::XMMatrixIdentity()
     ) {
         std::shared_ptr<MeshRenderObject<ModelBuffer>> pObj{
@@ -365,7 +366,8 @@ public:
             pDeviceContext,
             pCommandList,
             albedoFilename,
-            normalFilename
+            normalFilename,
+            phong
         ));
 
         return pObj;
