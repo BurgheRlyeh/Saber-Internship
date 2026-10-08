@@ -71,13 +71,14 @@ public:
     ModelBuffer& GetModelBuffer() {
         return m_modelBuffer;
     }
-    void SetModelBuffer(const ModelBuffer& modelBuffer) {
-        m_modelBuffer = modelBuffer;
-        UpdateModelBuffer();
-    }
-    void UpdateModelBuffer() {
-        m_pModelCb->Update(&m_modelBuffer);
-    }
+    // TODO: MeshRenderObject variant (or option) that owns its CB and renders without a RenderSubsystem
+    //void SetModelBuffer(const ModelBuffer& modelBuffer) {
+    //    m_modelBuffer = modelBuffer;
+    //    UpdateModelBuffer();
+    //}
+    //void UpdateModelBuffer() {
+    //    m_pModelCb->Update(&m_modelBuffer);
+    //}
 
     void FillIndirectCommand(CbMeshIndirectCommand& indirectCommand) override {
         indirectCommand = CbMeshIndirectCommand{
