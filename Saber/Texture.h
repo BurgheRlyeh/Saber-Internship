@@ -8,6 +8,7 @@
 #include "CommandQueue.h"
 #include "DeviceContext.h"
 #include "DescriptorHeapManager.h"
+#include "DepthBuffer.h"
 #include "DescriptorHeapRange.h"
 #include "TextureResource.h"
 
@@ -195,7 +196,7 @@ class GBuffer : public Texture {
 	// tex1: uv, materialId
 	// tex2: tbn
 	static inline constexpr size_t GBufferSize{ 2 };
-	static constexpr D3D12_RESOURCE_DESC GetGBufferTexDesc(size_t width, size_t height) {
+ 	static constexpr D3D12_RESOURCE_DESC GetGBufferTexDesc(size_t width, size_t height) {
 		return D3D12_RESOURCE_DESC{
 			.Dimension{ D3D12_RESOURCE_DIMENSION_TEXTURE2D },
 			.Width{ static_cast<UINT64>(width) },
