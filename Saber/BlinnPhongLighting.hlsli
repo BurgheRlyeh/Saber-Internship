@@ -29,21 +29,22 @@ Lighting GetPointLight(
     
     float attenuation = saturate(1.f / (lightDist * lightDist));
     
+    float NdotL = dot(normal, lightDir);
+    
     // diffuse part
     {
-        float NdotL = dot(normal, lightDir);
         float diffuseIntensity = saturate(NdotL);
         
         lighting.diffuse = diffuseIntensity * attenuation * light.diffuseColorAndPower.xyz * light.diffuseColorAndPower.w;
     }
     
-    if (shininess <= 0.f || light.specularColorAndPower.w <= 0.f)
+    if (shininess <= 0.f || light.specularColorAndPower.w <= 0.f || NdotL <= 0.f)
     {
         return lighting;
     }
 
     
-    float3 viewDir = normalize(position - cameraPosition);
+    float3 viewDir = normalize(cameraPosition - position);
     float specularIntensity;
     
     // specular blinn

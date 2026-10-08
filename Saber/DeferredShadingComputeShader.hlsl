@@ -122,7 +122,7 @@ void main(ComputeShaderInput IN)
         Lighting lighting = GetPointLight(
             LightCB.lights[i],
             worldPos,
-            worldPos - CameraCB.cameraPosition.xyz,
+            CameraCB.cameraPosition.xyz,
             norm,
             1.f
         );
