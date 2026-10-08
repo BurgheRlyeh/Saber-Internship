@@ -228,14 +228,15 @@ public:
 	std::shared_ptr<EnumFence<GBufferState>> GetFence() const {
 		return m_pGBufferFence;
 	}
-	void SignalState(std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
-		pCommandList->AddAfterTask([&, state] {
-			pCommandList->GetQueue()->Signal(m_pGBufferFence, state);
+
+	void SignalState(const std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
+		pCommandList->AddAfterTask([state, pQueue = pCommandList->GetQueue(), pFence = m_pGBufferFence] {
+			pQueue->Signal(pFence, state);
 		});
 	}
-	void WaitState(std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
-		pCommandList->AddBeforeTask([&, state] {
-			pCommandList->GetQueue()->GpuWait(m_pGBufferFence, state);
+	void WaitState(const std::shared_ptr<CommandList>& pCommandList, GBufferState state) {
+		pCommandList->AddBeforeTask([state, pQueue = pCommandList->GetQueue(), pFence = m_pGBufferFence] {
+			pQueue->GpuWait(pFence, state);
 		});
 	}
 };
