@@ -40,6 +40,10 @@ size_t Mesh::GetIndicesCount() const {
     return m_indicesCount;
 }
 
+const AABB& Mesh::GetAABB() const {
+    return m_aabb;
+}
+
 void Mesh::InitFromVerticesIndices(
     const std::wstring& name,
     std::shared_ptr<DeviceContext> pDeviceContext,
@@ -60,8 +64,9 @@ void Mesh::InitFromVerticesIndices(
 
     size_t i{};
     for (const VertexData& vertexData : meshData.verticesData) {
-        if (vertexData.handler) {
-            vertexData.handler(vertexData.data, vertexData.size);
+        if (i == meshData.positionsStreamId) {
+            assert(vertexData.size == sizeof(DirectX::XMFLOAT3));
+            AccumulatePositionsAABB(vertexData.data, meshData.verticesCnt);
         }
         AddVertexBuffer(
             name + L"/VertexBuffer" + std::to_wstring(i++),
@@ -127,8 +132,9 @@ void Mesh::InitFromGLTF(
         }
 
         size_t verticesCnt{ vertexData.size() / (attribute.size / 4) };
-        if (attribute.handler) {
-            attribute.handler(vertexData.data(), verticesCnt);
+        if (attribute.name == Microsoft::glTF::ACCESSOR_POSITION) {
+            assert(attribute.size == sizeof(DirectX::XMFLOAT3));
+            AccumulatePositionsAABB(vertexData.data(), verticesCnt);
         }
 
         BufferData vertexBufferData{
@@ -182,6 +188,18 @@ void Mesh::AddVertexBuffer(
         .SizeInBytes{ static_cast<UINT>(bufferData.size * bufferData.count) },
         .StrideInBytes{ static_cast<UINT>(bufferData.size) }
         });
+}
+
+void Mesh::AccumulatePositionsAABB(const void* pPositions, size_t count) {
+    const DirectX::XMFLOAT3* positions{ static_cast<const DirectX::XMFLOAT3*>(pPositions) };
+    for (size_t i{}; i < count; ++i) {
+        m_aabb.min.x = std::min(m_aabb.min.x, positions[i].x);
+        m_aabb.min.y = std::min(m_aabb.min.y, positions[i].y);
+        m_aabb.min.z = std::min(m_aabb.min.z, positions[i].z);
+        m_aabb.max.x = std::max(m_aabb.max.x, positions[i].x);
+        m_aabb.max.y = std::max(m_aabb.max.y, positions[i].y);
+        m_aabb.max.z = std::max(m_aabb.max.z, positions[i].z);
+    }
 }
 
 std::shared_ptr<GPUResource> Mesh::CreateBuffer(
