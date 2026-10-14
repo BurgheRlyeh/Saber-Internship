@@ -103,7 +103,7 @@ public:
 			T* pDst{};
 			ThrowIfFailed(pIntermediate->GetD3D12Resource()->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 			memcpy(pDst, &buffer.GetStorageData()[m_updRange.first], updSize);
-			pIntermediate->GetD3D12Resource()->Unmap(0, &CD3DX12_RANGE(m_updRange.first, m_updRange.second));
+			pIntermediate->GetD3D12Resource()->Unmap(0, &CD3DX12_RANGE(0, updSize));
 
 			pCommandList->GetD3D12CommandList()->CopyBufferRegion(
 				buffer.GetResource()->GetD3D12Resource().Get(),
@@ -308,7 +308,7 @@ public:
 		T* pDst{};
 		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		memcpy(pDst, pData, count * sizeof(T));
-		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(0, count));
+		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(0, count * sizeof(T)));
 	}
 	virtual void UpdateAt(size_t id, const T& data) override {
 		auto pD3D12Buffer{ m_buffer.GetResource()->GetD3D12Resource() };
@@ -316,7 +316,7 @@ public:
 		T* pDst{};
 		ThrowIfFailed(pD3D12Buffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&pDst)));
 		pDst[id] = data;
-		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(id, id + 1));
+		pD3D12Buffer->Unmap(0, &CD3DX12_RANGE(id * sizeof(T), (id + 1) * sizeof(T)));
 	}
 	virtual bool IsUpdatePending() const override {
 		return false;
