@@ -160,6 +160,10 @@ private:
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList
     );
+    void UpdateRenderSubsystems(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList
+    );
     void UpdateLightBuffer(
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList

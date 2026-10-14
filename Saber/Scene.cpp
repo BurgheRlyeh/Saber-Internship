@@ -132,6 +132,18 @@ void Scene::Update(
 ) {
     UpdateCamera(deltaTime);
     UpdateCameraBuffer(pDeviceContext, pCommandList);
+    UpdateRenderSubsystems(pDeviceContext, pCommandList);
+}
+
+void Scene::UpdateRenderSubsystems(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+    for (const auto& pRenderSubsystem : m_pRenderSubsystems) {
+        if (pRenderSubsystem && pRenderSubsystem->IsUpdatePending()) {
+            pRenderSubsystem->PerformUpdate(pDeviceContext, pCommandList);
+        }
+    }
 }
 
 void Scene::BeforeFrameJob(std::shared_ptr<CommandList> pCommandList) {
@@ -261,9 +273,10 @@ void Scene::RenderObjects(
     if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
         return;
 
-    if (m_pRenderSubsystems[ToId(type)]->IsUpdatePending()) {
-        m_pRenderSubsystems[ToId(type)]->PerformUpdate(pDeviceContext, pCommandList);
-    }
+    m_pCameraCB->GetResource()->ResourceTransition(
+        pCommandList,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
 
     auto commandListPrepare = [&] {
         auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
@@ -318,6 +331,11 @@ void Scene::RunDeferredShading(
 
     m_pGBuffer->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    m_pCameraCB->GetResource()->ResourceTransition(
+        pCommandListCompute,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
 
     UpdateLightBuffer(pDeviceContext, pCommandListCompute);
     m_pLightCB->GetResource()->ResourceTransition(
