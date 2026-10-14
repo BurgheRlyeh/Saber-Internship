@@ -5,15 +5,28 @@
 
 #define LIGHTS_MAX_COUNT 10
 
-struct Light {
-    float4 position;
+enum class LightType : uint {
+    Point,
+    Directional,
+    Spot,
+
+    Count
+};
+
+struct LightDesc {
+    float4 position;    // w = 1: xyz - position; w = 0: xyz - direction to the light
+    float4 direction;   // xyz - where the light points, normalized
+
     float4 diffuseColorAndPower;
     float4 specularColorAndPower;
+
+    float4 params;      // x - LightType, y - 1 / range, z - spot scale, w - spot offset
 };
+
 struct LightBuffer {
     float4 ambientColorAndPower;
     uint4 lightsCount;
-    Light lights[LIGHTS_MAX_COUNT];
+    LightDesc lights[LIGHTS_MAX_COUNT];
 
 #ifdef __cplusplus
     void SetAmbientLight(
@@ -24,37 +37,8 @@ struct LightBuffer {
 	        color.x,
 	        color.y,
 	        color.z,
-	        power
+            power
         };
-    }
-
-    bool Add(
-        const DirectX::XMFLOAT4& position,
-        const DirectX::XMFLOAT3& diffuseColor,
-        const float& diffusePower,
-        const DirectX::XMFLOAT3& specularColor,
-        const float& specularPower
-    ) {
-        if (lightsCount.x == LIGHTS_MAX_COUNT) {
-            return false;
-        }
-
-        lights[lightsCount.x++] = {
-            position,
-            {
-                diffuseColor.x,
-                diffuseColor.y,
-                diffuseColor.z,
-                diffusePower
-            },
-            {
-                specularColor.x,
-                specularColor.y,
-                specularColor.z,
-                specularPower
-            }
-        };
-        return true;
     }
 #endif
 };
@@ -62,8 +46,9 @@ struct LightBuffer {
 #include "HlslTypesUndef.h"
 
 #ifdef __cplusplus
+const char* LightTypeName(LightType type);
+
 // UI
-bool DrawSettings(Light& light);
 bool DrawSettings(LightBuffer& lightBuffer);
 #endif  // __cplusplus
 

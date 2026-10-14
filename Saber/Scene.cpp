@@ -4,13 +4,17 @@
 
 #include "Buffer.h"
 #include "Camera.h"
+#include "LightSource.h"
 #include "CommandList.h"
 #include "ComputeObject.h"
 #include "DepthBuffer.h"
 #include "DescriptorHeapManager.h"
 #include "Device.h"
 #include "DeviceContext.h"
+#include "DirectionalLight.h"
 #include "MaterialManager.h"
+#include "PointLight.h"
+#include "SpotLight.h"
 #include "RenderObject.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
@@ -45,10 +49,19 @@ m_pGBuffer(pGBuffer)
     m_pCameraCB->CreateUpdater<WholeBufferUpdater<CameraBuffer>>();
 
     m_lightBuffer.SetAmbientLight({ .5f, .5f, .5f }, 1.f);
-    m_pLightCB = CreateUploadBufferWithUpdater<LightBuffer>(
+    m_pLightCB = std::make_shared<Buffer<LightBuffer>>(
         m_name + L"/LightCB",
-        pDeviceContext
+        pDeviceContext,
+        1,
+        GPUResource::AllocationDesc{},
+        GPUResource::ResourceDesc{
+            CD3DX12_RESOURCE_DESC::Buffer(0),
+            D3D12_RESOURCE_STATE_GENERIC_READ
+        },
+        EnumFlags<ResourceView>{ ResourceView::None }
     );
+    m_pLightCB->CreateStorage<WholeBufferStorage<LightBuffer>>();
+    m_pLightCB->CreateUpdater<WholeBufferUpdater<LightBuffer>>();
     m_pLightCB->UpdateAll(&m_lightBuffer, 1);
 
     m_pTargetTexture = std::make_shared<Texture>(
@@ -207,28 +220,29 @@ void Scene::SetAmbientLight(
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
     m_lightBuffer.SetAmbientLight(color, power);
-    m_isUpdateLightCB.store(true);
 }
-bool Scene::AddLightSource(
-    const DirectX::XMFLOAT4& position,
-    const DirectX::XMFLOAT3& diffuseColor,
-    const DirectX::XMFLOAT3& specularColor,
-    const float& diffusePower,
-    const float& specularPower
-) {
-    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-    bool result{ m_lightBuffer.Add(
-        position,
-        diffuseColor,
-        diffusePower,
-        specularColor,
-        specularPower
-    ) };
-
-    if (result) {
-        m_isUpdateLightCB.store(true);
+bool Scene::AddLight(const std::shared_ptr<LightSource>& pLight) {
+    if (!pLight) {
+        return false;
     }
-    return result;
+
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+    if (m_pLights.size() == LIGHTS_MAX_COUNT) {
+        return false;
+    }
+
+    m_pLights.push_back(pLight);
+    return true;
+}
+
+size_t Scene::GetLightCount() {
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+    return m_pLights.size();
+}
+
+std::shared_ptr<LightSource> Scene::GetLight(size_t lightId) {
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+    return lightId < m_pLights.size() ? m_pLights[lightId] : nullptr;
 }
 
 void Scene::AddObject(
@@ -291,6 +305,7 @@ void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDefe
 }
 
 void Scene::RunDeferredShading(
+    std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandListCompute,
     std::shared_ptr<DescriptorHeap> pResDescHeapManager,
     std::shared_ptr<MaterialManager> pMaterialManager,
@@ -304,7 +319,11 @@ void Scene::RunDeferredShading(
     m_pGBuffer->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     m_pTargetTexture->ChangeState(pCommandListCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-    UpdateLightBuffer();
+    UpdateLightBuffer(pDeviceContext, pCommandListCompute);
+    m_pLightCB->GetResource()->ResourceTransition(
+        pCommandListCompute,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
 
     std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
 
@@ -414,12 +433,19 @@ void Scene::UpdateCameraBuffer(
     m_pCameraCB->PerformUpdate(pDeviceContext, pCommandList);
 }
 
-void Scene::UpdateLightBuffer() {
-    bool expected{ true };
-    if (m_isUpdateLightCB.compare_exchange_strong(expected, false)) {
-        std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
-        m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+void Scene::UpdateLightBuffer(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+    std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
+
+    m_lightBuffer.lightsCount.x = static_cast<uint32_t>(m_pLights.size());
+    for (size_t lightId{}; lightId < m_pLights.size(); ++lightId) {
+        m_lightBuffer.lights[lightId] = m_pLights[lightId]->GetLightDesc();
     }
+
+    m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+    m_pLightCB->PerformUpdate(pDeviceContext, pCommandList);
 }
 
 // UI
@@ -438,16 +464,46 @@ void Scene::DrawSettingsUI() {
 
 	// Light settings
     {
-        bool isChanged{};
         std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
 
         if (ImGui::Begin("Lights")) {
-            isChanged = DrawSettings(m_lightBuffer);
+            DrawSettings(m_lightBuffer);
+
+            ImGui::SeparatorText("Sources");
+            ImGui::Text("Count: %zu / %d", m_pLights.size(), LIGHTS_MAX_COUNT);
+
+            if (ImGui::Button("+") && m_pLights.size() < LIGHTS_MAX_COUNT) {
+                m_pLights.push_back(std::make_shared<PointLight>());
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("-") && !m_pLights.empty()) {
+                m_pLights.pop_back();
+            }
+
+            for (size_t lightId{}; lightId < m_pLights.size(); ++lightId) {
+                ImGui::PushID(static_cast<int>(lightId));
+                if (ImGui::TreeNode("source", "%s %zu", LightTypeName(m_pLights[lightId]->GetType()), lightId)) {
+                    int lightType{ static_cast<int>(m_pLights[lightId]->GetType()) };
+                    if (ImGui::Combo("Type", &lightType, "Point\0Directional\0Spot\0")) {
+                        switch (static_cast<LightType>(lightType)) {
+                        case LightType::Point:
+                            m_pLights[lightId] = std::make_shared<PointLight>();
+                            break;
+                        case LightType::Directional:
+                            m_pLights[lightId] = std::make_shared<DirectionalLight>();
+                            break;
+                        case LightType::Spot:
+                            m_pLights[lightId] = std::make_shared<SpotLight>();
+                            break;
+                        }
+                    }
+
+                    DrawSettings(*m_pLights[lightId]);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
         }
         ImGui::End();
-
-        if (isChanged) {
-            m_isUpdateLightCB.store(true);
-        }
     }
 }

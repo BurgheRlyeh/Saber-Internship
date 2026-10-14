@@ -127,7 +127,7 @@ void main(ComputeShaderInput IN)
     float3 finalColor = ambientK * LightCB.ambientColorAndPower.w * LightCB.ambientColorAndPower.xyz * albedo;
     for (uint i = 0; i < LightCB.lightsCount.x; ++i)
     {
-        Lighting lighting = GetPointLight(
+        Lighting lighting = GetLight(
             LightCB.lights[i],
             worldPos,
             CameraCB.cameraPosition.xyz,
