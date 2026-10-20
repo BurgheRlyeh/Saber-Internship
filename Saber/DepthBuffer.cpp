@@ -10,7 +10,29 @@
 #include "TextureResource.h"
 
 namespace {
-	constexpr DXGI_FORMAT FormatToDepthSrv(DXGI_FORMAT depthFormat) {
+	constexpr DXGI_FORMAT TypelessToDepthFormat(DXGI_FORMAT typelessFormat) {
+		switch (typelessFormat) {
+		case DXGI_FORMAT_R32G8X24_TYPELESS:		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+		case DXGI_FORMAT_R32_TYPELESS:			return DXGI_FORMAT_D32_FLOAT;
+		case DXGI_FORMAT_R24G8_TYPELESS:		return DXGI_FORMAT_D24_UNORM_S8_UINT;
+		case DXGI_FORMAT_R16_TYPELESS:			return DXGI_FORMAT_D16_UNORM;
+
+		default:								return DXGI_FORMAT_UNKNOWN;
+		}
+	}
+
+	constexpr DXGI_FORMAT DepthFormatToTypeless(DXGI_FORMAT depthFormat) {
+		switch (depthFormat) {
+		case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:	return DXGI_FORMAT_R32G8X24_TYPELESS;
+		case DXGI_FORMAT_D32_FLOAT:				return DXGI_FORMAT_R32_TYPELESS;
+		case DXGI_FORMAT_D24_UNORM_S8_UINT:		return DXGI_FORMAT_R24G8_TYPELESS;
+		case DXGI_FORMAT_D16_UNORM:				return DXGI_FORMAT_R16_TYPELESS;
+
+		default:								return DXGI_FORMAT_UNKNOWN;
+		}
+	}
+
+	constexpr DXGI_FORMAT DepthFormatToSrv(DXGI_FORMAT depthFormat) {
 		switch (depthFormat) {
 		case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:	return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 		case DXGI_FORMAT_D32_FLOAT:				return DXGI_FORMAT_R32_FLOAT;
@@ -21,7 +43,7 @@ namespace {
 		}
 	}
 
-	constexpr DXGI_FORMAT FormatToStencilSrv(DXGI_FORMAT depthFormat) noexcept {
+	constexpr DXGI_FORMAT DepthFormatToStencilSrv(DXGI_FORMAT depthFormat) noexcept {
 		switch (depthFormat) {
 		case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:	return DXGI_FORMAT_X32_TYPELESS_G8X24_UINT;
 		case DXGI_FORMAT_D24_UNORM_S8_UINT:		return DXGI_FORMAT_X24_TYPELESS_G8_UINT;
@@ -30,8 +52,8 @@ namespace {
 		}
 	}
 
-	constexpr bool IsStencilFormat(DXGI_FORMAT depthFormat) noexcept {
-		return FormatToStencilSrv(depthFormat) != DXGI_FORMAT_UNKNOWN;
+	constexpr bool DepthFormatHasStencil(DXGI_FORMAT depthFormat) noexcept {
+		return DepthFormatToStencilSrv(depthFormat) != DXGI_FORMAT_UNKNOWN;
 	}
 }
 
@@ -44,7 +66,7 @@ DepthBuffer::DepthBuffer(
 	D3D12_RESOURCE_FLAGS flags
 ) : m_name(name)
 {
-	assert(FormatToDepthSrv(format) != DXGI_FORMAT_UNKNOWN);
+	assert(DepthFormatToSrv(format) != DXGI_FORMAT_UNKNOWN);
 
 	auto desc{ CD3DX12_RESOURCE_DESC::Tex2D(
 		format, width, height, 1, 1, 1, 0, flags
@@ -57,7 +79,7 @@ DepthBuffer::DepthBuffer(
 		m_pSrvsRange = pDeviceContext->AllocateDescRange(
 			m_name,
 			DescRangeType::Srv,
-			1 + IsStencilFormat(format)
+			1 + DepthFormatHasStencil(format)
 		);
 	}
 
@@ -69,7 +91,7 @@ void DepthBuffer::Resize(
 	UINT64 width,
 	UINT height
 ) {
-	auto desc{ m_pDepthBuffer->GetResourceDesc() };
+	auto desc{ GetDepthDesc() };
 	desc.Width = width;
 	desc.Height = height;
 	Recreate(pDevice, desc);
@@ -88,6 +110,14 @@ D3D12_RESOURCE_DESC DepthBuffer::GetDesc() const {
 	return m_pDepthBuffer->GetResourceDesc();
 }
 
+D3D12_RESOURCE_DESC DepthBuffer::GetDepthDesc() const {
+	D3D12_RESOURCE_DESC desc{ m_pDepthBuffer->GetResourceDesc() };
+	if (IsSrvDesc(desc)) {
+		desc.Format = TypelessToDepthFormat(desc.Format);
+	}
+	return desc;
+}
+
 D3D12_CPU_DESCRIPTOR_HANDLE DepthBuffer::GetDsvCpuDescHandle() const {
 	return m_pDsvsRange->GetCpuHandle();
 }
@@ -103,6 +133,14 @@ void DepthBuffer::Recreate(
 	std::shared_ptr<Device> pDevice,
 	const D3D12_RESOURCE_DESC& desc
 ) {
+	// The format the views use; the texture gets the typeless one when read as srv
+	assert(DepthFormatToSrv(desc.Format) != DXGI_FORMAT_UNKNOWN);
+
+	D3D12_RESOURCE_DESC textureDesc{ desc };
+	if (IsSrvDesc(desc)) {
+		textureDesc.Format = DepthFormatToTypeless(desc.Format);
+	}
+
 	m_pDsvsRange->FreeAll();
 
 	m_pDepthBuffer = std::make_shared<TextureResource>(
@@ -110,7 +148,7 @@ void DepthBuffer::Recreate(
 		pDevice,
 		GPUResource::AllocationDesc{ D3D12_HEAP_TYPE_DEFAULT },
 		GPUResource::ResourceDesc{
-			desc,
+			textureDesc,
 			D3D12_RESOURCE_STATE_COMMON,
 			&CD3DX12_CLEAR_VALUE(desc.Format, 0.0f, 0)
 		}
@@ -135,7 +173,7 @@ void DepthBuffer::Recreate(
 	m_pSrvsRange->FreeAll();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
-		.Format{ FormatToDepthSrv(desc.Format) },
+		.Format{ DepthFormatToSrv(desc.Format) },
 		.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
 		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 		.Texture2D{ .MipLevels{ 1 } }
@@ -144,9 +182,9 @@ void DepthBuffer::Recreate(
 		pDevice, m_pSrvsRange->AllocateGetCpuHandle(), &srvDesc
 	);
 
-	if (IsStencilFormat(desc.Format)) {
+	if (DepthFormatHasStencil(desc.Format)) {
 		D3D12_SHADER_RESOURCE_VIEW_DESC stencilSrvDesc{
-			.Format{ FormatToStencilSrv(desc.Format) },
+			.Format{ DepthFormatToStencilSrv(desc.Format) },
 			.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
 			.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
 			.Texture2D{ .MipLevels{ 1 } }
@@ -179,7 +217,7 @@ HiDepthBuffer::HiDepthBuffer(
 		height
 	);
 
-	RecreateHiDepthBuffer(pDeviceContext->GetDevice(), GetDesc());
+	RecreateHiDepthBuffer(pDeviceContext->GetDevice(), GetDepthDesc());
 
 	m_pDepthBufferFence = std::make_shared<EnumFence<DepthBufferState>>(
 		m_name + L"/Fence",
@@ -211,7 +249,7 @@ void HiDepthBuffer::RecreateHiDepthBuffer(
 		throw std::runtime_error("HiDepthBuffer does not support resolution larger than 4096");
 	}
 
-	const DXGI_FORMAT hzbFormat{ FormatToDepthSrv(desc.Format) };
+	const DXGI_FORMAT hzbFormat{ DepthFormatToSrv(desc.Format) };
 	const UINT mipLevels{ 1u + static_cast<UINT>(std::log2f(static_cast<float>(resMax))) };
 
 	D3D12_RESOURCE_DESC hzbDesc{ desc };

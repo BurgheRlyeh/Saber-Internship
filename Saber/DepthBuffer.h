@@ -56,6 +56,8 @@ public:
 	) const;
 
 protected:
+	D3D12_RESOURCE_DESC GetDepthDesc() const;
+
 	virtual void Recreate(
 		std::shared_ptr<Device> pDevice,
 		const D3D12_RESOURCE_DESC& desc
