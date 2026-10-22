@@ -55,6 +55,22 @@ namespace {
 	constexpr bool DepthFormatHasStencil(DXGI_FORMAT depthFormat) noexcept {
 		return DepthFormatToStencilSrv(depthFormat) != DXGI_FORMAT_UNKNOWN;
 	}
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC DepthSrvDesc(DXGI_FORMAT depthFormat, UINT16 arraySize, bool isArray) {
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+			.Format{ DepthFormatToSrv(depthFormat) },
+			.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
+			.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
+			.Texture2D{ .MipLevels{ 1 } }
+		};
+
+		if (isArray) {
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+			srvDesc.Texture2DArray = { .MipLevels{ 1 }, .ArraySize{ arraySize } };
+		}
+
+		return srvDesc;
+	}
 }
 
 DepthBuffer::DepthBuffer(
@@ -63,17 +79,20 @@ DepthBuffer::DepthBuffer(
 	UINT64 width,
 	UINT height,
 	DXGI_FORMAT format,
-	D3D12_RESOURCE_FLAGS flags
+	D3D12_RESOURCE_FLAGS flags,
+	UINT16 arraySize
 ) : m_name(name)
 {
 	assert(DepthFormatToSrv(format) != DXGI_FORMAT_UNKNOWN);
+	assert(arraySize > 0);
+	assert(arraySize == 1 || !DepthFormatHasStencil(format));	// no stencil view for arrays yet
 
 	auto desc{ CD3DX12_RESOURCE_DESC::Tex2D(
-		format, width, height, 1, 1, 1, 0, flags
+		format, width, height, arraySize, 1, 1, 0, flags
 	) };
 
 	assert(IsDsvDesc(desc));
-	m_pDsvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Dsv, 1);
+	m_pDsvsRange = pDeviceContext->AllocateDescRange(m_name, DescRangeType::Dsv, arraySize);
 
 	if (IsSrvDesc(desc)) {
 		m_pSrvsRange = pDeviceContext->AllocateDescRange(
@@ -99,7 +118,9 @@ void DepthBuffer::Resize(
 
 void DepthBuffer::Clear(std::shared_ptr<CommandList> pCommandList) {
 	m_pDepthBuffer->ResourceTransition(pCommandList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	m_pDepthBuffer->ClearDepthTarget(pCommandList, GetDsvCpuDescHandle());
+	for (UINT slice{}; slice < GetArraySize(); ++slice) {
+		m_pDepthBuffer->ClearDepthTarget(pCommandList, GetDsvCpuDescHandle(slice));
+	}
 }
 
 std::shared_ptr<TextureResource> DepthBuffer::GetTexture() const {
@@ -118,8 +139,26 @@ D3D12_RESOURCE_DESC DepthBuffer::GetDepthDesc() const {
 	return desc;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DepthBuffer::GetDsvCpuDescHandle() const {
-	return m_pDsvsRange->GetCpuHandle();
+UINT16 DepthBuffer::GetArraySize() const {
+	return GetDesc().DepthOrArraySize;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DepthBuffer::GetDsvCpuDescHandle(UINT slice) const {
+	assert(slice < GetArraySize());
+	return m_pDsvsRange->GetCpuHandle(slice);
+}
+
+void DepthBuffer::CreateArraySrv(
+	std::shared_ptr<Device> pDevice,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle
+) const {
+	const D3D12_RESOURCE_DESC desc{ GetDepthDesc() };
+	assert(IsSrvDesc(desc));
+
+	const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+		DepthSrvDesc(desc.Format, desc.DepthOrArraySize, true)
+	};
+	m_pDepthBuffer->CreateShaderResourceView(pDevice, cpuDescHandle, &srvDesc);
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE DepthBuffer::GetSrvGpuDescHandle(
@@ -160,11 +199,18 @@ void DepthBuffer::Recreate(
 		.Flags{ D3D12_DSV_FLAG_NONE },
 		.Texture2D{}
 	};
-	m_pDepthBuffer->CreateDepthStencilView(
-		pDevice,
-		m_pDsvsRange->AllocateGetCpuHandle(),
-		&dsvDesc
-	);
+	// One view per slice, as each one is rendered on its own
+	for (UINT16 slice{}; slice < desc.DepthOrArraySize; ++slice) {
+		if (desc.DepthOrArraySize > 1) {
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			dsvDesc.Texture2DArray = { .MipSlice{}, .FirstArraySlice{ slice }, .ArraySize{ 1 } };
+		}
+		m_pDepthBuffer->CreateDepthStencilView(
+			pDevice,
+			m_pDsvsRange->AllocateGetCpuHandle(),
+			&dsvDesc
+		);
+	}
 
 	if (!m_pSrvsRange) {
 		return;
@@ -172,11 +218,8 @@ void DepthBuffer::Recreate(
 
 	m_pSrvsRange->FreeAll();
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
-		.Format{ DepthFormatToSrv(desc.Format) },
-		.ViewDimension{ D3D12_SRV_DIMENSION_TEXTURE2D },
-		.Shader4ComponentMapping{ D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING },
-		.Texture2D{ .MipLevels{ 1 } }
+	const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+		DepthSrvDesc(desc.Format, desc.DepthOrArraySize, desc.DepthOrArraySize > 1)
 	};
 	m_pDepthBuffer->CreateShaderResourceView(
 		pDevice, m_pSrvsRange->AllocateGetCpuHandle(), &srvDesc

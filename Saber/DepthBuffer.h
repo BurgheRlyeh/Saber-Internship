@@ -34,7 +34,8 @@ public:
 		UINT64 width,
 		UINT height,
 		DXGI_FORMAT format = DXGI_FORMAT_D32_FLOAT,
-		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+		UINT16 arraySize = 1		// shadow maps keep a slice per view
 	);
 	virtual ~DepthBuffer() = default;
 
@@ -44,15 +45,24 @@ public:
 		UINT height
 	);
 
+	// Every slice
 	void Clear(std::shared_ptr<CommandList> pCommandList);
 
 	std::shared_ptr<TextureResource> GetTexture() const;
 
 	D3D12_RESOURCE_DESC GetDesc() const;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCpuDescHandle() const;
+	UINT16 GetArraySize() const;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCpuDescHandle(UINT slice = 0) const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuDescHandle(
 		DepthStencilSubresources subresource = DepthStencilSubresources::Depth
+	) const;
+
+	// Depth of all slices as Texture2DArray, written where the caller binds it from
+	void CreateArraySrv(
+		std::shared_ptr<Device> pDevice,
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle
 	) const;
 
 protected:
