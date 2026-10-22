@@ -2,17 +2,10 @@
 
 #include "Headers.h"
 
-#include "Camera.h"
 #include "LightSource.h"
 
 class SpotLight : public LightSource, public IPositionableLight, public IDirectionalLight {
 public:
-	struct Settings : LightSource::Settings {
-		// Full cone half-angles in degrees
-		float innerAngle{ 15.0f };
-		float outerAngle{ 25.0f };
-	};
-
 	SpotLight(
 		const DirectX::XMFLOAT3& position = { 0.0f, 10.0f, 0.0f },
 		const DirectX::XMFLOAT3& direction = { 0.0f, -1.0f, 0.0f },
@@ -21,37 +14,29 @@ public:
 
 	LightType GetType() const override { return LightType::Spot; }
 
-	Settings& GetSettings() override { return m_settings; }
-	const Settings& GetSettings() const override { return m_settings; }
+	DirectX::XMFLOAT3 GetPosition() const override { return m_position; }
+	void SetPosition(const DirectX::XMFLOAT3& position) override { m_position = position; }
 
-	size_t GetShadowViewCount() const override { return 1; }
-	const Camera& GetShadowCamera(size_t viewIndex = 0) const override {
-		assert(viewIndex == 0);
-		return m_camera;
-	}
-
-	DirectX::XMFLOAT3 GetPosition() const override;
-	DirectX::XMFLOAT3 GetDirection() const override;
-	float GetRange() const;
-
-	void SetPosition(const DirectX::XMFLOAT3& position) override;
+	DirectX::XMFLOAT3 GetDirection() const override { return m_direction; }
 	void SetDirection(const DirectX::XMFLOAT3& direction) override;
+
+	float GetRange() const { return m_range; }
 	void SetRange(float range);
 
-	// Keeps the shadow camera's fov in step with the outer angle
+	// Half-angles in degrees
+	float GetInnerAngle() const { return m_innerAngle; }
+	float GetOuterAngle() const { return m_outerAngle; }
 	void SetCone(float innerAngle, float outerAngle);
 
 protected:
 	void FillLightDesc(LightDesc& light) const override;
 
 private:
-	Settings m_settings{};
-	StaticCamera m_camera{};
-
-	void PlaceCamera(
-		const DirectX::XMFLOAT3& position,
-		const DirectX::XMFLOAT3& direction
-	);
+	DirectX::XMFLOAT3 m_position{};
+	DirectX::XMFLOAT3 m_direction{};
+	float m_range{};
+	float m_innerAngle{ 15.f };
+	float m_outerAngle{ 25.f };
 };
 
 // UI

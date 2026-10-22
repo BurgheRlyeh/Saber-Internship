@@ -20,7 +20,7 @@ class IDirectionalLight {
 public:
 	virtual DirectX::XMFLOAT3 GetDirection() const = 0;	// Normalized
 
-	// Spot rotates around its position, directional rotates around its target
+	// Turns the light in place
 	virtual void SetDirection(const DirectX::XMFLOAT3& direction) = 0;
 
 protected:
@@ -47,21 +47,16 @@ public:
 
 	virtual LightType GetType() const = 0;
 
-	virtual Settings& GetSettings() = 0;
-	virtual const Settings& GetSettings() const = 0;
-
-	// 1 view for directional and spot, 6 for a point light
-	virtual size_t GetShadowViewCount() const = 0;
-	virtual const Camera& GetShadowCamera(size_t viewIndex = 0) const = 0;
-
-	DirectX::XMMATRIX GetViewProjectionMatrix(size_t viewIndex = 0) const {
-		return GetShadowCamera(viewIndex).GetViewProjectionMatrix();
-	}
+	Settings& GetSettings() { return m_settings; }
+	const Settings& GetSettings() const { return m_settings; }
 
 	LightDesc GetLightDesc() const;
 
 protected:
 	virtual void FillLightDesc(LightDesc& light) const = 0;
+
+private:
+	Settings m_settings{};
 };
 
 // UI
