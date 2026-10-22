@@ -16,16 +16,20 @@ struct CameraBuffer {
 
 #ifdef __cplusplus
     void Update(const std::shared_ptr<Camera>& pCamera) {
-        viewProjMatrix = pCamera->GetViewProjectionMatrix();
+        Update(*pCamera);
+    }
+
+    void Update(const Camera& camera) {
+        viewProjMatrix = camera.GetViewProjectionMatrix();
         invViewProjMatrix = DirectX::XMMatrixInverse(nullptr, viewProjMatrix);
 
-        DirectX::XMFLOAT3 pos{ pCamera->GetPosition() };
+        DirectX::XMFLOAT3 pos{ camera.GetPosition() };
         cameraPosition = { pos.x, pos.y, pos.z, 0.f };
 
-        const Camera::Settings& cameraSettings{ pCamera->GetSettings() };
+        const Camera::Settings& cameraSettings{ camera.GetSettings() };
         nearFar = { cameraSettings.nearPlane, cameraSettings.farPlane, 0.f, 0.f };
 
-        pCamera->BuildViewFrustumPlanes(viewFrustumPlanes, &viewProjMatrix);
+        camera.BuildViewFrustumPlanes(viewFrustumPlanes, &viewProjMatrix);
     }
 #endif
 };
