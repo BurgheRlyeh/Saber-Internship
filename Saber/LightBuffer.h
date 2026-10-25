@@ -5,6 +5,9 @@
 
 #define LIGHTS_MAX_COUNT 10
 
+// Per scene, across all lights
+#define SHADOW_VIEWS_MAX_COUNT 16
+
 enum class LightType : uint {
     Point,
     Directional,

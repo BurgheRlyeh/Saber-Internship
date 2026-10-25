@@ -16,12 +16,14 @@ class Buffer;
 class Camera;
 class CommandList;
 class ComputeObject;
+class DepthBuffer;
 class DescriptorHeap;
 class Device;
 class DeviceContext;
 class GBuffer;
 class HiDepthBuffer;
 class LightSource;
+class LightShadow;
 class MaterialManager;
 class RenderObject;
 template <IndirectCommandConcept IndirectCommand>
@@ -47,6 +49,23 @@ class Scene {
     LightBuffer m_lightBuffer{};
     std::shared_ptr<Buffer<LightBuffer>> m_pLightCB{};
     std::mutex m_lightBufferMutex{};
+
+    // One element per shadow view, 256-aligned so each one binds as a root CBV
+    struct alignas(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) ShadowViewCB {
+        CameraBuffer camera;
+    };
+    std::shared_ptr<Buffer<ShadowViewCB>> m_pShadowViewCB{};
+
+    struct ShadowRenderView {
+        std::shared_ptr<DepthBuffer> pMap{};
+        UINT slice{};
+        D3D12_VIEWPORT viewport{};
+        D3D12_RECT scissorRect{};
+    };
+
+    // Rebuilt with the light buffer every frame, under its mutex
+    std::vector<std::shared_ptr<DepthBuffer>> m_shadowMaps{};
+    std::vector<ShadowRenderView> m_shadowViews{};
 
     std::array<
         std::shared_ptr<RenderSubsystem<ConstMesh4IndirectCommand>>,
@@ -134,6 +153,12 @@ public:
         D3D12_RECT scissorRect
     );
 
+    // Depth of every shadow view, ahead of the lighting pass
+    void RenderShadowMaps(
+        std::shared_ptr<DeviceContext> pDeviceContext,
+        std::shared_ptr<CommandList> pCommandList
+    );
+
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
         std::shared_ptr<CommandList> pCommandListCompute,
@@ -166,6 +191,12 @@ private:
     void UpdateLightBuffer(
         std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandList
+    );
+
+    void AddShadowViews(
+        const LightSource& light,
+        const LightShadow& shadow,
+        std::vector<ShadowViewCB>& viewCBs
     );
 
 public:

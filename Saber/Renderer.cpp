@@ -84,8 +84,8 @@ void Renderer::Initialize(HWND hWnd) {
             {},
             // RTV
             { m_numFrames + GBUFFER_SIZE },
-            // DSV
-            { 1 }
+            // DSV: the shared depth buffer, then shadow maps, one view per slice
+            { 256 }
         })
     );
     m_pDeviceContext->SetMaterialManager(std::make_shared<MaterialManager>(
@@ -438,6 +438,21 @@ void Renderer::Render() {
 
         commandListBeforeFrame->PushForExecution();
     }
+
+    // Ahead of the G-buffer lists: the lighting pass further down needs the maps done
+    const auto shadowMapsPriority{ ++listPriority };
+    std::shared_ptr<CommandList> commandListForShadowMaps{
+        pClMgr->GetDeferredCommandList(
+            L"ShadowMaps",
+            CommandListType::Direct,
+            shadowMapsPriority
+        )
+    };
+    m_pJobSystem->AddJob([&]() {
+        commandListForShadowMaps->PixBeginEvent(L"Shadow maps rendering");
+        pScene->RenderShadowMaps(m_pDeviceContext, commandListForShadowMaps);
+        commandListForShadowMaps->PushForExecution();
+    });
 
     // two command lists: static (1), dynamic (2)
     const auto staticObjectsPriority{ ++listPriority };

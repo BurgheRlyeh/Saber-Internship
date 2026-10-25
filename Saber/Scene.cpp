@@ -1,5 +1,6 @@
 #include "Scene.h"
 
+#include <algorithm>
 #include <functional>
 
 #include "Buffer.h"
@@ -18,6 +19,7 @@
 #include "RenderObject.h"
 #include "RenderSubsystem.h"
 #include "Texture.h"
+#include "TextureResource.h"
 
 Scene::Scene(
     const std::wstring& name,
@@ -63,6 +65,20 @@ m_pGBuffer(pGBuffer)
     m_pLightCB->CreateStorage<WholeBufferStorage<LightBuffer>>();
     m_pLightCB->CreateUpdater<WholeBufferUpdater<LightBuffer>>();
     m_pLightCB->UpdateAll(&m_lightBuffer, 1);
+
+    m_pShadowViewCB = std::make_shared<Buffer<ShadowViewCB>>(
+        m_name + L"/ShadowViewCB",
+        pDeviceContext,
+        SHADOW_VIEWS_MAX_COUNT,
+        GPUResource::AllocationDesc{},
+        GPUResource::ResourceDesc{
+            CD3DX12_RESOURCE_DESC::Buffer(0),
+            D3D12_RESOURCE_STATE_GENERIC_READ
+        },
+        EnumFlags<ResourceView>{ ResourceView::None }
+    );
+    m_pShadowViewCB->CreateStorage<VectorBufferStorage<ShadowViewCB>>();
+    m_pShadowViewCB->CreateUpdater<WholeBufferUpdater<ShadowViewCB>>();
 
     m_pTargetTexture = std::make_shared<Texture>(
         m_name + L"/TargetTexture",
@@ -314,6 +330,72 @@ void Scene::RenderObjects(
     );
 }
 
+void Scene::RenderShadowMaps(
+    std::shared_ptr<DeviceContext> pDeviceContext,
+    std::shared_ptr<CommandList> pCommandList
+) {
+    if (std::scoped_lock<std::mutex> lock(m_camerasMutex); !m_isSceneReady.load() || m_pCameras.empty())
+        return;
+
+    std::scoped_lock<std::mutex> lightBufferLock(m_lightBufferMutex);
+    if (m_shadowViews.empty()) {
+        return;
+    }
+
+    m_pShadowViewCB->GetResource()->ResourceTransition(
+        pCommandList,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+    // Whole maps, so a region of an atlas no light renders this frame stays empty
+    for (const auto& pMap : m_shadowMaps) {
+        pMap->Clear(pCommandList);
+    }
+
+    const D3D12_GPU_VIRTUAL_ADDRESS viewCBAddress{
+        m_pShadowViewCB->GetResource()->GetD3D12Resource()->GetGPUVirtualAddress()
+    };
+
+    constexpr EnumFlags<RenderSubsystemType> SubsystemTypes[]{
+        RenderSubsystemType::Default,
+        RenderSubsystemType::AlphaKill,
+        RenderSubsystemType::Dynamic,
+        RenderSubsystemType::AlphaKill | RenderSubsystemType::Dynamic
+    };
+
+    for (size_t viewId{}; viewId < m_shadowViews.size(); ++viewId) {
+        const ShadowRenderView& view{ m_shadowViews[viewId] };
+        const D3D12_CPU_DESCRIPTOR_HANDLE dsv{ view.pMap->GetDsvCpuDescHandle(view.slice) };
+
+        for (const EnumFlags<RenderSubsystemType> type : SubsystemTypes) {
+            auto commandListPrepare = [&] {
+                auto pD3D12CommandList{ pCommandList->GetD3D12CommandList() };
+                pD3D12CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+                pD3D12CommandList->RSSetViewports(1, &view.viewport);
+                pD3D12CommandList->RSSetScissorRects(1, &view.scissorRect);
+
+                // Depth only. The pipeline state still declares the G-buffer targets and
+                // runs its pixel shader; writes to unbound targets are dropped
+                pD3D12CommandList->OMSetRenderTargets(0, nullptr, FALSE, &dsv);
+
+                pD3D12CommandList->SetGraphicsRootConstantBufferView(
+                    0,
+                    viewCBAddress + viewId * sizeof(ShadowViewCB)
+                );
+                pD3D12CommandList->SetDescriptorHeaps(1, pDeviceContext->GetDescriptorHeap(DescRangeType::Srv)->GetD3D12DescriptorHeap().GetAddressOf());
+                if (type & RenderSubsystemType::AlphaKill) {
+                    const auto& pMaterialManager{ pDeviceContext->GetMaterialManager() };
+                    pD3D12CommandList->SetGraphicsRootDescriptorTable(3, pMaterialManager->GetMaterialCbvRange()->GetGpuHandle());
+                    pD3D12CommandList->SetGraphicsRootDescriptorTable(4, pMaterialManager->GetMaterialSrvRange()->GetGpuHandle());
+                }
+            };
+
+            m_pRenderSubsystems[ToId(type)]->Render(pCommandList, commandListPrepare);
+        }
+    }
+}
+
 void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO) {
     m_pDeferredShadingComputeObject = pDeferredShadingCO;
 }
@@ -343,6 +425,13 @@ void Scene::RunDeferredShading(
         pCommandListCompute,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
+    // All shader stages: the UI previews single-slice maps from a pixel shader
+    for (const auto& pMap : m_shadowMaps) {
+        pMap->GetTexture()->ResourceTransition(
+            pCommandListCompute,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        );
+    }
 
     constexpr int block_size{ 8 };
     m_pDeferredShadingComputeObject->Dispatch(
@@ -456,13 +545,81 @@ void Scene::UpdateLightBuffer(
 ) {
     std::scoped_lock<std::mutex> lock(m_lightBufferMutex);
 
+    m_shadowMaps.clear();
+    m_shadowViews.clear();
+    std::vector<ShadowViewCB> viewCBs{};
+
     m_lightBuffer.lightsCount.x = static_cast<uint32_t>(m_pLights.size());
     for (size_t lightId{}; lightId < m_pLights.size(); ++lightId) {
-        m_lightBuffer.lights[lightId] = m_pLights[lightId]->GetLightDesc();
+        LightSource& light{ *m_pLights[lightId] };
+        LightDesc lightDesc{ light.GetLightDesc() };
+
+        if (std::shared_ptr<LightShadow> pShadow{ light.GetShadow() }) {
+            if (!pShadow->GetMap().IsValid()) {
+                pShadow->CreateMap(
+                    pDeviceContext,
+                    m_name + L"/Light" + std::to_wstring(lightId) + L"/ShadowMap"
+                );
+            }
+            pShadow->Update(pDeviceContext, pCommandList);
+            AddShadowViews(light, *pShadow, viewCBs);
+        }
+
+        m_lightBuffer.lights[lightId] = lightDesc;
+    }
+
+    if (!viewCBs.empty()) {
+        m_pShadowViewCB->UpdateAll(viewCBs.data(), viewCBs.size());
+        m_pShadowViewCB->PerformUpdate(pDeviceContext, pCommandList);
     }
 
     m_pLightCB->UpdateAll(&m_lightBuffer, 1);
     m_pLightCB->PerformUpdate(pDeviceContext, pCommandList);
+}
+
+void Scene::AddShadowViews(
+    const LightSource& light,
+    const LightShadow& shadow,
+    std::vector<ShadowViewCB>& viewCBs
+) {
+    const ShadowMapRegion& region{ shadow.GetMap() };
+    if (!region.IsValid()) {
+        return;
+    }
+
+    const size_t viewCount{ shadow.GetViewCount() };
+    if (m_shadowViews.size() + viewCount > SHADOW_VIEWS_MAX_COUNT) {
+        return;
+    }
+
+    // Lights sharing an atlas share its map
+    if (std::find(m_shadowMaps.begin(), m_shadowMaps.end(), region.pMap) == m_shadowMaps.end()) {
+        m_shadowMaps.push_back(region.pMap);
+    }
+
+    const UINT regionSize{ region.GetSize() };
+
+    for (size_t viewId{}; viewId < viewCount; ++viewId) {
+        const StaticCamera camera{ light.GetShadowCamera(shadow, viewId) };
+
+        ShadowViewCB viewCB{};
+        viewCB.camera.Update(camera);
+        viewCBs.push_back(viewCB);
+
+        m_shadowViews.push_back(ShadowRenderView{
+            .pMap{ region.pMap },
+            .slice{ region.firstSlice + static_cast<UINT>(viewId) },
+            .viewport{
+                static_cast<float>(region.x), static_cast<float>(region.y),
+                static_cast<float>(regionSize), static_cast<float>(regionSize),
+                0.f, 1.f
+            },
+            .scissorRect{
+                static_cast<LONG>(region.x), static_cast<LONG>(region.y),
+                static_cast<LONG>(region.x + regionSize), static_cast<LONG>(region.y + regionSize)
+            }
+        });
+    }
 }
 
 // UI
