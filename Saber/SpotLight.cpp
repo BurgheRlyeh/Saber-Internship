@@ -35,6 +35,25 @@ void SpotLight::SetCone(float innerAngle, float outerAngle) {
 	m_innerAngle = std::clamp(innerAngle, MinAngle, m_outerAngle);
 }
 
+StaticCamera SpotLight::GetShadowCamera(const LightShadow& shadow, size_t viewIndex) const {
+	assert(viewIndex == 0);
+
+	StaticCamera camera{};
+	StaticCamera::Settings& settings{ camera.GetSettings() };
+	settings.projectionType = ProjectionType::Perspective;
+	settings.fov = 2.f * m_outerAngle;	// fov is the full angle, the cone a half-angle
+	settings.aspectRatio = 1.f;
+	settings.nearPlane = shadow.GetSettings().nearPlane;
+	settings.farPlane = m_range;
+
+	const DirectX::XMVECTOR direction{ DirectX::XMLoadFloat3(&m_direction) };
+	settings.pos = m_position;
+	DirectX::XMStoreFloat3(&settings.poi, DirectX::XMVectorAdd(DirectX::XMLoadFloat3(&m_position), direction));
+	DirectX::XMStoreFloat3(&settings.up, StableUpFor(direction));
+
+	return camera;
+}
+
 void SpotLight::FillLightDesc(LightDesc& light) const {
 	light.position = { m_position.x, m_position.y, m_position.z, 1.f };
 	light.direction = { m_direction.x, m_direction.y, m_direction.z, 0.f };

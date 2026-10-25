@@ -2,10 +2,13 @@
 
 #include "Headers.h"
 
+#include "Camera.h"
 #include "LightSource.h"
 
 class PointLight : public LightSource, public IPositionableLight {
 public:
+	static constexpr size_t FaceCount{ 6 };
+
 	explicit PointLight(
 		const DirectX::XMFLOAT3& position = { 0.f, 0.f, 0.f },
 		float range = 25.f
@@ -18,6 +21,11 @@ public:
 
 	float GetRange() const { return m_range; }
 	void SetRange(float range);
+
+	size_t GetShadowViewCount() const override { return FaceCount; }
+
+	// Cube face viewIndex: +X, -X, +Y, -Y, +Z, -Z
+	StaticCamera GetShadowCamera(const LightShadow& shadow, size_t viewIndex) const override;
 
 protected:
 	void FillLightDesc(LightDesc& light) const override;

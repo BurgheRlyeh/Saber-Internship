@@ -4,6 +4,7 @@
 
 #include "Camera.h"
 #include "LightBuffer.h"
+#include "LightShadow.h"
 
 // Has a point in space it shines from
 class IPositionableLight {
@@ -50,13 +51,27 @@ public:
 	Settings& GetSettings() { return m_settings; }
 	const Settings& GetSettings() const { return m_settings; }
 
+	// 1 view for directional and spot, 6 for a point light
+	virtual size_t GetShadowViewCount() const = 0;
+
+	// Built from the light's placement and the shadow's settings
+	virtual StaticCamera GetShadowCamera(const LightShadow& shadow, size_t viewIndex) const = 0;
+
+	std::shared_ptr<LightShadow> GetShadow() { return m_pShadow; }
+	std::shared_ptr<const LightShadow> GetShadow() const { return m_pShadow; }
+
+	void EnableShadow(bool enable);
+
 	LightDesc GetLightDesc() const;
 
 protected:
 	virtual void FillLightDesc(LightDesc& light) const = 0;
 
+	virtual std::shared_ptr<LightShadow> MakeShadow() const;
+
 private:
 	Settings m_settings{};
+	std::shared_ptr<LightShadow> m_pShadow{};
 };
 
 // UI
@@ -64,5 +79,8 @@ bool DrawSettings(LightSource::Settings& settings);
 
 // Position and direction fields for whatever the light supports
 bool DrawPlacement(LightSource& light);
+
+// Shadow switch, then the shadow's own settings when it is on
+bool DrawShadowSettings(LightSource& light);
 
 bool DrawSettings(LightSource& light);

@@ -2,6 +2,7 @@
 
 #include "Headers.h"
 
+#include "Camera.h"
 #include "LightSource.h"
 
 class SpotLight : public LightSource, public IPositionableLight, public IDirectionalLight {
@@ -27,6 +28,9 @@ public:
 	float GetInnerAngle() const { return m_innerAngle; }
 	float GetOuterAngle() const { return m_outerAngle; }
 	void SetCone(float innerAngle, float outerAngle);
+
+	size_t GetShadowViewCount() const override { return 1; }
+	StaticCamera GetShadowCamera(const LightShadow& shadow, size_t viewIndex) const override;
 
 protected:
 	void FillLightDesc(LightDesc& light) const override;

@@ -234,6 +234,9 @@
     <ClInclude Include="PointLight.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="LightShadow.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="LightSource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -366,6 +369,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="LightBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LightShadow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="LightSource.cpp">

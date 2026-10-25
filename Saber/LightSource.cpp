@@ -25,6 +25,21 @@ DirectX::XMVECTOR IDirectionalLight::LoadDirectionOrFallback(const DirectX::XMFL
 	return DirectX::XMVector3Normalize(loaded);
 }
 
+void LightSource::EnableShadow(bool enable) {
+	if (!enable) {
+		m_pShadow.reset();
+		return;
+	}
+
+	if (!m_pShadow) {
+		m_pShadow = MakeShadow();
+	}
+}
+
+std::shared_ptr<LightShadow> LightSource::MakeShadow() const {
+	return std::make_shared<LightShadow>(static_cast<UINT16>(GetShadowViewCount()));
+}
+
 LightDesc LightSource::GetLightDesc() const {
 	const Settings& settings{ GetSettings() };
 
@@ -87,12 +102,33 @@ bool DrawPlacement(LightSource& light) {
 	return isChanged;
 }
 
-bool DrawSettings(LightSource& light) {
-	switch (light.GetType()) {
-	case LightType::Point:			return DrawSettings(static_cast<PointLight&>(light));
-	case LightType::Directional:	return DrawSettings(static_cast<DirectionalLight&>(light));
-	case LightType::Spot:			return DrawSettings(static_cast<SpotLight&>(light));
+bool DrawShadowSettings(LightSource& light) {
+	bool isChanged{};
+
+	ImGui::SeparatorText("Shadow");
+
+	bool castsShadows{ light.GetShadow() != nullptr };
+	if (ImGui::Checkbox("Casts shadows", &castsShadows)) {
+		light.EnableShadow(castsShadows);
+		isChanged = true;
 	}
 
-	return DrawSettings(light.GetSettings());
+	if (std::shared_ptr<LightShadow> pShadow{ light.GetShadow() }) {
+		isChanged |= DrawSettings(*pShadow);
+	}
+
+	return isChanged;
+}
+
+bool DrawSettings(LightSource& light) {
+	bool isChanged{};
+	switch (light.GetType()) {
+	case LightType::Point:			isChanged = DrawSettings(static_cast<PointLight&>(light)); break;
+	case LightType::Directional:	isChanged = DrawSettings(static_cast<DirectionalLight&>(light)); break;
+	case LightType::Spot:			isChanged = DrawSettings(static_cast<SpotLight&>(light)); break;
+	default:						isChanged = DrawSettings(light.GetSettings()); break;
+	}
+
+	isChanged |= DrawShadowSettings(light);
+	return isChanged;
 }
