@@ -132,6 +132,7 @@ void Scene::Update(
 ) {
     UpdateCamera(deltaTime);
     UpdateCameraBuffer(pDeviceContext, pCommandList);
+    UpdateLightBuffer(pDeviceContext, pCommandList);
     UpdateRenderSubsystems(pDeviceContext, pCommandList);
 }
 
@@ -318,7 +319,6 @@ void Scene::SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDefe
 }
 
 void Scene::RunDeferredShading(
-    std::shared_ptr<DeviceContext> pDeviceContext,
     std::shared_ptr<CommandList> pCommandListCompute,
     std::shared_ptr<DescriptorHeap> pResDescHeapManager,
     std::shared_ptr<MaterialManager> pMaterialManager,
@@ -337,13 +337,12 @@ void Scene::RunDeferredShading(
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
-    UpdateLightBuffer(pDeviceContext, pCommandListCompute);
+    // Filled in Update, at the start of the frame
+    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
     m_pLightCB->GetResource()->ResourceTransition(
         pCommandListCompute,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
-
-    std::scoped_lock<std::mutex> lightCBMutex(m_lightBufferMutex);
 
     constexpr int block_size{ 8 };
     m_pDeferredShadingComputeObject->Dispatch(

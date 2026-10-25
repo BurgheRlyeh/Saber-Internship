@@ -557,7 +557,6 @@ void Renderer::Render() {
             pGBuf->WaitState(commandListForDeferredShading, GBufferState::Read);
             pDepthBuf->WaitState(commandListForDeferredShading, DepthBufferState::DepthReading);
             pScene->RunDeferredShading(
-                m_pDeviceContext,
                 commandListForDeferredShading,
                 m_pDeviceContext->GetDescriptorHeap(DescRangeType::Srv),
                 m_pDeviceContext->GetMaterialManager(),

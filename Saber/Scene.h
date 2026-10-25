@@ -136,7 +136,6 @@ public:
 
     void SetDeferredShadingComputeObject(std::shared_ptr<ComputeObject> pDeferredShadingCO);
     void RunDeferredShading(
-        std::shared_ptr<DeviceContext> pDeviceContext,
         std::shared_ptr<CommandList> pCommandListCompute,
         std::shared_ptr<DescriptorHeap> pResDescHeapManager,
         std::shared_ptr<MaterialManager> pMaterialManager,
