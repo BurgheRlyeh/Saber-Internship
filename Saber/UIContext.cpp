@@ -11,6 +11,15 @@
 #include "backends/imgui_impl_win32.h"
 #include "backends/imgui_impl_dx12.h"
 
+#include <mutex>
+
+// The window thread feeds input events while the render thread builds the frame,
+// and ImGui's context is not thread-safe. Recursive: SetCapture/ReleaseCapture in
+// the Win32 handler send WM_CAPTURECHANGED straight back into WndProc
+namespace {
+    std::recursive_mutex g_imGuiMutex{};
+}
+
 // ImGui DX12 backend wants C-style callbacks to allocate/free SRVs.
 namespace {
     DescRange* g_pImGuiSrvRange{};
@@ -73,6 +82,8 @@ UIContext::UIContext(
 }
 
 UIContext::~UIContext() {
+    std::scoped_lock<std::recursive_mutex> lock(g_imGuiMutex);
+
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -85,15 +96,18 @@ UIContext::~UIContext() {
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 LRESULT UIContext::WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    std::scoped_lock<std::recursive_mutex> lock(g_imGuiMutex);
     if (!ImGui::GetCurrentContext())
         return 0;
     return ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 }
 
 bool UIContext::WantCaptureMouse() {
+    std::scoped_lock<std::recursive_mutex> lock(g_imGuiMutex);
     return ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse;
 }
 bool UIContext::WantCaptureKeyboard() {
+    std::scoped_lock<std::recursive_mutex> lock(g_imGuiMutex);
     return ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard;
 }
 
@@ -107,6 +121,8 @@ void UIContext::Render(
 ) {
     if (!m_isVisible)
         return;
+
+    std::scoped_lock<std::recursive_mutex> lock(g_imGuiMutex);
 
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
