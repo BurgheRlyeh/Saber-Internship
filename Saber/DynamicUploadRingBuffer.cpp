@@ -5,8 +5,7 @@
 #include "Device.h"
 #include "GPUResource.h"
 
-FenceBasedRawRingBuffer::FenceBasedRawRingBuffer(size_t numFrames, size_t capacity) :
-    FrameFencedQueue<MemorySegment>(numFrames),
+FenceBasedRawRingBuffer::FenceBasedRawRingBuffer(size_t capacity) :
     m_capacity(capacity)
 {}
 
@@ -60,7 +59,7 @@ GPURingBuffer::GPURingBuffer(
     std::shared_ptr<Device> pDevice,
     size_t capacity,
     const RingBufferType& type
-) : FenceBasedRawRingBuffer(3, capacity),
+) : FenceBasedRawRingBuffer(capacity),
     m_cpuVirtualAddress(nullptr),
     m_gpuVirtualAddress(0)
 {

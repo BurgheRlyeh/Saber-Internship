@@ -21,11 +21,6 @@ class FencedQueue {
 	std::queue<FencedData<T>> m_data{};
 
 public:
-	FencedQueue() = default;
-	FencedQueue(size_t numFrames)
-		: m_data(std::deque<FencedData<T>>(numFrames))
-	{}
-
 	void Push(uint64_t fenceValue, T&& data) {
 		m_data.push(FencedData<T>{ fenceValue, std::move(data) });
 	}
@@ -43,13 +38,9 @@ public:
 template <typename T>
 class FrameFencedQueue : public FencedQueue<T> {
 public:
-	FrameFencedQueue(size_t numFrames)
-		: FencedQueue<T>(numFrames)
-	{}
-
 	void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {
-		Push(fenceValue, ProduceForPush());
-		for (auto& data : PopCompleted(completedFenceValue)) {
+		this->Push(fenceValue, ProduceForPush());
+		for (auto& data : this->PopCompleted(completedFenceValue)) {
 			BeforePop(data);
 		}
 	}
@@ -64,8 +55,7 @@ class FrameDataBuffer : public FrameFencedQueue<std::vector<T>> {
 	std::vector<T> m_curr{};
 
 public:
-	FrameDataBuffer(size_t numFrames, size_t initCapacity = 16) :
-		FrameFencedQueue<std::vector<T>>(numFrames),
+	explicit FrameDataBuffer(size_t initCapacity = 16) :
 		m_initCapacity(initCapacity)
 	{
 		Reserve();
@@ -83,7 +73,7 @@ public:
 		m_curr.push_back(data);
 	}
 	void Add(T&& data) {
-		m_curr.push_back(std::forward(data));
+		m_curr.push_back(std::move(data));
 	}
 
 protected:

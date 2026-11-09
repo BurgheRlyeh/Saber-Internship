@@ -24,7 +24,7 @@ class FenceBasedRawRingBuffer : public FrameFencedQueue<MemorySegment> {
 
 public:
 	FenceBasedRawRingBuffer() = delete;
-	FenceBasedRawRingBuffer(size_t numFrames, size_t capacity);
+	explicit FenceBasedRawRingBuffer(size_t capacity);
 
 	size_t GetCapacity() const {
 		return m_capacity;
