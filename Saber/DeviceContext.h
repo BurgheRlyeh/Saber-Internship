@@ -65,9 +65,9 @@ public:
 		return m_pDescHeapManager->GetDescHeap(descRangeType);
 	}
 
-	template <std::derived_from<DescRange> DescRangeImpl = StackDescRange>
+	template <IndexRangeConcept IndexRangeImpl = StackIndexRange>
 	std::shared_ptr<DescRange> AllocateDescRange(const std::wstring& basename, DescRangeType descRangeType, size_t size) {
-		return m_pDescHeapManager->AllocateRange<DescRangeImpl>(basename, descRangeType, size);
+		return m_pDescHeapManager->AllocateRange<IndexRangeImpl>(basename, descRangeType, size);
 	}
 
 	std::shared_ptr<Atlas<RootSignatureResource>> GetRootSignatureAtlas() const {

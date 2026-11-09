@@ -87,6 +87,7 @@ void DeviceContext::FinishFrame(uint64_t fenceValue, uint64_t lastCompletedFence
 	for (auto& pRingBuffer : m_pRingBuffers) {
 		pRingBuffer->FinishFrame(fenceValue, lastCompletedFenceValue);
 	}
+	m_pDescHeapManager->FinishFrame(fenceValue, lastCompletedFenceValue);
 	m_pCommandListMgr->ReleaseCompletedResources();
 }
 

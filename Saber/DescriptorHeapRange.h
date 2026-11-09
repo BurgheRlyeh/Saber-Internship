@@ -2,9 +2,13 @@
 
 #include "Headers.h"
 
+#include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <mutex>
+
+#include "IndexRange.h"
 
 class DescriptorHeap;
 
@@ -50,78 +54,61 @@ constexpr std::wstring ToName(DescRangeType type) {
 	}
 }
 
+// Descriptors of a heap from startId on, handed out by its index range
 class DescRange {
-protected:
 	const std::wstring m_name{};
 
-	std::weak_ptr<DescriptorHeap> m_pDescHeapManager{};
+	// Kept alive by its ranges: one can't outlive the heap it gives descriptors back to
+	std::shared_ptr<DescriptorHeap> m_pDescHeap{};
 	size_t m_startId{};
 
-	size_t m_capacity{};
+	std::unique_ptr<IndexRange> m_pIds{};
 
 public:
 	DescRange() = delete;
+
+	// The tag picks how ids are handed out: a constructor can't take template arguments explicitly
+	template <IndexRangeConcept IndexRangeImpl>
 	DescRange(
 		const std::wstring& name,
-		std::shared_ptr<DescriptorHeap>& pDescHeapManager,
+		const std::shared_ptr<DescriptorHeap>& pDescHeap,
 		size_t startId,
-		size_t capacity
+		size_t capacity,
+		std::in_place_type_t<IndexRangeImpl>
+	) : DescRange(name, pDescHeap, startId, std::make_unique<IndexRangeImpl>(capacity))
+	{}
+
+private:
+	DescRange(
+		const std::wstring& name,
+		const std::shared_ptr<DescriptorHeap>& pDescHeap,
+		size_t startId,
+		std::unique_ptr<IndexRange> pIds
 	);
 
-	virtual ~DescRange() = default;
+public:
+	// Gives its descriptors back to the heap
+	~DescRange();
 
-	DescRange(const DescRange& other) = default;
-	DescRange& operator=(const DescRange& other) = default;
+	DescRange(const DescRange&) = delete;
+	DescRange& operator=(const DescRange&) = delete;
 
-	DescRange(DescRange&& other) noexcept = default;
-	DescRange& operator=(DescRange&& other) noexcept = default;
+	DescRange(DescRange&&) = delete;
+	DescRange& operator=(DescRange&&) = delete;
 
 	inline const std::wstring& GetName() const { return m_name; }
 
-	virtual size_t GetSize() const = 0;
-	inline size_t GetCapacity() const { return m_capacity; }
+	inline size_t GetSize() const { return m_pIds->GetSize(); }
+	inline size_t GetCapacity() const { return m_pIds->GetCapacity(); }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(size_t id = 0) const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(size_t id = 0) const;
 
-	virtual size_t Allocate() = 0;
+	inline size_t Allocate() { return m_pIds->Allocate(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateGetCpuHandle();
 
-	virtual void Free(size_t id) = 0;
+	inline void Free(size_t id) { m_pIds->Free(id); }
 	void Free(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
 
-	virtual void FreeAll() = 0;
-};
-
-class StackDescRange : public DescRange {
-	size_t m_size{};
-
-public:
-	using DescRange::DescRange;
-
-	size_t GetSize() const override { return m_size; };
-
-	size_t Allocate() override;
-	void Free(size_t id) override;
-	void FreeAll();
-};
-
-class PoolDescRange : public DescRange {
-	std::vector<size_t> m_freeIndices{};
-
-public:
-	PoolDescRange(
-		const std::wstring& name,
-		std::shared_ptr<DescriptorHeap>& pDescHeapManager,
-		size_t startId,
-		size_t capacity
-	);
-
-	inline size_t GetSize() const override {
-		return m_capacity - m_freeIndices.size();
-	};
-
-	size_t Allocate() override;
-	void Free(size_t id) override;
-	void FreeAll() override;
+	inline void FreeAll() { m_pIds->FreeAll(); }
 };

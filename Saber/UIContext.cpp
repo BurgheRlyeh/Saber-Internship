@@ -54,7 +54,7 @@ UIContext::UIContext(
 ) {
     pDeviceContext = pDeviceContext;
 
-    m_pSrvRange = pDeviceContext->AllocateDescRange<PoolDescRange>(
+    m_pSrvRange = pDeviceContext->AllocateDescRange<PoolIndexRange>(
         L"ImGui", DescRangeType::Srv, srvPoolSize
     );
     g_pImGuiSrvRange = m_pSrvRange.get();
