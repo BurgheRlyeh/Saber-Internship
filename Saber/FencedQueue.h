@@ -38,6 +38,15 @@ public:
 template <typename T>
 class FrameFencedQueue : public FencedQueue<T> {
 public:
+	FrameFencedQueue() = default;
+	virtual ~FrameFencedQueue() = default;
+
+	FrameFencedQueue(const FrameFencedQueue&) = default;
+	FrameFencedQueue& operator=(const FrameFencedQueue&) = default;
+
+	FrameFencedQueue(FrameFencedQueue&&) noexcept = default;
+	FrameFencedQueue& operator=(FrameFencedQueue&&) noexcept = default;
+
 	void FinishFrame(uint64_t fenceValue, uint64_t completedFenceValue) {
 		this->Push(fenceValue, ProduceForPush());
 		for (auto& data : this->PopCompleted(completedFenceValue)) {
