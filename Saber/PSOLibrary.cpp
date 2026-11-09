@@ -1,5 +1,7 @@
 #include "PSOLibrary.h"
 
+#include <vector>
+
 #include "Device.h"
 
 PSOLibrary::PSOLibrary(
@@ -52,19 +54,14 @@ void PSOLibrary::FlushCacheToFile() {
 	auto currentFileSize = m_file.GetSize();
 	if (neededSize > currentFileSize)
 	{
-		void* pTempData = new BYTE[librarySize];
-		if (pTempData)
-		{
-			ThrowIfFailed(m_pPipelineLibrary->Serialize(pTempData, librarySize));
-			m_file.GrowMapping(static_cast<UINT>(librarySize));
-			memcpy(m_file.GetData(), pTempData, librarySize);
-			m_file.SetSize(static_cast<UINT>(librarySize));
-
-			delete[] pTempData;
-		}
+		std::vector<BYTE> tempData(librarySize);
+		ThrowIfFailed(m_pPipelineLibrary->Serialize(tempData.data(), librarySize));
+		m_file.GrowMapping(static_cast<UINT>(librarySize));
+		memcpy(m_file.GetData(), tempData.data(), librarySize);
+		m_file.SetSize(static_cast<UINT>(librarySize));
 	}
 	else {
-		m_pPipelineLibrary->Serialize(m_file.GetData(), librarySize);
+		ThrowIfFailed(m_pPipelineLibrary->Serialize(m_file.GetData(), librarySize));
 	}
 	m_file.Flush();
 
