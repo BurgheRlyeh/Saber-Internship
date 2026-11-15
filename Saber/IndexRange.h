@@ -4,6 +4,8 @@
 
 #include <concepts>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -59,11 +61,55 @@ concept IndexRangeConcept = std::derived_from<T, IndexRange> && std::constructib
 // Contiguous ranges of ids: first fit, neighbors merged on free
 class RangeAllocator {
 	std::map<size_t, size_t> m_freeRanges{};	// first id -> size
+	size_t m_capacity{};
 
 public:
 	explicit RangeAllocator(size_t capacity);
 
+	inline size_t GetCapacity() const { return m_capacity; }
+
 	// First id, or nothing when no free range is large enough
 	std::optional<size_t> Allocate(size_t size);
+	void Free(size_t first, size_t size);
+
+	// The ids up to the new capacity become free
+	void Grow(size_t capacity);
+};
+
+class GrowingRangeAllocator;
+
+// Contiguous ids taken from an allocator, given back on destruction
+class IdRange {
+	std::shared_ptr<GrowingRangeAllocator> m_pAllocator{};
+	size_t m_first{};
+	size_t m_size{};
+
+public:
+	IdRange(std::shared_ptr<GrowingRangeAllocator> pAllocator, size_t first, size_t size);
+	~IdRange();
+
+	IdRange(const IdRange&) = delete;
+	IdRange& operator=(const IdRange&) = delete;
+
+	IdRange(IdRange&&) = delete;
+	IdRange& operator=(IdRange&&) = delete;
+
+	inline size_t GetFirst() const { return m_first; }
+	inline size_t GetSize() const { return m_size; }
+};
+
+// Hands out ranges that give themselves back, grows instead of failing. Thread-safe
+class GrowingRangeAllocator : public std::enable_shared_from_this<GrowingRangeAllocator> {
+	friend class IdRange;
+
+	RangeAllocator m_allocator;
+	std::mutex m_mutex{};
+
+public:
+	explicit GrowingRangeAllocator(size_t capacity);
+
+	std::unique_ptr<IdRange> Allocate(size_t size);
+
+private:
 	void Free(size_t first, size_t size);
 };

@@ -1,5 +1,6 @@
 #include "IndexRange.h"
 
+#include <bit>
 #include <iterator>
 
 // StackIndexRange
@@ -49,9 +50,7 @@ void PoolIndexRange::FreeAll() {
 // RangeAllocator
 
 RangeAllocator::RangeAllocator(size_t capacity) {
-	if (capacity) {
-		m_freeRanges.emplace(0, capacity);
-	}
+	Grow(capacity);
 }
 
 std::optional<size_t> RangeAllocator::Allocate(size_t size) {
@@ -95,4 +94,54 @@ void RangeAllocator::Free(size_t first, size_t size) {
 	}
 
 	m_freeRanges.emplace(first, size);
+}
+
+void RangeAllocator::Grow(size_t capacity) {
+	assert(capacity >= m_capacity);
+	if (capacity == m_capacity) {
+		return;
+	}
+
+	const size_t oldCapacity{ m_capacity };
+	m_capacity = capacity;
+	Free(oldCapacity, capacity - oldCapacity);
+}
+
+// IdRange
+
+IdRange::IdRange(std::shared_ptr<GrowingRangeAllocator> pAllocator, size_t first, size_t size)
+	: m_pAllocator(std::move(pAllocator)),
+	m_first(first),
+	m_size(size)
+{
+	assert(m_pAllocator);
+}
+
+IdRange::~IdRange() {
+	m_pAllocator->Free(m_first, m_size);
+}
+
+// GrowingRangeAllocator
+
+GrowingRangeAllocator::GrowingRangeAllocator(size_t capacity)
+	: m_allocator(capacity)
+{}
+
+std::unique_ptr<IdRange> GrowingRangeAllocator::Allocate(size_t size) {
+	std::scoped_lock<std::mutex> lock(m_mutex);
+
+	std::optional<size_t> first{ m_allocator.Allocate(size) };
+	if (!first) {
+		// A power of two, so ranges taken one by one cost amortized constant time
+		m_allocator.Grow(std::bit_ceil(m_allocator.GetCapacity() + size));
+		first = m_allocator.Allocate(size);
+		assert(first);
+	}
+
+	return std::make_unique<IdRange>(shared_from_this(), *first, size);
+}
+
+void GrowingRangeAllocator::Free(size_t first, size_t size) {
+	std::scoped_lock<std::mutex> lock(m_mutex);
+	m_allocator.Free(first, size);
 }
