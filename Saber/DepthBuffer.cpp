@@ -216,7 +216,16 @@ void DepthBuffer::Recreate(
 		return;
 	}
 
-	m_pSrvsRange->FreeAll();
+	// Views written before may still be read by frames in flight: a new range for the new ones.
+	// Released first, so the name gives a new range.
+	// The heap reuses the old one once those frames complete
+	if (m_pSrvsRange->GetSize()) {
+		const std::shared_ptr<DescriptorHeap> pSrvHeap{ m_pSrvsRange->GetDescHeap() };
+		const size_t capacity{ m_pSrvsRange->GetCapacity() };
+
+		m_pSrvsRange.reset();
+		m_pSrvsRange = pSrvHeap->AllocateRange(m_name, DescRangeType::Srv, capacity);
+	}
 
 	const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
 		DepthSrvDesc(desc.Format, desc.DepthOrArraySize, desc.DepthOrArraySize > 1)

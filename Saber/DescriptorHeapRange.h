@@ -97,12 +97,16 @@ public:
 	DescRange& operator=(DescRange&&) = delete;
 
 	inline const std::wstring& GetName() const { return m_name; }
+	inline const std::shared_ptr<DescriptorHeap>& GetDescHeap() const { return m_pDescHeap; }
 
 	inline size_t GetSize() const { return m_pIds->GetSize(); }
 	inline size_t GetCapacity() const { return m_pIds->GetCapacity(); }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(size_t id = 0) const;
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(size_t id = 0) const;
+
+	// Index from the heap start, for shaders that index the whole heap
+	inline size_t GetHeapIndex(size_t id = 0) const { return m_startId + id; }
 
 	inline size_t Allocate() { return m_pIds->Allocate(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateGetCpuHandle();
